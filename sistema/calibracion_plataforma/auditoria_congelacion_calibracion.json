@@ -1,0 +1,96 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "name": "primary_surface_accepted_ratio",
+      "value": 1.0,
+      "threshold": ">=0.95",
+      "passed": true,
+      "meaning": "Consistencia de superficie en el grafo de la referencia."
+    },
+    {
+      "name": "primary_point_plane_rmse_median_mm",
+      "value": 0.6216037035429345,
+      "threshold": "<=2.5",
+      "passed": true,
+      "meaning": "Error normal a superficie de relaciones primarias."
+    },
+    {
+      "name": "primary_point_plane_p90_median_mm",
+      "value": 0.9370987878426055,
+      "threshold": "<=4.0",
+      "passed": true,
+      "meaning": "Cola robusta del error normal a superficie."
+    },
+    {
+      "name": "closure_overlap",
+      "value": 1.0,
+      "threshold": ">=0.8",
+      "passed": true,
+      "meaning": "El último sector debe cerrar contra P00."
+    },
+    {
+      "name": "closure_rmse_mm",
+      "value": 0.7392194482720178,
+      "threshold": "<=2.5",
+      "passed": true,
+      "meaning": "Cierre euclídeo robusto."
+    },
+    {
+      "name": "closure_point_plane_rmse_mm",
+      "value": 0.45551668958064595,
+      "threshold": "<=2.0",
+      "passed": true,
+      "meaning": "Cierre normal a superficie."
+    },
+    {
+      "name": "maximum_reference_angle_correction_deg",
+      "value": 0.16574872730179435,
+      "threshold": "<=0.35",
+      "passed": true,
+      "meaning": "La calibración no debe depender de correcciones angulares grandes aprendidas de la referencia."
+    },
+    {
+      "name": "adaptive_saturation_count",
+      "value": 0,
+      "threshold": "<=1",
+      "passed": true,
+      "meaning": "Ninguna o muy pocas poses deben intentar escapar del modelo mecánico."
+    },
+    {
+      "name": "reference_manhattan_p90_deg",
+      "value": 6.271475738262375,
+      "threshold": "<=12.0",
+      "passed": true,
+      "meaning": "Chequeo exclusivo de la referencia usada durante desarrollo; NO forma parte del runtime general."
+    },
+    {
+      "name": "reference_compactness_worst_p90_mm",
+      "value": 3.9369759454556856,
+      "threshold": "<=6.0",
+      "passed": true,
+      "meaning": "Chequeo de la referencia; no se exigirá planaridad ni compactación de caras a objetos futuros."
+    },
+    {
+      "name": "mount_reference_distance_error_mm",
+      "value": 45.74895467519758,
+      "threshold": "<=65.0",
+      "passed": true,
+      "meaning": "Prior físico con tolerancia amplia de montaje."
+    }
+  ],
+  "axis_xyz": [
+    0.01132543586121747,
+    0.9616201598533514,
+    0.2741503285902983
+  ],
+  "axis_line_point_xyz_mm": [
+    40.15579380446993,
+    -97.12016289576758,
+    340.67776359749996
+  ],
+  "stereo_midpoint_to_axis_distance_mm": 354.2510453248025,
+  "calibration_path": "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\sistema\\calibracion_plataforma\\calibracion_plataforma_candidata.json",
+  "calibration_sha256": "c88a5548ee0b3ca736426b17085b95039c0d32fc6aa9e74ef6a50dd1e8befb34",
+  "calibration_size_bytes": 30379
+}

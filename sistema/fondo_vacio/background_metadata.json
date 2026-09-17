@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-09-02 08:40:11",
+  "samples": 20,
+  "resolution": [
+    1920,
+    1080
+  ],
+  "method": "median_stereo_background"
+}

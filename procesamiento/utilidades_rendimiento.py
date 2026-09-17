@@ -1,0 +1,220 @@
+"""Recursos compartidos y tareas independientes; sin modificar geometría."""
+
+from __future__ import annotations
+import os
+import sys
+import time
+import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_COMPLETED
+
+_CONTEXT = {}
+
+
+def cpu_threads():
+    """Obtiene el presupuesto de hilos de CPU, con un mínimo de uno."""
+    return max(1, int(os.environ.get("SISTEMA3D_CPU_THREADS", os.cpu_count() or 1)))
+
+
+def configurar(script):
+    # Incluye fallos de importación en stdout, incluso antes de main().
+    """Configura diagnóstico, salida inmediata y límites de hilos del proceso.
+
+    Debe ejecutarse antes de importar las bibliotecas de cálculo para que sus
+    runtimes reciban las variables de entorno. Los procesos hijos usan un solo
+    hilo nativo; el presupuesto BLAS se configura de forma independiente.
+    """
+
+    def uncaught(exc_type, exc, tb):
+        import traceback
+
+        print(f"[ERROR] {os.path.basename(script)} | {exc_type.__name__}: {exc}", flush=True)
+        traceback.print_exception(exc_type, exc, tb, file=sys.stdout)
+
+    sys.excepthook = uncaught
+    # Cada hijo configura su propio presupuesto antes de importar NumPy/Open3D.
+    step = os.path.basename(script)[:2]
+    internal = (
+        1 if step in {"04", "15"} or mp.current_process().name != "MainProcess" else cpu_threads()
+    )
+    for key in ("OMP_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        os.environ[key] = str(internal)
+    # Miles de sistemas 6x6 no deben crear un equipo BLAS por cada ajuste.
+    for key in ("OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS"):
+        os.environ[key] = os.environ.get("SISTEMA3D_BLAS_THREADS", "1")
+    os.environ["PYTHONUNBUFFERED"] = "1"
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(line_buffering=True, write_through=True)
+
+
+def _initialize(context):
+    """Instala el contexto privado del trabajador y limita OpenCV en procesos hijos."""
+    global _CONTEXT
+    _CONTEXT = context
+    if mp.current_process().name != "MainProcess":
+        try:
+            import cv2
+
+            cv2.setNumThreads(1)
+        except ImportError:
+            pass
+
+
+def contexto():
+    """Devuelve el contexto instalado en el proceso trabajador actual."""
+    return _CONTEXT
+
+
+def _available_memory():
+    """Consulta memoria disponible o usa un presupuesto de 2 GiB si falta psutil."""
+    try:
+        import psutil
+
+        return psutil.virtual_memory().available
+    except ImportError:
+        return 2 * 1024**3  # presupuesto conservador si no hay psutil
+
+
+def ejecutar_bloques(worker, context, outputs, count, block, label):
+    """Ejecuta bloques independientes y escribe sus resultados en los arrays de salida.
+
+    worker recibe (inicio, fin) y devuelve (inicio, fin, valores), donde valores
+    es un diccionario de arrays. El número de procesos se limita por CPU, memoria
+    y cantidad de tareas. Con spawn, el worker debe poder importarse en el hijo.
+    La ventana de tareas pendientes evita acumular copias innecesarias.
+    """
+    import pickle
+
+    block = max(1, int(block))
+    tasks = [(a, min(a + block, count)) for a in range(0, count, block)]
+    if not tasks:
+        return
+    requested = max(1, int(os.environ.get("SISTEMA3D_WORKERS", min(8, max(1, cpu_threads() - 2)))))
+    # Contexto privado por proceso + arrays temporales + importaciones.
+    context_bytes = len(pickle.dumps(context, protocol=5))
+    memory_workers = max(1, int(0.5 * _available_memory() / max(256 * 1024**2, 3 * context_bytes)))
+    workers = min(requested, memory_workers, len(tasks))
+    if count < 1500:
+        workers = 1
+    start = time.perf_counter()
+    print(f"[CPU] {label}: {workers} procesos | {count:,} vértices", flush=True)
+    completed = 0
+
+    def collect(result):
+        nonlocal completed
+        a, b, values = result
+        for name, value in values.items():
+            outputs[name][a:b] = value
+        completed += b - a
+
+    if workers == 1:
+        _initialize(context)
+        try:
+            for task in tasks:
+                collect(worker(task))
+                print(f"[CPU] {label}: {completed:,}/{count:,}", flush=True)
+        finally:
+            _initialize({})
+    else:
+        # Ventana limitada: no acumular resultados ni copias de la malla.
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=mp.get_context("spawn"),
+            initializer=_initialize,
+            initargs=(context,),
+        ) as pool:
+            remaining = iter(tasks)
+            pending = {
+                pool.submit(worker, t)
+                for t in [next(remaining, None) for _ in range(2 * workers)]
+                if t is not None
+            }
+            while pending:
+                done, pending = wait(pending, timeout=15, return_when=FIRST_COMPLETED)
+                if not done:
+                    print(
+                        f"[CPU] {label}: trabajando | {completed:,}/{count:,} | {time.perf_counter()-start:.0f} s",
+                        flush=True,
+                    )
+                for future in done:
+                    collect(future.result())
+                    nxt = next(remaining, None)
+                    if nxt is not None:
+                        pending.add(pool.submit(worker, nxt))
+                if done:
+                    print(
+                        f"[CPU] {label}: {completed:,}/{count:,} | {time.perf_counter()-start:.1f} s",
+                        flush=True,
+                    )
+    print(f"[CPU] {label} completado en {time.perf_counter()-start:.1f} s", flush=True)
+
+
+def ejecutar_items(worker, context, tasks, label, reserve_mb=512):
+    """Tareas con ficheros propios; devuelve metadatos en orden de entrada."""
+    import pickle
+
+    tasks = list(tasks)
+    if not tasks:
+        return []
+    requested = max(1, int(os.environ.get("SISTEMA3D_WORKERS", min(8, max(1, cpu_threads() - 2)))))
+    context_bytes = len(pickle.dumps(context, protocol=5))
+    budget = max(int(reserve_mb) * 1024**2, 3 * context_bytes)
+    workers = min(requested, len(tasks), max(1, int(0.5 * _available_memory() / budget)))
+    start = time.perf_counter()
+    print(f"[PROGRESO] {label}: {len(tasks)} tareas | {workers} procesos", flush=True)
+    results = [None] * len(tasks)
+    if workers == 1:
+        _initialize(context)
+        try:
+            for index, task in enumerate(tasks):
+                results[index] = worker(task)
+                print(f"[PROGRESO] {label}: {index+1}/{len(tasks)} completadas", flush=True)
+        finally:
+            _initialize({})
+    else:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=mp.get_context("spawn"),
+            initializer=_initialize,
+            initargs=(context,),
+        ) as pool:
+            remaining = iter(enumerate(tasks))
+            pending = {}
+            for _ in range(2 * workers):
+                item = next(remaining, None)
+                if item is not None:
+                    index, task = item
+                    pending[pool.submit(worker, task)] = index
+            completed = 0
+            while pending:
+                done, _ = wait(pending, timeout=15, return_when=FIRST_COMPLETED)
+                if not done:
+                    print(
+                        f"[PROGRESO] {label}: calculando | {completed}/{len(tasks)} | {time.perf_counter()-start:.0f} s",
+                        flush=True,
+                    )
+                for future in done:
+                    index = pending.pop(future)
+                    try:
+                        results[index] = future.result()
+                    except BaseException:
+                        print(f"[ERROR] {label}: falló la tarea {index+1}/{len(tasks)}", flush=True)
+                        for other in pending:
+                            other.cancel()
+                        raise
+                    completed += 1
+                    item = next(remaining, None)
+                    if item is not None:
+                        idx, task = item
+                        pending[pool.submit(worker, task)] = idx
+                if done:
+                    print(
+                        f"[PROGRESO] {label}: {completed}/{len(tasks)} completadas | {time.perf_counter()-start:.1f} s",
+                        flush=True,
+                    )
+    return results
+
+
+def query_threads():
+    """Devuelve un hilo para procesos hijos y el presupuesto de CPU para el principal."""
+    return 1 if mp.current_process().name != "MainProcess" else cpu_threads()

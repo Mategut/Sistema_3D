@@ -1,0 +1,1074 @@
+{
+  "schema_version": 1,
+  "calibration_type": "turntable_axis_line_mechanical_pose_model",
+  "status": "candidate_ready_for_independent_validation",
+  "coordinate_frame": "rectified_left_camera_metric_frame_mm; axis_line_point is the point on the axis closest to stereo midpoint",
+  "source_reference_object": "cubo",
+  "source_registration": "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\trabajos\\CALIBRACION_PLATAFORMA_20260831_141353\\objetos\\cubo\\reconstruccion\\MULTISESION\\fase5_3B_registro_multivista_restringido_v3_2",
+  "generalization_contract": {
+    "runtime_uses_object_shape": false,
+    "runtime_uses_manhattan": false,
+    "runtime_uses_planes": false,
+    "runtime_uses_reference_v3_2_angle_corrections": false,
+    "future_object_pose_source": "2055_step_mechanical_model_only",
+    "allowed_future_objects": "Cualquier objeto rígido que esté dentro del volumen útil, sea visible por ambas cámaras y produzca profundidad estéreo suficiente.",
+    "explicitly_not_hardcoded": [
+      "cubo",
+      "cilindro",
+      "pirámide",
+      "número de caras",
+      "planaridad",
+      "ortogonalidad Manhattan"
+    ]
+  },
+  "mechanical_model": {
+    "steps_per_revolution": 2055,
+    "poses_per_revolution": 25,
+    "step_sequence": [
+      82,
+      82,
+      83,
+      82,
+      82,
+      82,
+      82,
+      83,
+      82,
+      82,
+      82,
+      82,
+      83,
+      82,
+      82,
+      82,
+      82,
+      83,
+      82,
+      82,
+      82,
+      82,
+      83,
+      82,
+      82
+    ],
+    "degrees_per_motor_step": 0.17518248175182483,
+    "direction_sign": -1,
+    "closure_steps": 2055,
+    "closure_angle_deg": 360.0
+  },
+  "stereo_geometry": {
+    "baseline_mm": 81.0558,
+    "stereo_midpoint_xyz_mm": [
+      40.5279,
+      0.0,
+      0.0
+    ],
+    "mount_reference_distance_mm": 400.0,
+    "mount_reference_sigma_mm": 30.0
+  },
+  "rotation_axis": {
+    "unit_axis_xyz": [
+      0.01132543586121747,
+      0.9616201598533514,
+      0.2741503285902983
+    ],
+    "canonical_line_point_xyz_mm": [
+      40.15579380446993,
+      -97.12016289576758,
+      340.67776359749996
+    ],
+    "source_center_point_xyz_mm_diagnostic_only": [
+      41.03497829517462,
+      -22.47036214177308,
+      361.95983344203074
+    ],
+    "stereo_midpoint_to_axis_distance_mm": 354.2510453248025
+  },
+  "poses": [
+    {
+      "pose_index": 0,
+      "cumulative_steps": 0,
+      "physical_angle_deg": 0.0,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.0,
+      "transform_pose_to_P00_mechanical": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 1,
+      "cumulative_steps": 82,
+      "physical_angle_deg": 14.364963503649635,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.09739996321981971,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.968739064657411,
+          -0.06767552559057344,
+          0.23867267929682312,
+          -86.62782501032632
+        ],
+        [
+          0.06835652409293574,
+          0.997646166418743,
+          0.005432517272637967,
+          -4.824253022654503
+        ],
+        [
+          -0.23847853199107133,
+          0.011052143051248292,
+          0.971084877811079,
+          20.500419852380787
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 2,
+      "cumulative_steps": 164,
+      "physical_angle_deg": 28.72992700729927,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.13650370202399723,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.8769110015126992,
+          -0.13043830943260673,
+          0.4626153292513754,
+          -165.32820919236818
+        ],
+        [
+          0.1331197206798553,
+          0.9907318506325058,
+          0.027010000155635885,
+          -15.447358679032405
+        ],
+        [
+          -0.4618508800382567,
+          0.03789785712482553,
+          0.8861475706863018,
+          61.01362576332593
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 3,
+      "cumulative_steps": 247,
+      "physical_angle_deg": 43.27007299270073,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.1178615499855552,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.7281657497351068,
+          -0.18495222398816707,
+          0.6599752387435005,
+          -231.8857583838974
+        ],
+        [
+          0.19087395074689828,
+          0.9795318796511636,
+          0.06390955854431385,
+          -31.425127668666505
+        ],
+        [
+          -0.6582870011165194,
+          0.07943532960143931,
+          0.7485641272276747,
+          119.80742005582988
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 4,
+      "cumulative_steps": 329,
+      "physical_angle_deg": 57.63503649635037,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.10026746311904676,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.5353699900728538,
+          -0.22650173631391798,
+          0.8136804883835994,
+          -280.5431477184248
+        ],
+        [
+          0.23662338934334295,
+          0.9650150672639572,
+          0.11293932693800156,
+          -51.37545972145329
+        ],
+        [
+          -0.8107948848784513,
+          0.13207150866224118,
+          0.5702357155200106,
+          191.79605396078722
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 5,
+      "cumulative_steps": 411,
+      "physical_angle_deg": 72.0,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.04836789319957127,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.30910562365389094,
+          -0.2532071212287446,
+          0.9167005329902405,
+          -309.1475922106332
+        ],
+        [
+          0.2682577916717768,
+          0.9479781917488093,
+          0.1713916718397931,
+          -74.21380252191969
+        ],
+        [
+          -0.9124097054683935,
+          0.19293393099118045,
+          0.36095017334719437,
+          273.086376575418
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 6,
+      "cumulative_steps": 493,
+      "physical_angle_deg": 86.36496350364963,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.004169439267514669,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.063520936673095,
+          -0.26339849392179837,
+          0.9625935403917383,
+          -315.91045906108377
+        ],
+        [
+          0.2837990619991856,
+          0.9294865670765836,
+          0.23561157448769357,
+          -98.51207698155648
+        ],
+        [
+          -0.9567774992194136,
+          0.25821687594716947,
+          0.13379410287276872,
+          358.59531287810773
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 7,
+      "cumulative_steps": 575,
+      "physical_angle_deg": 100.72992700729927,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.013370583148258869,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.18602768713366125,
+          -0.25643858896829297,
+          0.9484898258324396,
+          -300.40886694200753
+        ],
+        [
+          0.2822754063842422,
+          0.9106964725245328,
+          0.30158337136185714,
+          -122.75091464417443
+        ],
+        [
+          -0.9411239528193466,
+          0.3238382080905892,
+          -0.09702845155089634,
+          442.9759983926806
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 8,
+      "cumulative_steps": 658,
+      "physical_angle_deg": 115.27007299270073,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.07457373462353475,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.4267025601749663,
+          -0.23237581095639392,
+          0.8740288368369133,
+          -263.0401922397497
+        ],
+        [
+          0.2634555690041955,
+          0.8925745388037085,
+          0.36592602509253525,
+          -145.67530566675612
+        ],
+        [
+          -0.8651682427717773,
+          0.3864093362765778,
+          -0.31964313935620425,
+          521.8427287092013
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 9,
+      "cumulative_steps": 740,
+      "physical_angle_deg": 129.63503649635035,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.1019807176450974,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.6376849556778064,
+          -0.19329162520277116,
+          0.7456515573165967,
+          -207.03687969881153
+        ],
+        [
+          0.2289674931809913,
+          0.8766883395538723,
+          0.42307380249394677,
+          -165.30225686390594
+        ],
+        [
+          -0.7354806485344174,
+          0.4405177668570768,
+          -0.5147934660761024,
+          588.373416880277
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 10,
+      "cumulative_steps": 822,
+      "physical_angle_deg": 144.0,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.09651386146610001,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.808784959910275,
+          -0.141439936669847,
+          0.5708429144149599,
+          -135.5769612509268
+        ],
+        [
+          0.1808431034431789,
+          0.863805137842153,
+          0.47025148141663387,
+          -180.69338858859157
+        ],
+        [
+          -0.5596093821229012,
+          0.4835653297666498,
+          -0.6730541666817735,
+          639.4078544398822
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 11,
+      "cumulative_steps": 904,
+      "physical_angle_deg": 158.36496350364965,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.10917473222343428,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.9293037082383215,
+          -0.08006302579559832,
+          0.3605336735382128,
+          -53.12881781556877
+        ],
+        [
+          0.12209161264093188,
+          0.8547305188687684,
+          0.5045090467346078,
+          -190.88629504996612
+        ],
+        [
+          -0.34855165467580534,
+          0.5128602655838912,
+          -0.784529216796914,
+          671.7548635644134
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 12,
+      "cumulative_steps": 986,
+      "physical_angle_deg": 172.72992700729927,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.07071282082723786,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.9917051764519464,
+          -0.012998784133829894,
+          0.12787444861838715,
+          35.15207717579973
+        ],
+        [
+          0.05638674509682762,
+          0.850031917570014,
+          0.523704376618747,
+          -195.24361491687714
+        ],
+        [
+          -0.11550488290890489,
+          0.5265707651619933,
+          -0.8422480936760341,
+          683.3917892954901
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 13,
+      "cumulative_steps": 1069,
+      "physical_angle_deg": 187.27007299270073,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.037330973997095715,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.9917051764519464,
+          0.05638674509682766,
+          -0.11550488290890507,
+          124.80473744786266
+        ],
+        [
+          -0.012998784133829943,
+          0.850031917570014,
+          0.5265707651619933,
+          -193.43389875059148
+        ],
+        [
+          0.12787444861838732,
+          0.523704376618747,
+          -0.8422480936760341,
+          673.3403149201678
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 14,
+      "cumulative_steps": 1151,
+      "physical_angle_deg": 201.63503649635035,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.06275578867911943,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.9293037082383215,
+          0.12209161264093181,
+          -0.3485516546758052,
+          208.0740774152729
+        ],
+        [
+          -0.08006302579559825,
+          0.8547305188687684,
+          0.5128602655838912,
+          -185.61368963317878
+        ],
+        [
+          0.36053367353821264,
+          0.5045090467346078,
+          -0.784529216796914,
+          642.4699075998558
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 15,
+      "cumulative_steps": 1233,
+      "physical_angle_deg": 216.0,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.1000163025307388,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.808784959910275,
+          0.18084310344317878,
+          -0.559609382122901,
+          280.84318034156973
+        ],
+        [
+          -0.14143993666984694,
+          0.863805137842153,
+          0.48356532976664973,
+          -172.28758936389485
+        ],
+        [
+          0.5708429144149597,
+          0.4702514814166339,
+          -0.6730541666817735,
+          592.7206019937953
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 16,
+      "cumulative_steps": 1315,
+      "physical_angle_deg": 230.36496350364965,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.0774732145323853,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.6376849556778064,
+          0.22896749318099135,
+          -0.7354806485344175,
+          338.56180214439814
+        ],
+        [
+          -0.1932916252027712,
+          0.8766883395538723,
+          0.4405177668570768,
+          -154.28887754153595
+        ],
+        [
+          0.7456515573165968,
+          0.42307380249394677,
+          -0.5147934660761024,
+          527.2032167644687
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 17,
+      "cumulative_steps": 1397,
+      "physical_angle_deg": 244.72992700729927,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.0644433101021695,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.4267025601749663,
+          0.2634555690041955,
+          -0.8651682427717774,
+          377.62080368724787
+        ],
+        [
+          -0.23237581095639395,
+          0.8925745388037085,
+          0.3864093362765778,
+          -132.74301165652417
+        ],
+        [
+          0.8740288368369135,
+          0.36592602509253525,
+          -0.31964313935620425,
+          450.0145468762596
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 18,
+      "cumulative_steps": 1480,
+      "physical_angle_deg": 259.2700729927007,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.009174626029988411,
+      "transform_pose_to_P00_mechanical": [
+        [
+          -0.1860276871336617,
+          0.28227540638424214,
+          -0.9411239528193465,
+          395.6605202149723
+        ],
+        [
+          -0.2564385889682929,
+          0.9106964725245328,
+          0.32383820809058933,
+          -108.70015453318784
+        ],
+        [
+          0.9484898258324395,
+          0.30158337136185726,
+          -0.09702845155089657,
+          364.9356637587411
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 19,
+      "cumulative_steps": 1562,
+      "physical_angle_deg": 273.6350364963504,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.0804025832620866,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.06352093667309522,
+          0.2837990619991856,
+          -0.9567774992194136,
+          391.12048999466384
+        ],
+        [
+          -0.26339849392179837,
+          0.9294865670765837,
+          0.2582168759471694,
+          -84.24004830234507
+        ],
+        [
+          0.9625935403917383,
+          0.23561157448769351,
+          0.13379410287276894,
+          279.32601461715893
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 20,
+      "cumulative_steps": 1644,
+      "physical_angle_deg": 288.0,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.13891889331368523,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.3091056236538907,
+          0.2682577916717769,
+          -0.9124097054683936,
+          364.63435048607005
+        ],
+        [
+          -0.25320712122874467,
+          0.9479781917488093,
+          0.1929339309911805,
+          -60.612933673752906
+        ],
+        [
+          0.9167005329902406,
+          0.17139167183979315,
+          0.36095017334719426,
+          197.54481527630276
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 21,
+      "cumulative_steps": 1726,
+      "physical_angle_deg": 302.3649635036496,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.08609460772461881,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.5353699900728534,
+          0.23662338934334304,
+          -0.8107948848784515,
+          317.85827710866073
+        ],
+        [
+          -0.22650173631391807,
+          0.9650150672639572,
+          0.1320715086622413,
+          -39.29621155244604
+        ],
+        [
+          0.8136804883835996,
+          0.11293932693800168,
+          0.5702357155200102,
+          124.70583522602755
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 22,
+      "cumulative_steps": 1808,
+      "physical_angle_deg": 316.7299270072993,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": -0.014650277173869138,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.7281657497351068,
+          0.19087395074689825,
+          -0.6582870011165193,
+          253.71717263740797
+        ],
+        [
+          -0.18495222398816705,
+          0.9795318796511636,
+          0.07943532960143931,
+          -21.62281425155082
+        ],
+        [
+          0.6599752387435004,
+          0.06390955854431385,
+          0.7485641272276747,
+          65.36368795764184
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 23,
+      "cumulative_steps": 1891,
+      "physical_angle_deg": 331.2700729927007,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.16574872730179435,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.8769110015126989,
+          0.13311972067985542,
+          -0.4618508800382571,
+          175.21367032689207
+        ],
+        [
+          -0.13043830943260684,
+          0.9907318506325058,
+          0.03789785712482563,
+          -8.57322752895712
+        ],
+        [
+          0.4626153292513758,
+          0.02701000015563597,
+          0.8861475706863015,
+          22.833520841458096
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "pose_index": 24,
+      "cumulative_steps": 1973,
+      "physical_angle_deg": 345.6350364963504,
+      "runtime_correction_deg": 0.0,
+      "reference_v3_2_correction_deg_diagnostic_only": 0.09084943423945116,
+      "transform_pose_to_P00_mechanical": [
+        [
+          0.968739064657411,
+          0.06835652409293572,
+          -0.23847853199107125,
+          89.13843737337925
+        ],
+        [
+          -0.06767552559057341,
+          0.997646166418743,
+          0.01105214305124829,
+          -1.276259627275934
+        ],
+        [
+          0.23867267929682304,
+          0.005432517272637969,
+          0.971084877811079,
+          0.7942552273191268
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  ],
+  "reference_quality_evidence": {
+    "primary_edge_count": 25,
+    "primary_surface_accepted_count": 25,
+    "primary_surface_accepted_ratio": 1.0,
+    "primary_point_plane_rmse_mm": {
+      "count": 25,
+      "median": 0.6216037035429345,
+      "mean": 0.6592007192911505,
+      "min": 0.4470114026118383,
+      "max": 1.1030370572322776,
+      "p90": 0.8854682120844211
+    },
+    "primary_point_plane_p90_abs_mm": {
+      "count": 25,
+      "median": 0.9370987878426055,
+      "mean": 1.0225434965538727,
+      "min": 0.6894943055122597,
+      "max": 2.01863184142867,
+      "p90": 1.539336797399264
+    },
+    "closure": {
+      "overlap": 1.0,
+      "trimmed_rmse_mm": 0.7392194482720178,
+      "point_plane_rmse_mm": 0.45551668958064595,
+      "point_plane_p90_abs_mm": 0.7836630788975678,
+      "surface_accepted": true
+    },
+    "angle_correction_abs_deg": {
+      "count": 25,
+      "median": 0.0804025832620866,
+      "mean": 0.07595020798544681,
+      "min": 0.0,
+      "max": 0.16574872730179435,
+      "p90": 0.12904684120862045
+    },
+    "adaptive_saturation_count": 0,
+    "manhattan_p90_deg_reference_only": 6.271475738262375,
+    "reference_compactness_worst_p90_mm": 3.9369759454556856,
+    "mounting_geometry": {
+      "baseline_mm": 81.0558,
+      "target_midpoint_axis_distance_mm": 400.0,
+      "midpoint_axis_distance_mm": 354.2510453248024,
+      "midpoint_axis_distance_error_mm": -45.74895467519758,
+      "left_axis_distance_mm": 356.51920249730216,
+      "right_axis_distance_mm": 356.6037920157884,
+      "left_right_symmetry_error_mm": -0.08458951848621155,
+      "axis_baseline_perpendicular_deviation_deg": 0.6489135487012344,
+      "closest_point_to_stereo_midpoint_xyz_mm": [
+        40.15579380446993,
+        -97.12016289576758,
+        340.67776359749996
+      ],
+      "reference_uncertainty_note": "Los 400 mm son un prior aproximado. Los sigmas por defecto permiten diferencias físicas del orden de 2–3 cm."
+    }
+  },
+  "candidate_quality_checks": [
+    {
+      "name": "primary_surface_accepted_ratio",
+      "value": 1.0,
+      "threshold": ">=0.95",
+      "passed": true,
+      "meaning": "Consistencia de superficie en el grafo de la referencia."
+    },
+    {
+      "name": "primary_point_plane_rmse_median_mm",
+      "value": 0.6216037035429345,
+      "threshold": "<=2.5",
+      "passed": true,
+      "meaning": "Error normal a superficie de relaciones primarias."
+    },
+    {
+      "name": "primary_point_plane_p90_median_mm",
+      "value": 0.9370987878426055,
+      "threshold": "<=4.0",
+      "passed": true,
+      "meaning": "Cola robusta del error normal a superficie."
+    },
+    {
+      "name": "closure_overlap",
+      "value": 1.0,
+      "threshold": ">=0.8",
+      "passed": true,
+      "meaning": "El último sector debe cerrar contra P00."
+    },
+    {
+      "name": "closure_rmse_mm",
+      "value": 0.7392194482720178,
+      "threshold": "<=2.5",
+      "passed": true,
+      "meaning": "Cierre euclídeo robusto."
+    },
+    {
+      "name": "closure_point_plane_rmse_mm",
+      "value": 0.45551668958064595,
+      "threshold": "<=2.0",
+      "passed": true,
+      "meaning": "Cierre normal a superficie."
+    },
+    {
+      "name": "maximum_reference_angle_correction_deg",
+      "value": 0.16574872730179435,
+      "threshold": "<=0.35",
+      "passed": true,
+      "meaning": "La calibración no debe depender de correcciones angulares grandes aprendidas de la referencia."
+    },
+    {
+      "name": "adaptive_saturation_count",
+      "value": 0,
+      "threshold": "<=1",
+      "passed": true,
+      "meaning": "Ninguna o muy pocas poses deben intentar escapar del modelo mecánico."
+    },
+    {
+      "name": "reference_manhattan_p90_deg",
+      "value": 6.271475738262375,
+      "threshold": "<=12.0",
+      "passed": true,
+      "meaning": "Chequeo exclusivo de la referencia usada durante desarrollo; NO forma parte del runtime general."
+    },
+    {
+      "name": "reference_compactness_worst_p90_mm",
+      "value": 3.9369759454556856,
+      "threshold": "<=6.0",
+      "passed": true,
+      "meaning": "Chequeo de la referencia; no se exigirá planaridad ni compactación de caras a objetos futuros."
+    },
+    {
+      "name": "mount_reference_distance_error_mm",
+      "value": 45.74895467519758,
+      "threshold": "<=65.0",
+      "passed": true,
+      "meaning": "Prior físico con tolerancia amplia de montaje."
+    }
+  ],
+  "candidate_quality_passed": true,
+  "fingerprints_sha256": {
+    "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\trabajos\\CALIBRACION_PLATAFORMA_20260831_141353\\objetos\\cubo\\reconstruccion\\MULTISESION\\fase5_3B_registro_multivista_restringido_v3_2\\resumen_fase5_3B_registro_multivista_v3_2.json": "57a97d884b70a2c2194ed616db04fde4457889402cbdba1842f1bc1cd670e3bb",
+    "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\trabajos\\CALIBRACION_PLATAFORMA_20260831_141353\\objetos\\cubo\\reconstruccion\\MULTISESION\\fase5_3B_registro_multivista_restringido_v3_2\\poses_registradas_v3_2.csv": "fdf51e19d7fe2cf5ceeef9df96bde9bc12e043696d69b4ba3a1d2f9a8d036bf9",
+    "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\trabajos\\CALIBRACION_PLATAFORMA_20260831_141353\\objetos\\cubo\\reconstruccion\\MULTISESION\\fase5_3B_registro_multivista_restringido_v3_2\\calidad_aristas_v3_2.csv": "99a187ae1b7b18b1d3b64216ddc98cf3eb5e8b2dad765704a23609c546dfe8dd",
+    "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\trabajos\\CALIBRACION_PLATAFORMA_20260831_141353\\objetos\\cubo\\reconstruccion\\MULTISESION\\fase5_3B_registro_multivista_restringido_v3_2\\observabilidad_angular_v3_2.csv": "67eb821705505b0b6cba77c019875c03141a0bb30d364630e22492215186f0a1",
+    "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\trabajos\\CALIBRACION_PLATAFORMA_20260831_141353\\objetos\\cubo\\reconstruccion\\MULTISESION\\fase5_0_mapa_angular\\mapa_angular_multisesion.json": "4bb557b94811aa3d366a558c0db427ac6550ae5eb986475bbcac9c4f804ac2d6",
+    "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\sistema\\calibracion_estereo\\stereo_initial.yaml": "bbcb705911ca14e46ae81deef601facfdfe92c6c0cbebdd8aae05fbc4176dd76",
+    "D:\\Users\\sanma\\Documents\\UNIVERSIDAD\\Tesis\\Sistema_3D_Integrado_v2_0_5_CALIBRADO\\sistema\\calibracion_estereo\\rectification_maps.npz": "fc2c18cf5cc8559f3a3c09d79ea380b83c1a2c846d6c5791844531c089034b15"
+  },
+  "invalidation_rules": [
+    "Mover una cámara o modificar su orientación.",
+    "Cambiar la calibración estéreo o la resolución geométrica usada.",
+    "Mover físicamente la plataforma respecto al par estéreo.",
+    "Cambiar motor, reducción, acople o transmisión de la plataforma.",
+    "Obtener una nueva medición de pasos/vuelta incompatible con 2055.",
+    "Cambiar el sentido físico de giro sin actualizar direction_sign."
+  ],
+  "promotion_requirements": {
+    "minimum_independent_campaigns": 3,
+    "minimum_distinct_unseen_geometries": 2,
+    "same_frozen_calibration_required": true,
+    "per_object_parameter_tuning_allowed": false,
+    "note": "Las tres sesiones S01/S02/S03 de una campaña prueban repetibilidad intra-campaña, no reemplazan campañas independientes."
+  },
+  "important_note": "Los ángulos runtime son exclusivamente los derivados de pasos. Las pequeñas correcciones V3.2 pertenecen al ajuste de la referencia y NO se transfieren a objetos futuros."
+}

@@ -1,0 +1,43 @@
+{
+  "version": "2.1",
+  "image_size": [
+    1920,
+    1080
+  ],
+  "checkerboard": {
+    "cols_internal": 6,
+    "rows_internal": 8,
+    "square_mm": 23.0
+  },
+  "pairs_after_mono_filter": 24,
+  "pairs_used_final": 24,
+  "rms_left_px": 0.3859801652028374,
+  "rms_right_px": 0.4438652994777291,
+  "stereo_rms_px": 0.4297041121607225,
+  "baseline_mm": 77.59245907207561,
+  "expected_baseline_mm": 81.0,
+  "baseline_tolerance_mm": 20.0,
+  "epipolar": {
+    "median_abs_dy_px": 0.11627899969714406,
+    "mean_abs_dy_px": 0.15508468740019488,
+    "p95_abs_dy_px": 0.42638998191032446,
+    "max_abs_dy_px": 0.8971716757968409
+  },
+  "quality": "accepted",
+  "reject_reasons": [],
+  "warnings": [],
+  "installation": {
+    "product_version": "2.0.5",
+    "active": true,
+    "note": "Calibración final suministrada tras corregir la ambigüedad de orden del checkerboard.",
+    "camera_resolution": [
+      1920,
+      1080
+    ],
+    "invalidate_if": [
+      "se mueve cualquiera de las dos cámaras",
+      "cambia la resolución de captura",
+      "se modifica físicamente enfoque/zoom o montaje óptico"
+    ]
+  }
+}
