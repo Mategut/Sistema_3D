@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Paso 03 V5.0 — Silueta visual conservadora + recuperación local del contacto por evidencia estéreo.
+Paso 03 V5.3 — Silueta visual conservadora + exclusión del hardware visible + recuperación local del contacto por evidencia estéreo.
 
 Objetivo
 --------
@@ -70,6 +70,8 @@ import numpy as np
 from utilidades_mascaras import (
     adaptive_visual_anchor,
     build_contact_sheet,
+    build_support_hardware_exclusion_mask,
+    build_support_rim_guard_mask,
     capture_volume_from_support,
     expanded_bbox_mask,
     fill_small_holes,
@@ -101,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Construye las opciones de línea de comandos de este paso."""
     p = argparse.ArgumentParser(
         description=(
-            "Máscara V5.0: cuerpo visual conservador + recuperación estéreo "
+            "Máscara V5.2: cuerpo visual conservador + exclusión del hardware + recuperación estéreo "
             "local únicamente en contacto con plataforma."
         )
     )
@@ -216,6 +218,80 @@ def build_parser() -> argparse.ArgumentParser:
         "--capture-volume-bottom-margin-fraction",
         type=float,
         default=0.03,
+    )
+
+    # ------------------------------------------------------------------
+    # Exclusión del cuerpo físico de la plataforma.
+    #
+    # IMPORTANTE: NO agranda support_mask. La superficie útil sigue siendo
+    # exactamente la misma. Se crea una segunda máscara exterior/inferior
+    # para impedir que el aro gris del hardware entre en la silueta final.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--support-hardware-exclusion",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    p.add_argument(
+        "--support-hardware-lateral-fraction",
+        type=float,
+        default=0.028,
+        help="Expansión lateral de la falda respecto al ancho del soporte.",
+    )
+    p.add_argument(
+        "--support-hardware-downward-fraction",
+        type=float,
+        default=0.17,
+        help="Expansión hacia abajo respecto a la altura del soporte.",
+    )
+    p.add_argument(
+        "--support-hardware-lower-start-fraction",
+        type=float,
+        default=0.40,
+        help=(
+            "Fracción vertical del bbox del soporte desde la que puede existir "
+            "la falda; evita expandir el arco superior."
+        ),
+    )
+    p.add_argument("--support-hardware-min-lateral-px", type=int, default=6)
+    p.add_argument("--support-hardware-min-downward-px", type=int, default=12)
+    p.add_argument("--support-hardware-max-lateral-px", type=int, default=64)
+    p.add_argument("--support-hardware-max-downward-px", type=int, default=96)
+
+    # Banda fina para el pequeño filo gris inmediatamente exterior a la
+    # elipse. No modifica support_mask ni la zona de contacto existente.
+    p.add_argument(
+        "--support-rim-guard",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Excluye un filo fino alrededor del borde físico de la plataforma "
+            "sin agrandar la superficie útil del soporte."
+        ),
+    )
+    p.add_argument(
+        "--support-rim-guard-px",
+        type=int,
+        default=6,
+        help="Espesor máximo, en píxeles, del filo exterior de la plataforma.",
+    )
+    p.add_argument(
+        "--support-rim-object-column-margin-px",
+        type=int,
+        default=10,
+        help=(
+            "Margen horizontal alrededor de columnas con cuerpo real del objeto; "
+            "en esas columnas el filo no se usa como veto."
+        ),
+    )
+    p.add_argument(
+        "--support-rim-object-core-clearance-px",
+        type=int,
+        default=14,
+        help=(
+            "Separación mínima respecto del soporte para considerar una semilla "
+            "como núcleo real del objeto y proteger sus columnas."
+        ),
     )
 
     p.add_argument(
@@ -1031,6 +1107,7 @@ def build_contact_ambiguity_band(
     roi: np.ndarray,
     object_seed: np.ndarray,
     args,
+    support_evidence: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
     """Construye una banda UNKNOWN donde objeto y soporte pueden solaparse.
 
@@ -1039,10 +1116,17 @@ def build_contact_ambiguity_band(
 
         objeto claro ≈ plato claro -> "fondo seguro"
 
-    La banda usa únicamente:
+    La banda usa:
     - dominio físico del soporte;
     - columnas ocupadas por el objeto ya detectado;
-    - proximidad vertical entre el cuerpo y la frontera superior del soporte.
+    - proximidad vertical entre el cuerpo y la frontera superior del soporte;
+    - evidencia visual estricta dentro del soporte, siempre que ya haya sido
+      validada como conectada al cuerpo del objeto.
+
+    La evidencia estricta permite abrir columnas laterales que pertenecen al
+    objeto pero que nacen ya dentro de la proyección del plato (por ejemplo,
+    caras inclinadas o bases anchas). No modifica la geometría del soporte ni
+    depende del nombre o forma conocida del objeto.
 
     El soporte fuera de esta banda sí puede bloquearse como background.
     """
@@ -1136,6 +1220,87 @@ def build_contact_ambiguity_band(
             support.astype(np.uint8) * 255,
         )
 
+    # ------------------------------------------------------------------
+    # V5.3 — extensión lateral guiada por evidencia estricta del objeto.
+    #
+    # El método anterior abría UNKNOWN solo en columnas donde el cuerpo ya
+    # existía FUERA del soporte. Eso recortaba objetos cuya parte inferior
+    # aparece por primera vez dentro de la proyección del plato. Aquí se usa
+    # únicamente evidencia estricta que ya fue validada como conectada al
+    # cuerpo; nunca se desplaza ni se redimensiona support_mask.
+    # ------------------------------------------------------------------
+    evidence_added_pixels = 0
+    evidence_columns_count = 0
+
+    if support_evidence is not None:
+        evidence_mask = (np.asarray(support_evidence) > 0) & support
+
+        if np.count_nonzero(evidence_mask) > 0:
+            # Un cierre muy pequeño une trazos de borde del mismo cuerpo sin
+            # transformar una región grande del plato en candidato.
+            evidence_mask = (
+                cv2.morphologyEx(
+                    evidence_mask.astype(np.uint8) * 255,
+                    cv2.MORPH_CLOSE,
+                    cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+                    iterations=1,
+                )
+                > 0
+            ) & support
+
+            _, evidence_bottom, evidence_valid = _column_bounds(evidence_mask)
+
+            # Se admite un pequeño margen lateral para huecos entre aristas
+            # visibles del mismo objeto. La autoridad sigue siendo la
+            # evidencia estricta, no una proyección de forma.
+            evidence_cols_u8 = evidence_valid.astype(np.uint8).reshape(1, -1) * 255
+            ev_margin = max(2, int(args.contact_band_horizontal_margin_px))
+            evidence_columns = (
+                cv2.dilate(
+                    evidence_cols_u8,
+                    np.ones((1, 2 * ev_margin + 1), dtype=np.uint8),
+                    iterations=1,
+                ).reshape(-1)
+                > 0
+            )
+            evidence_columns &= support_valid
+
+            # Para columnas añadidas por el margen, interpolar el fondo de
+            # evidencia desde la columna válida más cercana.
+            valid_x = np.flatnonzero(evidence_valid)
+            if valid_x.size > 0:
+                for x in np.flatnonzero(evidence_columns):
+                    if evidence_valid[x]:
+                        y_ev = int(evidence_bottom[x])
+                    else:
+                        nearest = int(valid_x[np.argmin(np.abs(valid_x - x))])
+                        y_ev = int(evidence_bottom[nearest])
+
+                    if y_ev < 0:
+                        continue
+
+                    y0 = int(support_top[x])
+                    y1 = int(support_bottom[x])
+                    if y0 > y1:
+                        continue
+
+                    # Abrir solo hasta donde llega la evidencia más una
+                    # tolerancia vertical corta para el contacto.
+                    extra = max(4, int(args.contact_connect_vertical_px))
+                    ye = min(y1, max(y0, y_ev + extra))
+                    before = int(np.count_nonzero(unknown[y0 : ye + 1, x]))
+                    unknown[y0 : ye + 1, x] = (
+                        support[y0 : ye + 1, x].astype(np.uint8) * 255
+                    )
+                    after = int(np.count_nonzero(unknown[y0 : ye + 1, x]))
+                    evidence_added_pixels += max(0, after - before)
+                    evidence_columns_count += 1
+
+            unknown = cv2.bitwise_and(
+                unknown,
+                support.astype(np.uint8) * 255,
+            )
+
     locked = (support & (unknown == 0)).astype(np.uint8) * 255
 
     return (
@@ -1144,6 +1309,8 @@ def build_contact_ambiguity_band(
         {
             "status": "ok",
             "contact_columns": int(selected_columns),
+            "evidence_extension_columns": int(evidence_columns_count),
+            "evidence_extension_added_pixels": int(evidence_added_pixels),
             "unknown_pixels": int(np.count_nonzero(unknown)),
             "locked_pixels": int(np.count_nonzero(locked)),
             "unknown_ratio_of_support": float(
@@ -2807,6 +2974,85 @@ def geodesic_contact_recovery(
     )
 
 
+
+def protect_support_rim_near_object(
+    rim_guard: np.ndarray,
+    support_mask: np.ndarray,
+    object_seed: np.ndarray,
+    valid_domain: np.ndarray,
+    core_clearance_px: int = 14,
+    column_margin_px: int = 10,
+) -> Tuple[np.ndarray, np.ndarray, dict]:
+    """Evita que el guard fino recorte un objeto que cruza el borde del plato.
+
+    El guard del filo es estático y proviene del hardware. Para no convertirlo
+    en una suposición sobre la geometría del objeto, solo se desactiva en las
+    columnas donde existe una semilla visual del objeto que se prolonga más
+    allá de una banda cercana al soporte. Un falso borde del plato, al estar
+    pegado a la elipse, no genera por sí solo ese núcleo profundo.
+    """
+    rim = np.asarray(rim_guard) > 0
+    support = np.asarray(support_mask) > 0
+    seed = np.asarray(object_seed) > 0
+    valid = np.asarray(valid_domain) > 0
+
+    if not (rim.shape == support.shape == seed.shape == valid.shape):
+        raise ValueError("rim_guard, support_mask, object_seed y valid_domain deben coincidir")
+
+    if not np.any(rim):
+        zero = np.zeros(rim.shape, np.uint8)
+        return zero, zero, {
+            "status": "disabled",
+            "reason": "rim_guard_empty",
+            "protected_columns": 0,
+            "raw_rim_pixels": 0,
+            "effective_rim_pixels": 0,
+        }
+
+    clearance = int(np.clip(int(core_clearance_px), 1, 64))
+    margin = int(np.clip(int(column_margin_px), 0, 64))
+
+    support_u8 = support.astype(np.uint8) * 255
+    near_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (2 * clearance + 1, 2 * clearance + 1),
+    )
+    near_support = cv2.dilate(support_u8, near_kernel, iterations=1) > 0
+
+    # Solo una semilla que se extiende claramente fuera del borde puede
+    # proteger columnas. El filo gris, por definición, permanece en near_support.
+    deep_object = seed & (~near_support) & valid
+    protected_columns = np.any(deep_object, axis=0).astype(np.uint8) * 255
+
+    if margin > 0 and np.any(protected_columns):
+        protected_columns = cv2.dilate(
+            protected_columns.reshape(1, -1),
+            np.ones((1, 2 * margin + 1), np.uint8),
+            iterations=1,
+        ).reshape(-1)
+
+    protected = np.broadcast_to(
+        protected_columns.astype(bool)[None, :],
+        rim.shape,
+    ) & rim
+
+    effective = rim & (~protected) & valid
+    return (
+        effective.astype(np.uint8) * 255,
+        protected.astype(np.uint8) * 255,
+        {
+            "status": "active",
+            "core_clearance_px": int(clearance),
+            "column_margin_px": int(margin),
+            "deep_object_pixels": int(np.count_nonzero(deep_object)),
+            "protected_columns": int(np.count_nonzero(protected_columns)),
+            "protected_rim_pixels": int(np.count_nonzero(protected)),
+            "raw_rim_pixels": int(np.count_nonzero(rim)),
+            "effective_rim_pixels": int(np.count_nonzero(effective)),
+        },
+    )
+
+
 @operacion("Crear silueta y resolver contacto con soporte")
 def create_silhouette(
     image: np.ndarray,
@@ -2834,8 +3080,58 @@ def create_silhouette(
         args,
     )
 
+    # La superficie superior detectada permanece intacta. Se manejan dos
+    # exclusiones independientes del hardware:
+    #   1) falda inferior: cuerpo/aro gris grande;
+    #   2) rim guard: filo fino inmediatamente exterior a la elipse.
+    # El rim guard se protege después en columnas ocupadas por un núcleo real
+    # del objeto, para no recortar el objeto cuando cruza visualmente ese borde.
+    if bool(args.support_hardware_exclusion):
+        support_hardware_skirt, support_hardware_diag = (
+            build_support_hardware_exclusion_mask(
+                support_mask,
+                rect_valid_mask,
+                lateral_fraction=args.support_hardware_lateral_fraction,
+                downward_fraction=args.support_hardware_downward_fraction,
+                lower_start_fraction=args.support_hardware_lower_start_fraction,
+                minimum_lateral_px=args.support_hardware_min_lateral_px,
+                minimum_downward_px=args.support_hardware_min_downward_px,
+                maximum_lateral_px=args.support_hardware_max_lateral_px,
+                maximum_downward_px=args.support_hardware_max_downward_px,
+            )
+        )
+    else:
+        support_hardware_skirt = np.zeros_like(support_mask)
+        support_hardware_diag = {
+            "status": "disabled",
+            "reason": "disabled_by_argument",
+            "exclusion_pixels": 0,
+        }
+
+    if bool(args.support_rim_guard):
+        support_rim_guard_raw, support_rim_raw_diag = build_support_rim_guard_mask(
+            support_mask,
+            rect_valid_mask,
+            rim_px=args.support_rim_guard_px,
+        )
+    else:
+        support_rim_guard_raw = np.zeros_like(support_mask)
+        support_rim_raw_diag = {
+            "status": "disabled",
+            "reason": "disabled_by_argument",
+            "rim_pixels": 0,
+        }
+
+    support_hardware_skirt_bool = (support_hardware_skirt > 0) & (roi > 0)
+
     evidence = compute_visual_evidence(image, background, roi, rect_valid_mask, support_mask, args)
-    strong_seed = evidence["strong"].astype(np.uint8) * 255
+
+    # La falda inferior sí es un veto seguro durante la búsqueda de semilla.
+    # El filo fino aún NO se veta: primero necesitamos saber dónde está el
+    # cuerpo real del objeto para no cortar sus columnas.
+    strong_for_seed = evidence["strong"].copy()
+    strong_for_seed[support_hardware_skirt_bool] = False
+    strong_seed = strong_for_seed.astype(np.uint8) * 255
     selected_seed = select_relevant_components(
         strong_seed,
         minimum_area=max(300, int(args.minimum_component_area // 3)),
@@ -2854,6 +3150,28 @@ def create_silhouette(
     else:
         roi_diag["seed_anchor_source"] = "adaptive_visual_fallback"
 
+    # Activar el filo fino solo donde no hay evidencia de un cuerpo real que
+    # se prolonga fuera de la vecindad inmediata del plato. Así el pequeño
+    # borde gris queda bloqueado, pero el objeto no se recorta.
+    (
+        support_rim_guard,
+        support_rim_protected,
+        support_rim_guard_diag,
+    ) = protect_support_rim_near_object(
+        support_rim_guard_raw,
+        support_mask,
+        selected_seed,
+        rect_valid_mask,
+        core_clearance_px=args.support_rim_object_core_clearance_px,
+        column_margin_px=args.support_rim_object_column_margin_px,
+    )
+
+    support_hardware_exclusion = cv2.bitwise_or(
+        support_hardware_skirt,
+        support_rim_guard,
+    )
+    support_hardware_bool = (support_hardware_exclusion > 0) & (roi > 0)
+
     support_bool = (support_mask > 0) & (roi > 0)
 
     # ------------------------------------------------------------------
@@ -2864,8 +3182,9 @@ def create_silhouette(
     object_seed_for_support = (selected_seed > 0) & (~support_bool) & (anchor > 0)
 
     if np.count_nonzero(object_seed_for_support) < 120:
+        fallback_candidate = (adaptive_visual_candidate > 0) & (~support_hardware_bool)
         fallback_visual_seed = select_relevant_components(
-            ((adaptive_visual_candidate > 0).astype(np.uint8) * 255),
+            (fallback_candidate.astype(np.uint8) * 255),
             minimum_area=max(
                 300,
                 int(args.minimum_component_area // 3),
@@ -2875,19 +3194,10 @@ def create_silhouette(
         )
         object_seed_for_support = (fallback_visual_seed > 0) & (~support_bool) & (anchor > 0)
 
-    (
-        support_contact_unknown,
-        support_background_locked,
-        support_contact_band_diag,
-    ) = build_contact_ambiguity_band(
-        support_mask,
-        roi,
-        object_seed_for_support,
-        args,
-    )
-
-    # Evidencia estricta se conserva solo como diagnóstico/semilla probable,
-    # nunca como veto para el UNKNOWN.
+    # Primero se calcula evidencia estricta dentro del soporte. Esta salida
+    # ya exige conexión espacial con el cuerpo y por tanto puede usarse para
+    # ampliar de forma segura la banda UNKNOWN en objetos cuya base aparece
+    # lateralmente dentro de la proyección del plato.
     (
         support_occlusion_strict,
         _legacy_support_search,
@@ -2901,19 +3211,34 @@ def create_silhouette(
         args,
     )
 
+    (
+        support_contact_unknown,
+        support_background_locked,
+        support_contact_band_diag,
+    ) = build_contact_ambiguity_band(
+        support_mask,
+        roi,
+        object_seed_for_support,
+        args,
+        support_evidence=support_occlusion_strict,
+    )
+
     support_search_bool = support_contact_unknown > 0
     support_strict_bool = support_occlusion_strict > 0
 
     weak_effective = evidence["weak"].copy()
     strong_effective = evidence["strong"].copy()
 
-    # Primera segmentación: exclusivamente fuera del soporte.
+    # Primera segmentación: exclusivamente fuera del soporte y fuera del
+    # cuerpo físico conocido de la plataforma.
     weak_effective[support_bool] = False
     strong_effective[support_bool] = False
+    weak_effective[support_hardware_bool] = False
+    strong_effective[support_hardware_bool] = False
 
     effective_shadow_mask = (
         evidence["shadow_mask"] & (~evidence["support_object_evidence"])
-    ) | support_bool
+    ) | support_bool | support_hardware_bool
 
     candidate = shadow_aware_hysteresis(
         weak_effective,
@@ -2955,6 +3280,7 @@ def create_silhouette(
         candidate,
         roi,
     )
+    candidate[support_hardware_bool] = 0
 
     mask, component_diag = select_spatial_components(
         candidate,
@@ -2969,6 +3295,7 @@ def create_silhouette(
     # ------------------------------------------------------------------
     mask_outside_support = mask.copy()
     mask_outside_support[support_bool] = 0
+    mask_outside_support[support_hardware_bool] = 0
 
     # ------------------------------------------------------------------
     # V5.0 — NO usar GraphCut para separar objeto/plataforma.
@@ -3035,7 +3362,7 @@ def create_silhouette(
     if args.graphcut_recovery and np.count_nonzero(mask) > 0:
         # El GraphCut general solo puede trabajar FUERA del soporte.
         # La frontera objeto-plataforma ya fue resuelta por el paso V3.2.
-        outside_support = (~support_bool) & (roi > 0)
+        outside_support = (~support_bool) & (~support_hardware_bool) & (roi > 0)
 
         weak_near_object = weak_effective & (anchor > 0) & outside_support
 
@@ -3064,6 +3391,8 @@ def create_silhouette(
         # El GraphCut general tampoco puede modificar el soporte.
         graphcut_mask[support_bool] = mask[support_bool]
         graphcut_recovered[support_bool] = 0
+        graphcut_mask[support_hardware_bool] = 0
+        graphcut_recovered[support_hardware_bool] = 0
 
         # Recuperación: no sustitución.
         mask = cv2.bitwise_or(mask, graphcut_mask)
@@ -3079,6 +3408,11 @@ def create_silhouette(
         mask,
         args.maximum_hole_area,
     )
+
+    # Seguridad final: el relleno morfológico no puede volver a introducir el
+    # aro físico de la plataforma. support_mask no se toca.
+    mask[support_hardware_bool] = 0
+
     mask = cv2.bitwise_and(
         mask,
         roi,
@@ -3107,6 +3441,18 @@ def create_silhouette(
         "strong_pixels": int(np.count_nonzero(evidence["strong"])),
         "shadow_pixels_rejected": int(np.count_nonzero(evidence["shadow_mask"])),
         "support_pixels": int(np.count_nonzero(support_mask)),
+        "support_hardware_exclusion": {
+            **support_hardware_diag,
+            "combined_exclusion_pixels": int(np.count_nonzero(support_hardware_bool)),
+            "rim_raw": support_rim_raw_diag,
+            "rim_effective": support_rim_guard_diag,
+        },
+        "support_hardware_exclusion_pixels": int(
+            np.count_nonzero(support_hardware_bool)
+        ),
+        "support_rim_guard_raw_pixels": int(np.count_nonzero(support_rim_guard_raw)),
+        "support_rim_guard_pixels": int(np.count_nonzero(support_rim_guard)),
+        "support_rim_protected_pixels": int(np.count_nonzero(support_rim_protected)),
         "support_shadow_pixels_hard_rejected": int(
             np.count_nonzero(evidence["support_shadow_reject"])
         ),
@@ -3118,7 +3464,7 @@ def create_silhouette(
         "support_occlusion_search_pixels": int(np.count_nonzero(support_contact_unknown)),
         "support_background_locked_pixels": int(np.count_nonzero(support_background_locked)),
         "support_contact_band": support_contact_band_diag,
-        "support_contact_method": "v5_local_geodesic_rgbd",
+        "support_contact_method": "v5_3_local_geodesic_rgbd_with_strict_evidence_extension",
         "support_contact_graphcut": {
             "status": "replaced",
             "replacement": "local_geodesic_rgbd_contact_v5",
@@ -3140,6 +3486,11 @@ def create_silhouette(
         "adaptive_visual_candidate": adaptive_visual_candidate,
         "shadow_mask": evidence["shadow_mask"].astype(np.uint8) * 255,
         "support_mask": (support_mask > 0).astype(np.uint8) * 255,
+        "support_hardware_skirt": support_hardware_skirt,
+        "support_rim_guard_raw": support_rim_guard_raw,
+        "support_rim_guard": support_rim_guard,
+        "support_rim_protected": support_rim_protected,
+        "support_hardware_exclusion": support_hardware_exclusion,
         "support_shadow_reject": evidence["support_shadow_reject"].astype(np.uint8) * 255,
         "support_object_evidence": evidence["support_object_evidence"].astype(np.uint8) * 255,
         "support_occlusion_strict": support_occlusion_strict,
@@ -3422,10 +3773,11 @@ def main() -> int:
     records = []
     preview_paths = []
 
-    print("\n========== " "PASO 03 V5.0: SILUETA " "ADAPTATIVA ==========")
+    print("\n========== " "PASO 03 V5.3: SILUETA " "ADAPTATIVA ==========")
     print(
         "Método: evidencia visual + plataforma multicue validada + "
-        "banda UNKNOWN profunda de contacto V3.3 + continuidad condicionada."
+        "falda inferior de exclusión de hardware + banda UNKNOWN profunda "
+        "de contacto V3.3 + continuidad condicionada."
     )
     print("Disparidad: SOLO verificación local dentro del contacto; nunca detector global.")
 
@@ -3544,7 +3896,7 @@ def main() -> int:
             overlay_mask(
                 image,
                 mask,
-                (f"{angle:05.1f}° " "| silueta V5 local"),
+                (f"{angle:05.1f}° " "| silueta V5.3 local"),
                 probability,
             ),
         )
@@ -3554,6 +3906,16 @@ def main() -> int:
         anchor_path = output_dir / f"{stem}_debug_anchor.png"
         shadow_path = output_dir / f"{stem}_debug_shadow_rejected.png"
         support_path = output_dir / f"{stem}_debug_support_hardware.png"
+        support_hardware_exclusion_path = (
+            output_dir / f"{stem}_debug_support_hardware_exclusion.png"
+        )
+        support_hardware_exclusion_overlay_path = (
+            output_dir / f"{stem}_debug_support_hardware_exclusion_overlay.png"
+        )
+        support_rim_guard_path = output_dir / f"{stem}_debug_support_rim_guard.png"
+        support_rim_guard_overlay_path = (
+            output_dir / f"{stem}_debug_support_rim_guard_overlay.png"
+        )
         capture_volume_path = output_dir / f"{stem}_debug_capture_volume.png"
         effective_shadow_path = output_dir / f"{stem}_debug_effective_shadow.png"
         graphcut_recovered_path = output_dir / f"{stem}_debug_graphcut_recovered.png"
@@ -3640,6 +4002,64 @@ def main() -> int:
             debug["adaptive_visual_candidate"],
         )
         imwrite_checked(str(support_path), debug["support_mask"])
+        imwrite_checked(
+            str(support_hardware_exclusion_path),
+            debug["support_hardware_exclusion"],
+        )
+
+        hardware_overlay = image.copy()
+        skirt_bool = debug["support_hardware_skirt"] > 0
+        if np.any(skirt_bool):
+            magenta = np.array([255, 0, 255], dtype=np.float32)
+            base = hardware_overlay[skirt_bool].astype(np.float32)
+            hardware_overlay[skirt_bool] = np.clip(
+                0.55 * base + 0.45 * magenta, 0, 255
+            ).astype(np.uint8)
+
+        rim_bool = debug["support_rim_guard"] > 0
+        if np.any(rim_bool):
+            green = np.array([0, 255, 0], dtype=np.float32)
+            base = hardware_overlay[rim_bool].astype(np.float32)
+            hardware_overlay[rim_bool] = np.clip(
+                0.55 * base + 0.45 * green, 0, 255
+            ).astype(np.uint8)
+
+        # Contorno verde exterior = superficie útil + filo fino. La máscara
+        # support_mask original sigue intacta internamente.
+        support_plus_rim = cv2.bitwise_or(
+            debug["support_mask"],
+            debug["support_rim_guard"],
+        )
+        support_contours, _ = cv2.findContours(
+            support_plus_rim,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+        cv2.drawContours(
+            hardware_overlay,
+            support_contours,
+            -1,
+            (0, 255, 0),
+            2,
+        )
+        imwrite_checked(
+            str(support_hardware_exclusion_overlay_path),
+            hardware_overlay,
+        )
+
+        imwrite_checked(str(support_rim_guard_path), debug["support_rim_guard"])
+        rim_overlay = image.copy()
+        rim_tint = np.zeros_like(image)
+        rim_tint[:, :, 1] = debug["support_rim_guard"]
+        rim_overlay = cv2.addWeighted(rim_overlay, 1.0, rim_tint, 0.45, 0.0)
+        rim_contours, _ = cv2.findContours(
+            support_plus_rim,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+        cv2.drawContours(rim_overlay, rim_contours, -1, (0, 255, 0), 2)
+        imwrite_checked(str(support_rim_guard_overlay_path), rim_overlay)
+
         imwrite_checked(str(capture_volume_path), debug["roi"])
         imwrite_checked(str(effective_shadow_path), debug["effective_shadow_mask"])
         imwrite_checked(
@@ -3695,6 +4115,46 @@ def main() -> int:
         tint[:, :, 1] = debug["support_occlusion_search"]
         tint[:, :, 2] = debug["support_background_locked"]
         support_overlay = cv2.addWeighted(support_overlay, 0.82, tint, 0.35, 0.0)
+
+        # Mostrar también en ESTE mismo diagnóstico la falda de hardware.
+        # Antes la exclusión sí se aplicaba a la máscara final, pero este
+        # overlay no la dibujaba, por lo que visualmente parecía que nada
+        # había cambiado. Se usa magenta para distinguirla del rojo/verde
+        # ya empleados por la lógica de oclusión del soporte.
+        skirt_bool = debug["support_hardware_skirt"] > 0
+        if np.any(skirt_bool):
+            hw_color = np.array([255, 0, 255], dtype=np.float32)  # BGR: magenta
+            base = support_overlay[skirt_bool].astype(np.float32)
+            support_overlay[skirt_bool] = np.clip(
+                0.55 * base + 0.45 * hw_color,
+                0,
+                255,
+            ).astype(np.uint8)
+
+        # El filo fino se muestra en verde porque forma parte del hardware
+        # visible del plato que queremos cubrir. support_mask no se altera: la
+        # unión solo existe para diagnóstico y veto exterior.
+        rim_bool = debug["support_rim_guard"] > 0
+        if np.any(rim_bool):
+            rim_color = np.array([0, 255, 0], dtype=np.float32)
+            base = support_overlay[rim_bool].astype(np.float32)
+            support_overlay[rim_bool] = np.clip(
+                0.55 * base + 0.45 * rim_color,
+                0,
+                255,
+            ).astype(np.uint8)
+
+        support_plus_rim = cv2.bitwise_or(
+            debug["support_mask"],
+            debug["support_rim_guard"],
+        )
+        support_contours, _ = cv2.findContours(
+            support_plus_rim,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+        cv2.drawContours(support_overlay, support_contours, -1, (0, 255, 0), 2)
+
         contours, _ = cv2.findContours(
             debug["support_occlusion_strict"],
             cv2.RETR_EXTERNAL,
@@ -3724,6 +4184,14 @@ def main() -> int:
                 "debug_anchor": str(anchor_path),
                 "debug_shadow": str(shadow_path),
                 "debug_candidate": str(candidate_path),
+                "debug_support_hardware_exclusion": str(
+                    support_hardware_exclusion_path
+                ),
+                "debug_support_hardware_exclusion_overlay": str(
+                    support_hardware_exclusion_overlay_path
+                ),
+                "debug_support_rim_guard": str(support_rim_guard_path),
+                "debug_support_rim_guard_overlay": str(support_rim_guard_overlay_path),
                 "debug_support_occlusion_strict": str(support_occlusion_strict_path),
                 "debug_support_occlusion_search": str(support_occlusion_search_path),
                 "debug_support_background_locked": str(support_background_locked_path),
@@ -3788,7 +4256,8 @@ def main() -> int:
         "schema_version": 5,
         "method": (
             "static_background_visual_core_v3_3_"
-            "local_support_contact_band_"
+            "directional_support_hardware_exclusion_v1_"
+            "local_support_contact_band_v5_3_"
             "local_disparity_background_verification_"
             "geodesic_contact_growth_v5"
         ),
@@ -3815,6 +4284,8 @@ def main() -> int:
         "views": records,
         "important_note": (
             "La pertenencia global sigue siendo visual. "
+            "La superficie superior del soporte no se agranda; una segunda falda "
+            "direccional excluye únicamente el cuerpo gris exterior/inferior del hardware. "
             "La disparidad solo puede recuperar píxeles dentro de la banda local "
             "de contacto objeto-plataforma y nunca fuera de ella. "
             "El contacto se resuelve por crecimiento geodésico desde el cuerpo "
@@ -3880,7 +4351,7 @@ def main() -> int:
                 }
             )
 
-    print("\n========== " "PASO 03 V5.0 COMPLETADO " "==========")
+    print("\n========== " "PASO 03 V5.3 COMPLETADO " "==========")
     print(f"Salida: {output_dir}")
     print("Revisar primero: " "contact_sheet_siluetas.png")
     print("Diagnóstico por vista: " "*_debug_shadow_rejected.png y *_debug_roi.png")

@@ -986,22 +986,46 @@ def _procesar_unidad_independiente(task):
                 )
                 continue
             aligned.append(align_observation(obs, estimate))
+        # Contrato de cobertura angular: el registro posterior trabaja con las 25
+        # poses mecánicas. Si dos repeticiones no superan el umbral de alineación
+        # residual, no se fuerza una fusión mala ni se elimina la pose completa.
+        # Se conserva únicamente la mejor observación de referencia como respaldo
+        # de baja autoridad. Los pasos 06/10 reciben soporte=1 y confianza reducida,
+        # por lo que esa pose aporta cobertura sin hacerse pasar por consenso.
+        single_source_fallback = False
         if len(aligned) < args.minimum_independent_depth_support:
-            records_out.append(
-                {
-                    "pose_index": pose,
-                    "physical_angle_deg": float(members[0]["physical_angle_deg"]),
-                    "quality": "rejected",
-                    "reasons": ["Soporte insuficiente después de alineación residual."],
-                    "alignment": alignment_info,
-                    "ignored": ignored,
-                }
-            )
-            print(f"[P{pose:02d}] rejected tras alineación | obs={len(aligned)}")
-            continue
+            if len(aligned) == 1 and len(loaded) >= args.minimum_independent_depth_support:
+                single_source_fallback = True
+                ignored.append(
+                    {
+                        "reason": (
+                            "fallback_single_source: las demás sesiones no superaron "
+                            "la alineación residual; se conserva solo la referencia con "
+                            "autoridad reducida"
+                        )
+                    }
+                )
+                print(
+                    f"[P{pose:02d}] warning | respaldo de una sola observación "
+                    f"tras alineación | loaded={len(loaded)} aligned=1"
+                )
+            else:
+                records_out.append(
+                    {
+                        "pose_index": pose,
+                        "physical_angle_deg": float(members[0]["physical_angle_deg"]),
+                        "quality": "rejected",
+                        "reasons": ["Soporte insuficiente después de alineación residual."],
+                        "alignment": alignment_info,
+                        "ignored": ignored,
+                    }
+                )
+                print(f"[P{pose:02d}] rejected tras alineación | obs={len(aligned)}")
+                continue
+
         masks = [o["silhouette"] for o in aligned]
         stack = np.stack([m > 0 for m in masks])
-        required = max(2, int(math.ceil(len(aligned) * 0.5)))
+        required = 1 if single_source_fallback else max(2, int(math.ceil(len(aligned) * 0.5)))
         silhouette_support = np.sum(stack, axis=0).astype(np.uint8)
         silhouette = (silhouette_support >= required).astype(np.uint8) * 255
         support_domain = _majority_support_domain(aligned)
@@ -1010,25 +1034,54 @@ def _procesar_unidad_independiente(task):
         adaptive_agreement_mm, agreement_diag = derive_depth_agreement(
             aligned, depth_biases, stable_interior, args
         )
-        (
-            depth,
-            depth_support,
-            depth_spread,
-            depth_valid,
-            low_agreement_map,
-            depth_agreement_support,
-            confidence,
-            selection_mode,
-        ) = consensus_depth(
-            aligned,
-            adaptive_agreement_mm,
-            args.minimum_independent_depth_support,
-            biases=depth_biases,
-            stable_interior=stable_interior,
-            triplet_rescue=bool(args.triplet_interior_rescue),
-            triplet_rescue_max_span_mm=float(args.triplet_rescue_max_span_mm),
-            regional_residual_reference_px=float(args.regional_residual_reference_px),
-        )
+
+        if single_source_fallback:
+            source = aligned[0]
+            valid_source = (source["cloud_mask"] > 0) & np.isfinite(source["depth"])
+            depth = source["depth"].astype(np.float32).copy()
+            depth[~valid_source] = np.nan
+            depth_support = valid_source.astype(np.uint8)
+            # No existe dispersión intersesión medible con una sola observación.
+            # Se usa la escala nominal de acuerdo como cota conservadora explícita,
+            # nunca como evidencia de repetibilidad real.
+            depth_spread = np.full(depth.shape, np.nan, np.float32)
+            depth_spread[valid_source] = float(args.depth_agreement_mm)
+            depth_valid = valid_source.astype(np.uint8) * 255
+            low_agreement_map = valid_source.astype(np.uint8) * 255
+            depth_agreement_support = np.zeros(depth.shape, np.uint8)
+            confidence = np.asarray(source["confidence"], dtype=np.float32).copy()
+            confidence = np.where(
+                valid_source & np.isfinite(confidence),
+                np.clip(confidence, 0.0, 1.0) * 0.55,
+                np.nan,
+            ).astype(np.float32)
+            selection_mode = np.zeros(depth.shape, np.uint8)
+            selection_mode[valid_source] = 4  # respaldo monosesión, sin consenso
+            agreement_diag = {
+                "adaptive": False,
+                "agreement_mm": float(args.depth_agreement_mm),
+                "reason": "single_source_fallback_no_independent_agreement",
+            }
+        else:
+            (
+                depth,
+                depth_support,
+                depth_spread,
+                depth_valid,
+                low_agreement_map,
+                depth_agreement_support,
+                confidence,
+                selection_mode,
+            ) = consensus_depth(
+                aligned,
+                adaptive_agreement_mm,
+                args.minimum_independent_depth_support,
+                biases=depth_biases,
+                stable_interior=stable_interior,
+                triplet_rescue=bool(args.triplet_interior_rescue),
+                triplet_rescue_max_span_mm=float(args.triplet_rescue_max_span_mm),
+                regional_residual_reference_px=float(args.regional_residual_reference_px),
+            )
         cloud_mask = cv2.bitwise_and(silhouette, depth_valid)
         support_veto, support_object_votes, support_veto_diag = support_depth_veto(aligned, args)
         support_veto &= cloud_mask > 0
@@ -1047,6 +1100,12 @@ def _procesar_unidad_independiente(task):
         steps = int(members[0]["cumulative_steps"])
         reasons = []
         quality = "accepted"
+        if single_source_fallback:
+            quality = "warning"
+            reasons.append(
+                "Respaldo monosesión: solo una repetición superó la alineación residual; "
+                "se conserva para mantener cobertura angular con confianza reducida."
+            )
         if valid_pixels == 0:
             quality = "rejected"
             reasons.append("Consenso sin profundidad válida.")
@@ -1176,6 +1235,7 @@ def _procesar_unidad_independiente(task):
             "reasons": reasons,
             "observations_loaded": len(loaded),
             "observations_used": len(aligned),
+            "single_source_fallback": bool(single_source_fallback),
             "silhouette_required_support": required,
             "silhouette_pixels": silhouette_pixels,
             "valid_depth_pixels": valid_pixels,
@@ -1316,8 +1376,11 @@ def main():
             "Z. El medoide selecciona una sola capa y únicamente sus medidas "
             "compatibles se fusionan robustamente en 1/Z. El desacuerdo se "
             "conserva como confianza, dispersión y soporte "
-            "para las etapas geométricas posteriores. El veto de plataforma "
-            "por profundidad permanece desactivado por defecto."
+            "para las etapas geométricas posteriores. Si una pose pierde el "
+            "respaldo independiente únicamente por fallo de alineación residual, "
+            "se conserva una sola observación como warning con soporte=1 y confianza "
+            "reducida para no romper la cobertura mecánica de 25 poses. El veto de "
+            "plataforma por profundidad permanece desactivado por defecto."
         ),
     }
     save_json(output / "resumen_05_consenso_multisesion.json", summary)

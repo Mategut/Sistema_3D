@@ -387,6 +387,7 @@ def classify_foreground(
     stereo_diagnostics: dict,
     stereo_fb_px_mm: float,
     args,
+    minimum_observed_override: int | None = None,
 ) -> Tuple[np.ndarray, ...]:
     """Valida candidatos de fondo con evidencia estéreo independiente."""
     valid_depth = np.isfinite(depth_mm) & (depth_mm > 1e-6)
@@ -465,7 +466,14 @@ def classify_foreground(
 
     observed_sessions = np.asarray(stereo_diagnostics.get("observed_sessions"), dtype=np.uint8)
     diagnostic_sessions = np.asarray(stereo_diagnostics.get("diagnostic_sessions"), dtype=np.uint8)
-    minimum_observed = max(1, int(args.stereo_minimum_observed_sessions))
+    minimum_observed = max(
+        1,
+        int(
+            args.stereo_minimum_observed_sessions
+            if minimum_observed_override is None
+            else minimum_observed_override
+        ),
+    )
     observed_score = np.where(
         diagnostic_sessions > 0,
         np.clip(observed_sessions.astype(np.float32) / minimum_observed, 0.0, 1.0),
@@ -1102,8 +1110,13 @@ def smooth_surface(samples: dict, normals: np.ndarray, args) -> Tuple[dict, dict
 
 
 @operacion("Limpiar nube y estimar normales")
-def clean_cloud(samples: dict, args):
-    """Aplica los filtros de nube configurados y conserva estadísticas de limpieza."""
+def clean_cloud(samples: dict, args, minimum_observed_override=None):
+    """Aplica los filtros de nube configurados y conserva estadísticas de limpieza.
+
+    ``minimum_observed_override`` se usa únicamente en poses marcadas explícitamente
+    como respaldo monosesión por el paso 05. De esta forma, el criterio de evidencia
+    3D no contradice el soporte mínimo ya autorizado aguas arriba.
+    """
     points = samples["points"]
     colors = samples["colors"]
     stats = {
@@ -1184,8 +1197,13 @@ def clean_cloud(samples: dict, args):
             # P95 evita que una pieza legítima con mucha frontera interpolada
             # sea descartada porque su mediana o P90 son modestos.
             p95_stereo = float(np.percentile(stereo, 95))
+            evidence_minimum_observed = (
+                max(1, int(minimum_observed_override))
+                if minimum_observed_override is not None
+                else max(1, int(args.stereo_minimum_observed_sessions))
+            )
             observed_evidence_points = int(
-                np.count_nonzero(observed >= max(1, int(args.stereo_minimum_observed_sessions)))
+                np.count_nonzero(observed >= evidence_minimum_observed)
             )
             evidence = bool(
                 np.any(validated_component)
@@ -1219,6 +1237,11 @@ def clean_cloud(samples: dict, args):
         samples = _take_samples(samples, np.empty(0, dtype=np.int64))
         points, colors = samples["points"], samples["colors"]
     stats["after_dbscan"] = int(len(points))
+    stats["component_evidence_minimum_observed_sessions"] = int(
+        max(1, int(minimum_observed_override))
+        if minimum_observed_override is not None
+        else max(1, int(args.stereo_minimum_observed_sessions))
+    )
 
     normals = estimate_normals(points, colors, args)
     samples, smoothing_stats = smooth_surface(samples, normals, args)
@@ -1335,6 +1358,11 @@ def _procesar_unidad_independiente(task):
             np.float32
         )
         spread = np.where(np.isfinite(spread), np.maximum(spread, 0.0), np.inf)
+        observations_used = int(view.get("observations_used", 0) or 0)
+        single_source_fallback = bool(view.get("single_source_fallback", False)) or observations_used == 1
+        effective_minimum_depth_support = (
+            1 if single_source_fallback else int(args.minimum_depth_support)
+        )
         support_denominator = np.maximum(depth_support.astype(np.float32), 1.0)
         agreement_ratio = np.clip(
             agreement_support.astype(np.float32) / support_denominator, 0.0, 1.0
@@ -1349,10 +1377,15 @@ def _procesar_unidad_independiente(task):
         point_confidence = np.clip(
             confidence * (0.6 + 0.4 * agreement_ratio) * (0.55 + 0.45 * spread_score), 0.0, 1.0
         ).astype(np.float32)
+        if single_source_fallback:
+            # Una pose de respaldo no debe tener la misma autoridad que un consenso
+            # real. Se permite soporte=1 únicamente para esa pose y se reduce de
+            # nuevo la confianza antes de la validación geométrica contra el fondo.
+            point_confidence *= np.float32(0.70)
         reliable = (
             (mask > 0)
             & np.isfinite(depth)
-            & (depth_support >= int(args.minimum_depth_support))
+            & (depth_support >= effective_minimum_depth_support)
             & (spread <= float(args.maximum_depth_spread_mm))
             & (point_confidence >= float(args.minimum_point_confidence))
         )
@@ -1395,6 +1428,7 @@ def _procesar_unidad_independiente(task):
             stereo_diagnostics,
             stereo_fb_px_mm,
             args,
+            minimum_observed_override=(1 if single_source_fallback else None),
         )
         regularization_domain = validated_foreground.copy()
         regularized_depth, regularization_stats = regularize_inverse_depth(
@@ -1422,13 +1456,23 @@ def _procesar_unidad_independiente(task):
             args.pixel_step,
         )
         samples_voxel = voxel_downsample(samples_raw, args.voxel_mm, args.depth_spread_reference_mm)
-        samples, normals, filter_stats = clean_cloud(samples_voxel, args)
+        samples, normals, filter_stats = clean_cloud(
+            samples_voxel,
+            args,
+            minimum_observed_override=(1 if single_source_fallback else None),
+        )
         points = samples["points"]
         colors = samples["colors"]
         reasons = []
         quality = "accepted" if view["quality"] == "accepted" else "warning"
         if view["quality"] == "warning":
             reasons.append("El consenso 05 marcó esta pose como warning.")
+        if single_source_fallback:
+            quality = "warning"
+            reasons.append(
+                "Pose de respaldo monosesión: soporte mínimo efectivo=1 y confianza reducida; "
+                "se conserva solo para mantener cobertura angular."
+            )
         if len(points) == 0:
             quality = "rejected"
             reasons.append("La nube de consenso quedó vacía.")
@@ -1485,6 +1529,8 @@ def _procesar_unidad_independiente(task):
             "quality": quality,
             "reasons": reasons,
             "source_quality": view["quality"],
+            "single_source_fallback": bool(single_source_fallback),
+            "effective_minimum_depth_support": int(effective_minimum_depth_support),
             "mask_points_before_reliability": int(np.count_nonzero(mask)),
             "reliable_depth_pixels": int(np.count_nonzero(reliable)),
             "reliable_ratio_of_input_mask": float(

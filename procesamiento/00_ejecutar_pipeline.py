@@ -42,6 +42,8 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional, Sequence
 
 from utilidades_multisesion import discover_sessions
+from utilidades_referencias import resolve_campaign_references
+from utilidades_almacenamiento import compact_reconstruction, print_compaction_report
 
 DEPTH = "02_estimacion_profundidad"
 SIL = "03_mascara_objeto"
@@ -78,14 +80,23 @@ def parser():
             "segura. Los valores explícitos exigen ese provider."
         ),
     )
-    p.add_argument("--regional-workers", type=int, default=0)
     p.add_argument("--expected-sessions", type=int, default=3)
+    p.add_argument("--regional-workers", type=int, default=0, help=argparse.SUPPRESS)
     p.add_argument(
         "--resume",
         action="store_true",
         help=(
             "Reutiliza únicamente checkpoints válidos del MISMO trabajo. "
             "Si encuentra un paso ausente, rechazado u obsoleto, continúa desde él."
+        ),
+    )
+    p.add_argument(
+        "--storage-mode",
+        choices=("reducido", "completo"),
+        default="reducido",
+        help=(
+            "reducido conserva al finalizar solo resúmenes, análisis y previews globales; "
+            "completo mantiene todos los artefactos intermedios de diagnóstico."
         ),
     )
     return p
@@ -424,6 +435,11 @@ class CheckpointManager:
         atomic_write_json(self.state_path, self.state)
 
     def _checkpoint_valid(self, stage: Stage) -> ContractResult:
+        if bool(self.state.get("storage_compacted", False)):
+            return ContractResult(
+                False,
+                "campaña compactada: los intermedios fueron retirados y deben recalcularse",
+            )
         contract = stage.validate_contract()
         if not contract.ok:
             return contract
@@ -817,7 +833,7 @@ def build_preprocess_stages(a, base, workspace, obj, py, stereo, background, mod
         script = base / "04_validar_disparidad.py"
         yield make_stage(
             f"04:{session}",
-            f"Paso 04 | {session} | Validar disparidad regional",
+            f"Paso 04 | {session} | Validar profundidad",
             script,
             [
                 py,
@@ -834,10 +850,6 @@ def build_preprocess_stages(a, base, workspace, obj, py, stereo, background, mod
                 SIL,
                 "--output-name",
                 REG,
-                "--no-fill-accepted-regions",
-                "--no-nominal-360-is-closure",
-                "--workers",
-                str(a.regional_workers),
                 "--calibration-dir",
                 str(stereo),
             ],
@@ -909,6 +921,14 @@ def run_pipeline(a, base, workspace, obj, py, stereo, background, model):
     manager = CheckpointManager(workspace, obj, a.mode, a.resume)
     if not a.resume:
         clean_current_results(workspace, obj)
+        if a.mode == "calibrar-plataforma":
+            local_calibration_result = workspace / "resultado_calibracion_plataforma"
+            if local_calibration_result.exists():
+                print(
+                    "[CLEAN] Se elimina resultado_calibracion_plataforma previo:",
+                    local_calibration_result,
+                )
+                shutil.rmtree(local_calibration_result)
         manager.reset()
         manager.save()
         print("[PIPELINE] Modo: DESDE CERO")
@@ -1022,6 +1042,9 @@ def run_pipeline(a, base, workspace, obj, py, stereo, background, model):
             allow_bootstrap=False,
         )
         manager.run_stage(stage)
+        if a.storage_mode == "reducido":
+            report = compact_reconstruction(workspace, reason="platform_calibration_complete")
+            print_compaction_report(report)
         return 0
 
     if not a.platform_calibration:
@@ -1034,7 +1057,7 @@ def run_pipeline(a, base, workspace, obj, py, stereo, background, model):
     rc10 = manager.run_stage(
         make_stage(
             "10",
-            "Paso 10 | Registrar vistas calibradas con refinamiento validado del eje",
+            "Paso 10 | Registrar vistas calibradas y evaluar A/B del eje",
             script,
             [
                 py,
@@ -1045,6 +1068,8 @@ def run_pipeline(a, base, workspace, obj, py, stereo, background, model):
                 obj,
                 "--calibration",
                 str(platform),
+                # Se evalúa el candidato A/B, pero Paso 10 V3.3 conserva
+                # la calibración congelada salvo autorización explícita.
                 "--refine-axis-line",
             ],
             [s3],
@@ -1229,6 +1254,10 @@ def run_pipeline(a, base, workspace, obj, py, stereo, background, model):
         )
     )
 
+    if a.storage_mode == "reducido":
+        report = compact_reconstruction(workspace, reason="reconstruction_complete")
+        print_compaction_report(report)
+
     return 0
 
 
@@ -1249,13 +1278,54 @@ def main():
 
     workspace = require_dir(a.workspace, "Workspace")
     obj = a.object.strip().lower()
-    model = require_file(a.model, "Modelo ONNX")
-    stereo = require_dir(a.stereo_calibration_dir, "Calibración estéreo")
+
+    # Campañas nuevas llevan dentro una copia inmutable de sus referencias.
+    # Los argumentos CLI se conservan como fallback únicamente para trabajos
+    # creados antes de esta arquitectura.
+    refs = resolve_campaign_references(
+        workspace,
+        a.mode,
+        fallback_model=Path(a.model),
+        fallback_stereo=Path(a.stereo_calibration_dir),
+        fallback_background=Path(a.background_dir),
+        fallback_platform=(Path(a.platform_calibration) if a.platform_calibration else None),
+        verify_hashes=True,
+    )
+
+    model = require_file(refs["model"], "Modelo ONNX")
+    stereo = require_dir(refs["stereo"], "Calibración estéreo")
     require_file(stereo / "stereo_initial.yaml", "stereo_initial.yaml")
     require_file(stereo / "rectification_maps.npz", "rectification_maps.npz")
-    background = require_dir(a.background_dir, "Fondo vacío")
+    background = require_dir(refs["background"], "Fondo vacío")
     require_file(background / "background_left.png", "background_left.png")
     require_file(background / "background_right.png", "background_right.png")
+
+    if refs.get("frozen"):
+        print(
+            "[REFERENCIAS] Campaña congelada: modelo, estéreo y fondo se leen "
+            "desde el propio trabajo.",
+            flush=True,
+        )
+        if a.mode == "reconstruir":
+            if refs.get("platform") is None:
+                raise FileNotFoundError("La campaña no contiene calibración de plataforma congelada.")
+            a.platform_calibration = str(refs["platform"])
+            print(
+                "[REFERENCIAS] Calibración de plataforma: copia congelada del trabajo.",
+                flush=True,
+            )
+        else:
+            # La calibración producida por una campaña de calibración se guarda
+            # primero dentro del trabajo. La GUI puede promoverla después al sistema.
+            a.platform_calibration_output_dir = str(
+                workspace / "resultado_calibracion_plataforma"
+            )
+    else:
+        print(
+            "[REFERENCIAS] Campaña heredada sin snapshot: se usarán los recursos "
+            "globales indicados por línea de comandos.",
+            flush=True,
+        )
 
     return run_pipeline(a, base, workspace, obj, py, stereo, background, model)
 

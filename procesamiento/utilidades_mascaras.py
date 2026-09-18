@@ -896,6 +896,182 @@ def estimate_turntable_support_mask(
     return selected_mask, diag
 
 
+
+def build_support_rim_guard_mask(
+    support_mask: np.ndarray,
+    valid_domain: np.ndarray,
+    rim_px: int = 6,
+) -> Tuple[np.ndarray, dict]:
+    """Crea una banda fina exterior para cubrir el filo físico del plato.
+
+    La elipse de ``support_mask`` se conserva sin cambios porque sigue siendo
+    la superficie útil usada por la lógica de contacto. El guard es una
+    segunda máscara, de pocos píxeles, formada únicamente FUERA del soporte.
+    Su objetivo es absorber el pequeño borde gris que queda inmediatamente
+    adyacente a la elipse estimada y que puede aparecer como falso foreground.
+
+    Esta función no decide todavía qué parte del guard debe quedar protegida
+    por la presencia de un objeto. Esa protección se resuelve en el paso 03 a
+    partir de la semilla visual del objeto, antes de convertir el guard en un
+    veto definitivo.
+    """
+    support_u8 = (np.asarray(support_mask) > 0).astype(np.uint8) * 255
+    valid = np.asarray(valid_domain) > 0
+
+    if support_u8.shape != valid.shape:
+        raise ValueError(
+            "support_mask y valid_domain deben tener la misma forma: "
+            f"{support_u8.shape} vs {valid.shape}"
+        )
+
+    zero = np.zeros_like(support_u8)
+    support_pixels = int(np.count_nonzero(support_u8))
+    if support_pixels < 1000:
+        return zero, {
+            "status": "disabled",
+            "reason": "support_not_available",
+            "support_pixels": support_pixels,
+            "rim_px": 0,
+            "rim_pixels": 0,
+        }
+
+    radius = int(np.clip(int(rim_px), 0, 32))
+    if radius <= 0:
+        return zero, {
+            "status": "disabled",
+            "reason": "rim_px_is_zero",
+            "support_pixels": support_pixels,
+            "rim_px": 0,
+            "rim_pixels": 0,
+        }
+
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (2 * radius + 1, 2 * radius + 1),
+    )
+    expanded = cv2.dilate(support_u8, kernel, iterations=1)
+    rim = (expanded > 0) & (support_u8 == 0) & valid
+    result = rim.astype(np.uint8) * 255
+
+    return result, {
+        "status": "active",
+        "principle": "thin_outer_rim_guard_without_changing_support_surface",
+        "rim_px": int(radius),
+        "support_pixels": support_pixels,
+        "rim_pixels": int(np.count_nonzero(result)),
+        "overlap_with_support_pixels": int(
+            np.count_nonzero((result > 0) & (support_u8 > 0))
+        ),
+    }
+
+
+def build_support_hardware_exclusion_mask(
+    support_mask: np.ndarray,
+    valid_domain: np.ndarray,
+    lateral_fraction: float = 0.028,
+    downward_fraction: float = 0.17,
+    lower_start_fraction: float = 0.40,
+    minimum_lateral_px: int = 6,
+    minimum_downward_px: int = 12,
+    maximum_lateral_px: int = 64,
+    maximum_downward_px: int = 96,
+) -> Tuple[np.ndarray, dict]:
+    """Construye una falda de exclusión para el cuerpo visible de la plataforma.
+
+    ``support_mask`` sigue representando exclusivamente la superficie superior
+    útil del plato y NO se modifica. Esta función crea una segunda máscara,
+    exterior y dirigida hacia abajo, para cubrir el aro/cuerpo gris del
+    hardware que puede aparecer como falso foreground por pequeñas variaciones
+    de iluminación.
+
+    La expansión es deliberadamente asimétrica:
+    - un margen lateral pequeño cubre el borde físico que sobresale;
+    - la mayor expansión se hace hacia abajo, donde está el cuerpo del plato;
+    - la parte alta de la elipse nunca se expande, para no recortar el objeto.
+
+    El resultado es siempre disjunto de ``support_mask``.
+    """
+    support_u8 = (np.asarray(support_mask) > 0).astype(np.uint8) * 255
+    valid = np.asarray(valid_domain) > 0
+
+    if support_u8.shape != valid.shape:
+        raise ValueError(
+            "support_mask y valid_domain deben tener la misma forma: "
+            f"{support_u8.shape} vs {valid.shape}"
+        )
+
+    zero = np.zeros_like(support_u8)
+    ys, xs = np.nonzero(support_u8)
+    if xs.size < 1000:
+        return zero, {
+            "status": "disabled",
+            "reason": "support_not_available",
+            "support_pixels": int(xs.size),
+        }
+
+    x0, x1 = int(xs.min()), int(xs.max()) + 1
+    y0, y1 = int(ys.min()), int(ys.max()) + 1
+    width = max(1, x1 - x0)
+    height = max(1, y1 - y0)
+
+    lateral_px = int(
+        np.clip(
+            max(int(minimum_lateral_px), round(float(lateral_fraction) * width)),
+            0,
+            max(0, int(maximum_lateral_px)),
+        )
+    )
+    downward_px = int(
+        np.clip(
+            max(int(minimum_downward_px), round(float(downward_fraction) * height)),
+            0,
+            max(0, int(maximum_downward_px)),
+        )
+    )
+
+    # Anchor en la fila inferior: OpenCV dilata hacia abajo, no hacia arriba.
+    # Así se conserva exactamente el borde superior que ya funciona bien.
+    kernel = np.ones(
+        (downward_px + 1, 2 * lateral_px + 1),
+        dtype=np.uint8,
+    )
+    expanded = cv2.dilate(
+        support_u8,
+        kernel,
+        anchor=(lateral_px, downward_px),
+        iterations=1,
+    )
+
+    skirt = (expanded > 0) & (support_u8 == 0) & valid
+
+    # El aro gris solo es visible en la mitad baja de la plataforma. Limitar la
+    # falda aquí evita introducir un veto alrededor del arco superior, donde
+    # puede encontrarse el objeto.
+    start_fraction = float(np.clip(lower_start_fraction, 0.0, 1.0))
+    start_y = int(round(y0 + start_fraction * height))
+    skirt[: max(0, min(skirt.shape[0], start_y)), :] = False
+
+    result = skirt.astype(np.uint8) * 255
+    return result, {
+        "status": "active",
+        "principle": "directional_lower_hardware_skirt_without_changing_support_surface",
+        "support_bbox_xyxy": [x0, y0, x1, y1],
+        "support_width_px": int(width),
+        "support_height_px": int(height),
+        "lateral_fraction": float(lateral_fraction),
+        "downward_fraction": float(downward_fraction),
+        "lower_start_fraction": float(start_fraction),
+        "lateral_px": int(lateral_px),
+        "downward_px": int(downward_px),
+        "start_y_px": int(start_y),
+        "support_pixels": int(np.count_nonzero(support_u8)),
+        "exclusion_pixels": int(np.count_nonzero(result)),
+        "overlap_with_support_pixels": int(
+            np.count_nonzero((result > 0) & (support_u8 > 0))
+        ),
+    }
+
+
 def capture_volume_from_support(
     support_mask: np.ndarray,
     valid_domain: np.ndarray,

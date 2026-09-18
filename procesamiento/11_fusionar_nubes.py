@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-PASO 11 V11.7 — FUSIÓN MULTIVISTA ROBUSTA GENERAL
+PASO 11 V11.8 — FUSIÓN MULTIVISTA ROBUSTA GENERAL
 ==============================================
 
 Entrada
@@ -34,7 +34,7 @@ NO usa forma específica:
 - no ICP 6DoF;
 - no correcciones angulares por objeto.
 
-Fusión regional V11.7 (activada por defecto):
+Fusión regional V11.8 (activada por defecto):
 - La ruta normal NO selecciona primitivas geométricas: el refinamiento de plano/cilindro/cuadrática permanece desactivado por defecto;
 - la conciliación usa superficies cuadráticas locales agnósticas a la forma y evidencia multivista;
 - regiones de trabajo adaptativas, con máximo 512 semillas y halos compartidos;
@@ -60,6 +60,15 @@ Selección V8.0: parches independientes con evidencia multivista propia,
 continuidad tangencial, normales compatibles e incertidumbre acotada. El núcleo
 de cinco poses es una etiqueta de evidencia, no una restricción de proximidad.
 --no-independent-patches conserva la selección histórica para comparación.
+
+V11.8 añade una segunda pasada de recuperación de COBERTURA OBSERVADA. No
+interpola ni crea puntos: reconsidera únicamente surfels que ya existen en la
+fusión local y que conservan evidencia multivista propia. Un candidato solo
+puede volver si está conectado a superficie validada, mantiene normales y
+residuo tangencial compatibles, posee respaldo de poses/confianza suficiente y
+la recuperación mejora la cobertura sin degradar de forma material la calidad
+global. Esto evita que un filtro local excesivamente conservador fragmente una
+superficie real, sin introducir una forma geométrica esperada.
 
 El completado exporta geometría INFERIDA en un archivo separado y es
 conservador por diseño. Un contorno cerrado no basta: cada candidato debe ser
@@ -306,6 +315,37 @@ def build_parser():
     p.add_argument("--class2-feature-min-family-separation-deg", type=float, default=25.0)
     p.add_argument("--class2-feature-min-tangent-backing-fraction", type=float, default=0.60)
 
+    # V11.8 — recuperación conservadora de cobertura OBSERVADA. No genera
+    # muestras ni rellena huecos geométricamente: solo reincorpora candidatos
+    # ya medidos que quedaron fuera por el filtro local, siempre que estén
+    # respaldados por varias poses y conectados a superficie validada.
+    p.add_argument("--observed-coverage-recovery", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--coverage-recovery-iterations", type=int, default=4)
+    p.add_argument("--coverage-recovery-max-distance-voxels", type=float, default=2.35)
+    p.add_argument("--coverage-recovery-candidate-radius-voxels", type=float, default=2.10)
+    p.add_argument("--coverage-recovery-min-kept-neighbors", type=int, default=1)
+    p.add_argument("--coverage-recovery-min-candidate-neighbors", type=int, default=2)
+    p.add_argument("--coverage-recovery-normal-angle-deg", type=float, default=42.0)
+    p.add_argument("--coverage-recovery-tangent-residual-voxel", type=float, default=0.42)
+    p.add_argument("--coverage-recovery-tangent-uncertainty-factor", type=float, default=2.0)
+    p.add_argument("--coverage-recovery-min-support", type=int, default=2)
+    p.add_argument("--coverage-recovery-min-independent-support", type=int, default=2)
+    p.add_argument("--coverage-recovery-min-angular-span", type=int, default=2)
+    p.add_argument("--coverage-recovery-min-confidence", type=float, default=0.60)
+    p.add_argument("--coverage-recovery-min-agreement", type=float, default=0.60)
+    p.add_argument("--coverage-recovery-min-normal-consistency", type=float, default=0.86)
+    p.add_argument("--coverage-recovery-max-conflict-ratio", type=float, default=0.32)
+    p.add_argument("--coverage-recovery-max-uncertainty-voxel", type=float, default=0.55)
+    p.add_argument("--coverage-recovery-rejected-class2-min-score", type=float, default=0.58)
+    p.add_argument("--coverage-recovery-rejected-class2-max-red-flags", type=int, default=4)
+    p.add_argument("--coverage-recovery-rejected-class2-min-support", type=int, default=3)
+    p.add_argument("--coverage-recovery-rejected-class2-min-confidence", type=float, default=0.70)
+    p.add_argument("--coverage-recovery-max-fraction-of-initial", type=float, default=0.60)
+    p.add_argument("--coverage-recovery-min-coverage-improvement", type=float, default=0.005)
+    p.add_argument("--coverage-recovery-max-confidence-drop", type=float, default=0.06)
+    p.add_argument("--coverage-recovery-max-normal-consistency-drop", type=float, default=0.04)
+    p.add_argument("--coverage-recovery-max-uncertainty-p90-factor", type=float, default=1.35)
+
     # V11.4 — separación post-fit de hojas respaldadas por grupos de poses.
     # Se aplica antes de declarar una observación como clase 3. No presupone
     # cilindros, planos ni otra primitiva: solo usa residuos firmados por pose
@@ -411,7 +451,7 @@ def build_parser():
         type=float,
         default=0.0,
         help=(
-            "0: límite automático estrictamente local = max(6 vox, min(12 vox, 18% de la "
+            "0: límite automático estrictamente local = max(6 vox, min(12 vox, 18%% de la "
             "extensión robusta)). Se aplica también a cierres terminales explícitos."
         ),
     )
@@ -2881,8 +2921,8 @@ def neighboring_surface_fusion(points, colors, normals, poses, weights, args):
     result = {name: values[unique] for name, values in result.items()}
     summary = dict(
         enabled=True,
-        version="11.7",
-        method="pose_diverse_heldout_pose_layer_local_coherence_raw_pose_bias_multiscale_regional_consensus_fusion",
+        version="11.8",
+        method="pose_diverse_heldout_pose_layer_local_coherence_observed_coverage_recovery_raw_pose_bias_multiscale_regional_consensus_fusion",
         regional_fusion=regional_summary,
         geometry_selection=geometry_summary,
         empirical_uncertainty=True,
@@ -4042,6 +4082,546 @@ def _postselection_regional_pose_consensus(
     return corrected, result, report
 
 
+def _selection_coverage_metrics(points, keep, reference, voxel):
+    """Cobertura de muestreo respecto a candidatos observados.
+
+    No estima área superficial verdadera. Solo mide qué tan lejos quedaron los
+    candidatos observados de una muestra retenida y qué fracción de celdas
+    ocupadas continúa representada.
+    """
+    points = np.asarray(points, dtype=np.float64)
+    keep = np.asarray(keep, dtype=bool)
+    reference = np.asarray(reference, dtype=bool)
+    out = {
+        "reference_points": int(np.count_nonzero(reference)),
+        "selected_points": int(np.count_nonzero(keep)),
+        "distance_to_retained_mm": finite_stats([]),
+        "spatially_uncovered_ratio": {"1_voxels": None, "2_voxels": None, "4_voxels": None},
+        "occupied_cell_retention_ratio": 0.0,
+    }
+    if not np.any(reference) or not np.any(keep):
+        return out
+    tree = cKDTree(points[keep])
+    distance = tree.query(points[reference], workers=query_threads())[0]
+    out["distance_to_retained_mm"] = finite_stats(distance)
+    out["spatially_uncovered_ratio"] = {
+        f"{f}_voxels": float(np.mean(distance > f * float(voxel))) for f in (1, 2, 4)
+    }
+    cells_ref = np.unique(
+        np.floor(points[reference] / float(voxel)).astype(np.int64), axis=0
+    )
+    cells_keep = np.unique(
+        np.floor(points[keep] / float(voxel)).astype(np.int64), axis=0
+    )
+    out["occupied_cell_retention_ratio"] = float(
+        len(cells_keep) / max(len(cells_ref), 1)
+    )
+    return out
+
+
+def _quality_snapshot(mask, support, confidence, normal_consistency, uncertainty, agreement):
+    mask = np.asarray(mask, dtype=bool)
+    if not np.any(mask):
+        return {
+            "points": 0,
+            "support": finite_stats([]),
+            "confidence": finite_stats([]),
+            "normal_consistency": finite_stats([]),
+            "uncertainty_mm": finite_stats([]),
+            "agreement": finite_stats([]),
+        }
+    return {
+        "points": int(np.count_nonzero(mask)),
+        "support": finite_stats(np.asarray(support)[mask]),
+        "confidence": finite_stats(np.asarray(confidence)[mask]),
+        "normal_consistency": finite_stats(np.asarray(normal_consistency)[mask]),
+        "uncertainty_mm": finite_stats(np.asarray(uncertainty)[mask]),
+        "agreement": finite_stats(np.asarray(agreement)[mask]),
+    }
+
+
+def _recover_observed_surface_coverage(
+    points,
+    normals,
+    support,
+    confidence,
+    normal_consistency,
+    uncertainty,
+    agreement,
+    independent,
+    angular_span,
+    conflict_ratio,
+    evidence_class_pre,
+    evidence_class,
+    coherence,
+    keep,
+    voxel,
+    minimum_confidence,
+    args,
+):
+    """Recupera cobertura usando únicamente observaciones ya existentes.
+
+    Esta pasada NO interpola puntos, NO desplaza observaciones y NO conoce la
+    forma del objeto. Reconsidera candidatos descartados por el filtro local si
+    mantienen evidencia multivista suficiente y pueden conectarse de forma
+    geométricamente compatible con superficie ya validada.
+
+    La expansión es iterativa pero acotada: cada candidato debe tener evidencia
+    propia, respaldo local y compatibilidad de normal/residuo tangencial. Al
+    final se compara cobertura y calidad global; si la recuperación no mejora
+    cobertura o deteriora demasiado la calidad, se revierte por completo.
+    """
+    n = len(points)
+    keep = np.asarray(keep, dtype=bool).copy()
+    initial_keep = keep.copy()
+    recovered = np.zeros(n, dtype=bool)
+    recovered_iteration = np.zeros(n, dtype=np.uint8)
+    recovery_score = np.zeros(n, dtype=np.float64)
+    final_evidence = np.asarray(evidence_class, dtype=np.uint8).copy()
+
+    enabled = bool(getattr(args, "observed_coverage_recovery", True))
+    reference = (
+        np.all(np.isfinite(points), axis=1)
+        & (np.asarray(support) >= 2)
+        & np.isfinite(confidence)
+        & (np.asarray(confidence) >= float(minimum_confidence))
+    )
+    before_cov = _selection_coverage_metrics(points, initial_keep, reference, voxel)
+    before_quality = _quality_snapshot(
+        initial_keep,
+        support,
+        confidence,
+        normal_consistency,
+        uncertainty,
+        agreement,
+    )
+    report = {
+        "enabled": enabled,
+        "policy": (
+            "observed_only_multiview_connected_same_sheet_recovery_"
+            "with_global_quality_guard"
+        ),
+        "interpolated_points": 0,
+        "synthetic_points": 0,
+        "initial_selected_points": int(np.count_nonzero(initial_keep)),
+        "candidate_points": 0,
+        "proposed_recovered_points": 0,
+        "accepted_recovered_points": 0,
+        "accepted": False,
+        "reason": None,
+        "iterations": [],
+        "coverage_before": before_cov,
+        "coverage_after": before_cov,
+        "quality_before": before_quality,
+        "quality_after": before_quality,
+    }
+    diagnostic = {
+        "coverage_recovery_candidate": np.zeros(n, dtype=np.uint8),
+        "coverage_recovered_observation": recovered.astype(np.uint8),
+        "coverage_recovery_iteration": recovered_iteration,
+        "coverage_recovery_score": recovery_score,
+    }
+    if not enabled:
+        report["reason"] = "disabled"
+        return keep, final_evidence, report, diagnostic
+    if np.count_nonzero(initial_keep) < 3:
+        report["reason"] = "insufficient_retained_surface"
+        return keep, final_evidence, report, diagnostic
+
+    points = np.asarray(points, dtype=np.float64)
+    normals = normalize_rows(np.asarray(normals, dtype=np.float64))
+    support = np.asarray(support, dtype=np.int16)
+    confidence = np.asarray(confidence, dtype=np.float64)
+    normal_consistency = np.asarray(normal_consistency, dtype=np.float64)
+    uncertainty = np.asarray(uncertainty, dtype=np.float64)
+    agreement = np.asarray(agreement, dtype=np.float64)
+    independent = np.asarray(independent, dtype=np.int16)
+    angular_span = np.asarray(angular_span, dtype=np.int16)
+    conflict_ratio = np.asarray(conflict_ratio, dtype=np.float64)
+    pre = np.asarray(evidence_class_pre, dtype=np.uint8)
+    coh_accept = np.asarray(coherence.get("accept", np.ones(n)), dtype=bool)
+    coh_score = np.asarray(coherence.get("score", np.ones(n)), dtype=np.float64)
+    coh_flags = np.asarray(coherence.get("red_flags", np.zeros(n)), dtype=np.uint8)
+
+    finite = (
+        np.all(np.isfinite(points), axis=1)
+        & np.all(np.isfinite(normals), axis=1)
+        & np.isfinite(confidence)
+        & np.isfinite(normal_consistency)
+        & np.isfinite(uncertainty)
+        & np.isfinite(agreement)
+        & np.isfinite(conflict_ratio)
+    )
+    min_support = max(2, int(getattr(args, "coverage_recovery_min_support", 2)))
+    min_independent = max(
+        2, int(getattr(args, "coverage_recovery_min_independent_support", 2))
+    )
+    min_span = max(2, int(getattr(args, "coverage_recovery_min_angular_span", 2)))
+    min_conf = max(
+        float(minimum_confidence),
+        float(getattr(args, "coverage_recovery_min_confidence", 0.60)),
+    )
+    min_agreement = float(getattr(args, "coverage_recovery_min_agreement", 0.60))
+    min_normal_consistency = float(
+        getattr(args, "coverage_recovery_min_normal_consistency", 0.86)
+    )
+    max_conflict = float(getattr(args, "coverage_recovery_max_conflict_ratio", 0.32))
+    max_uncertainty = (
+        float(getattr(args, "coverage_recovery_max_uncertainty_voxel", 0.55))
+        * float(voxel)
+    )
+
+    rejected_class2 = (pre == 2) & (~coh_accept)
+    rejected_rescue = (
+        rejected_class2
+        & (
+            coh_score
+            >= float(
+                getattr(args, "coverage_recovery_rejected_class2_min_score", 0.58)
+            )
+        )
+        & (
+            coh_flags
+            <= int(
+                getattr(args, "coverage_recovery_rejected_class2_max_red_flags", 4)
+            )
+        )
+        & (
+            support
+            >= int(
+                getattr(args, "coverage_recovery_rejected_class2_min_support", 3)
+            )
+        )
+        & (
+            confidence
+            >= float(
+                getattr(args, "coverage_recovery_rejected_class2_min_confidence", 0.70)
+            )
+        )
+        & (agreement >= max(min_agreement, 0.66))
+        & (normal_consistency >= max(min_normal_consistency, 0.90))
+    )
+    evidence_ok = (pre >= 3) | ((pre == 2) & coh_accept) | rejected_rescue
+    candidate = (
+        (~initial_keep)
+        & finite
+        & evidence_ok
+        & (support >= min_support)
+        & (independent >= min_independent)
+        & (angular_span >= min_span)
+        & (confidence >= min_conf)
+        & (agreement >= min_agreement)
+        & (normal_consistency >= min_normal_consistency)
+        & (conflict_ratio <= max_conflict)
+        & (uncertainty <= max_uncertainty)
+    )
+
+    candidate_idx = np.flatnonzero(candidate)
+    report["candidate_points"] = int(len(candidate_idx))
+    diagnostic["coverage_recovery_candidate"][candidate_idx] = 1
+    if len(candidate_idx) == 0:
+        report["reason"] = "no_candidates_with_required_evidence"
+        return keep, final_evidence, report, diagnostic
+
+    # Un candidato aislado no puede iniciar una cadena. Se exige respaldo local
+    # entre observaciones elegibles o, alternativamente, evidencia multivista
+    # particularmente fuerte.
+    candidate_radius = (
+        max(
+            0.5,
+            float(getattr(args, "coverage_recovery_candidate_radius_voxels", 2.10)),
+        )
+        * float(voxel)
+    )
+    evidence_pool = initial_keep | candidate
+    pool_idx = np.flatnonzero(evidence_pool)
+    pool_tree = cKDTree(points[pool_idx])
+    local_counts = (
+        pool_tree.query_ball_point(
+            points[candidate_idx],
+            r=candidate_radius,
+            workers=query_threads(),
+            return_length=True,
+        ).astype(np.int32)
+        - 1
+    )
+    min_candidate_neighbors = max(
+        1, int(getattr(args, "coverage_recovery_min_candidate_neighbors", 2))
+    )
+    locally_backed = local_counts >= min_candidate_neighbors
+    locally_backed |= (support[candidate_idx] >= 4) & (
+        confidence[candidate_idx] >= 0.78
+    )
+    candidate_idx = candidate_idx[locally_backed]
+    if len(candidate_idx) == 0:
+        report["reason"] = "candidates_not_locally_backed"
+        return keep, final_evidence, report, diagnostic
+
+    # Puntuación solo para limitar una recuperación excesiva; no define forma.
+    denom_conflict = max(max_conflict, 1e-6)
+    recovery_score_all = (
+        0.20 * np.clip(confidence, 0.0, 1.0)
+        + 0.16 * np.clip(normal_consistency, 0.0, 1.0)
+        + 0.16 * np.clip(agreement, 0.0, 1.0)
+        + 0.12 * np.clip(support.astype(np.float64) / 5.0, 0.0, 1.0)
+        + 0.10 * np.clip(independent.astype(np.float64) / 4.0, 0.0, 1.0)
+        + 0.10 * np.clip(coh_score, 0.0, 1.0)
+        + 0.08 * np.clip(1.0 - conflict_ratio / denom_conflict, 0.0, 1.0)
+        + 0.08
+        * np.exp(
+            -0.5
+            * (
+                uncertainty / np.maximum(0.40 * float(voxel), 1e-9)
+            )
+            ** 2
+        )
+    )
+    recovery_score[:] = np.nan_to_num(
+        recovery_score_all, nan=0.0, posinf=0.0, neginf=0.0
+    )
+
+    max_fraction = float(
+        np.clip(
+            getattr(args, "coverage_recovery_max_fraction_of_initial", 0.60),
+            0.0,
+            2.0,
+        )
+    )
+    maximum_recovery = max(
+        1,
+        int(
+            math.ceil(
+                max_fraction * max(np.count_nonzero(initial_keep), 1)
+            )
+        ),
+    )
+    iterations = max(1, int(getattr(args, "coverage_recovery_iterations", 4)))
+    radius = (
+        max(
+            0.5,
+            float(getattr(args, "coverage_recovery_max_distance_voxels", 2.35)),
+        )
+        * float(voxel)
+    )
+    normal_cos = math.cos(
+        math.radians(float(getattr(args, "coverage_recovery_normal_angle_deg", 42.0)))
+    )
+    min_kept_neighbors = max(
+        1, int(getattr(args, "coverage_recovery_min_kept_neighbors", 1))
+    )
+    tangent_voxel = max(
+        0.0, float(getattr(args, "coverage_recovery_tangent_residual_voxel", 0.42))
+    )
+    tangent_unc = max(
+        0.0,
+        float(getattr(args, "coverage_recovery_tangent_uncertainty_factor", 2.0)),
+    )
+
+    remaining_mask = np.zeros(n, dtype=bool)
+    remaining_mask[candidate_idx] = True
+    for iteration in range(1, iterations + 1):
+        remaining = np.flatnonzero(remaining_mask & (~keep))
+        if len(remaining) == 0 or np.count_nonzero(recovered) >= maximum_recovery:
+            break
+        current_idx = np.flatnonzero(keep)
+        tree = cKDTree(points[current_idx])
+        k = min(max(8, min_kept_neighbors * 4), len(current_idx))
+        distances, neighbor_local = tree.query(
+            points[remaining],
+            k=k,
+            distance_upper_bound=radius,
+            workers=query_threads(),
+        )
+        if np.ndim(distances) == 1:
+            distances = distances[:, None]
+            neighbor_local = neighbor_local[:, None]
+        valid_nb = np.isfinite(distances) & (neighbor_local < len(current_idx))
+        safe_local = np.clip(neighbor_local, 0, max(len(current_idx) - 1, 0))
+        neighbor_global = current_idx[safe_local]
+        cand_n = normals[remaining][:, None, :]
+        neigh_n = normals[neighbor_global]
+        raw_dot = np.einsum("ijk,ijk->ij", cand_n, neigh_n)
+        aligned_neigh_n = np.where(raw_dot[..., None] < 0.0, -neigh_n, neigh_n)
+        middle = cand_n + aligned_neigh_n
+        middle_len = np.linalg.norm(middle, axis=2)
+        middle = middle / np.maximum(middle_len[..., None], 1e-12)
+        delta = points[neighbor_global] - points[remaining][:, None, :]
+        tangential_residual = np.abs(np.einsum("ijk,ijk->ij", delta, middle))
+        neighbor_unc = uncertainty[neighbor_global]
+        pair_unc = np.minimum(uncertainty[remaining][:, None], neighbor_unc)
+        tolerance = np.maximum(
+            tangent_voxel * float(voxel), tangent_unc * pair_unc
+        )
+        same_sheet = (
+            valid_nb
+            & (np.abs(raw_dot) >= normal_cos)
+            & (tangential_residual <= tolerance)
+        )
+        same_count = np.sum(same_sheet, axis=1)
+        required = np.full(len(remaining), min_kept_neighbors, dtype=np.int32)
+        # Una clase 2 que el test multiescala había rechazado necesita dos
+        # enlaces independientes a superficie ya retenida para regresar.
+        rejected_rows = rejected_class2[remaining]
+        required[rejected_rows] = np.maximum(required[rejected_rows], 2)
+        chosen = remaining[same_count >= required]
+        if len(chosen) == 0:
+            report["iterations"].append(
+                {
+                    "iteration": int(iteration),
+                    "candidates_tested": int(len(remaining)),
+                    "accepted": 0,
+                }
+            )
+            break
+        remaining_budget = maximum_recovery - int(np.count_nonzero(recovered))
+        if len(chosen) > remaining_budget:
+            order = np.argsort(recovery_score[chosen])[::-1][:remaining_budget]
+            chosen = chosen[order]
+        keep[chosen] = True
+        recovered[chosen] = True
+        recovered_iteration[chosen] = np.uint8(min(iteration, 255))
+        report["iterations"].append(
+            {
+                "iteration": int(iteration),
+                "candidates_tested": int(len(remaining)),
+                "accepted": int(len(chosen)),
+                "recovered_total": int(np.count_nonzero(recovered)),
+            }
+        )
+
+    proposed_count = int(np.count_nonzero(recovered))
+    report["proposed_recovered_points"] = proposed_count
+    if proposed_count == 0:
+        report["reason"] = "no_candidate_connected_to_retained_surface"
+        return initial_keep, final_evidence, report, diagnostic
+
+    proposed_cov = _selection_coverage_metrics(points, keep, reference, voxel)
+    proposed_quality = _quality_snapshot(
+        keep,
+        support,
+        confidence,
+        normal_consistency,
+        uncertainty,
+        agreement,
+    )
+    report["coverage_after"] = proposed_cov
+    report["quality_after"] = proposed_quality
+
+    def _metric(record, section, name):
+        value = record.get(section, {}).get(name)
+        return None if value is None or not np.isfinite(value) else float(value)
+
+    before_u1 = before_cov["spatially_uncovered_ratio"].get("1_voxels")
+    before_u2 = before_cov["spatially_uncovered_ratio"].get("2_voxels")
+    after_u1 = proposed_cov["spatially_uncovered_ratio"].get("1_voxels")
+    after_u2 = proposed_cov["spatially_uncovered_ratio"].get("2_voxels")
+    improvement_1 = (
+        float(before_u1) - float(after_u1)
+        if before_u1 is not None and after_u1 is not None
+        else 0.0
+    )
+    improvement_2 = (
+        float(before_u2) - float(after_u2)
+        if before_u2 is not None and after_u2 is not None
+        else 0.0
+    )
+    cell_improvement = float(
+        proposed_cov.get("occupied_cell_retention_ratio", 0.0)
+        - before_cov.get("occupied_cell_retention_ratio", 0.0)
+    )
+    min_improvement = max(
+        0.0,
+        float(getattr(args, "coverage_recovery_min_coverage_improvement", 0.005)),
+    )
+    coverage_ok = (
+        max(improvement_1, improvement_2, cell_improvement) >= min_improvement
+    )
+
+    before_conf = _metric(before_quality, "confidence", "median")
+    after_conf = _metric(proposed_quality, "confidence", "median")
+    before_norm = _metric(before_quality, "normal_consistency", "median")
+    after_norm = _metric(proposed_quality, "normal_consistency", "median")
+    before_unc = _metric(before_quality, "uncertainty_mm", "p90")
+    after_unc = _metric(proposed_quality, "uncertainty_mm", "p90")
+    max_conf_drop = max(
+        0.0, float(getattr(args, "coverage_recovery_max_confidence_drop", 0.06))
+    )
+    max_norm_drop = max(
+        0.0,
+        float(
+            getattr(args, "coverage_recovery_max_normal_consistency_drop", 0.04)
+        ),
+    )
+    max_unc_factor = max(
+        1.0,
+        float(
+            getattr(args, "coverage_recovery_max_uncertainty_p90_factor", 1.35)
+        ),
+    )
+    confidence_ok = (
+        before_conf is None
+        or after_conf is None
+        or after_conf >= before_conf - max_conf_drop
+    )
+    normal_ok = (
+        before_norm is None
+        or after_norm is None
+        or after_norm >= before_norm - max_norm_drop
+    )
+    uncertainty_ok = (
+        before_unc is None
+        or after_unc is None
+        or after_unc <= max(before_unc * max_unc_factor, 0.65 * float(voxel))
+    )
+    quality_ok = bool(confidence_ok and normal_ok and uncertainty_ok)
+    report["validation"] = {
+        "coverage_improvement_one_voxel": float(improvement_1),
+        "coverage_improvement_two_voxels": float(improvement_2),
+        "occupied_cell_retention_improvement": float(cell_improvement),
+        "minimum_required_improvement": float(min_improvement),
+        "coverage_ok": bool(coverage_ok),
+        "confidence_ok": bool(confidence_ok),
+        "normal_consistency_ok": bool(normal_ok),
+        "uncertainty_p90_ok": bool(uncertainty_ok),
+        "quality_ok": bool(quality_ok),
+    }
+    if not (coverage_ok and quality_ok):
+        report["reason"] = "global_validation_failed"
+        report["accepted"] = False
+        report["accepted_recovered_points"] = 0
+        diagnostic["coverage_recovery_iteration"] = recovered_iteration
+        diagnostic["coverage_recovery_score"] = recovery_score
+        return (
+            initial_keep,
+            np.asarray(evidence_class, dtype=np.uint8).copy(),
+            report,
+            diagnostic,
+        )
+
+    # Aceptada: una clase 2 recuperada sigue siendo clase 2; una clase 3
+    # validada held-out conserva su clase. La recuperación nunca eleva autoridad.
+    final_evidence[recovered & (pre == 2)] = 2
+    final_evidence[recovered & (pre >= 3)] = np.maximum(
+        final_evidence[recovered & (pre >= 3)], 3
+    )
+    report["accepted"] = True
+    report["reason"] = "coverage_improved_without_material_quality_degradation"
+    report["accepted_recovered_points"] = proposed_count
+    report["recovered_rejected_class2"] = int(
+        np.count_nonzero(recovered & rejected_class2)
+    )
+    report["recovered_validated_fit"] = int(
+        np.count_nonzero(recovered & (pre >= 3))
+    )
+    report["recovered_accepted_class2"] = int(
+        np.count_nonzero(recovered & (pre == 2) & coh_accept)
+    )
+    diagnostic["coverage_recovered_observation"] = recovered.astype(np.uint8)
+    diagnostic["coverage_recovery_iteration"] = recovered_iteration
+    diagnostic["coverage_recovery_score"] = recovery_score
+    return keep, final_evidence, report, diagnostic
+
+
 def select_independent_patches(
     points,
     normals,
@@ -4262,6 +4842,31 @@ def select_independent_patches(
         keep[idx] = chosen
         labels_full[idx] = labels
         degree_full[idx] = degree
+    # V11.8 — segunda pasada de cobertura OBSERVADA. La recuperación no
+    # crea ni desplaza puntos: reincorpora únicamente candidatos ya medidos y
+    # con evidencia multivista propia que siguen conectados a la superficie.
+    keep, evidence_class, coverage_recovery_report, coverage_recovery_diagnostic = (
+        _recover_observed_surface_coverage(
+            points=points,
+            normals=normals,
+            support=support,
+            confidence=confidence,
+            normal_consistency=normal_consistency,
+            uncertainty=uncertainty,
+            agreement=agreement,
+            independent=independent,
+            angular_span=angular_span,
+            conflict_ratio=conflict_ratio,
+            evidence_class_pre=evidence_class_pre_coherence,
+            evidence_class=evidence_class,
+            coherence=coherence,
+            keep=keep,
+            voxel=float(voxel),
+            minimum_confidence=float(minimum_confidence),
+            args=args,
+        )
+    )
+
     # Una clase 2 solo puede actuar como ancla fuerte si además superó el
     # nivel estricto de coherencia local. Las clases 3 siguen siendo anclas
     # por validación held-out.
@@ -4289,6 +4894,7 @@ def select_independent_patches(
         "local_extension_points": int(np.count_nonzero(keep & ~strong)),
         "final_points": int(keep.sum()),
         "component_records": components,
+        "observed_coverage_recovery": coverage_recovery_report,
         "candidate_support_counts": {},
         "retained_support_counts": {},
         "rejected_support_counts": {},
@@ -4353,6 +4959,12 @@ def select_independent_patches(
                 & (np.asarray(coherence["feature_like"], dtype=bool))
             )
         ),
+        "observed_coverage_recovery_accepted": bool(
+            coverage_recovery_report.get("accepted", False)
+        ),
+        "observed_coverage_recovered_points": int(
+            coverage_recovery_report.get("accepted_recovered_points", 0)
+        ),
         "ambiguous_or_insufficient_candidates": int(np.count_nonzero(evidence_class == 0)),
         "local_coherence_note": (
             "Solo clase 2 se somete a coherencia multiescala. Se rechaza únicamente por múltiples "
@@ -4402,6 +5014,7 @@ def select_independent_patches(
             coherence["same_sheet_fraction"], dtype=np.float64
         ),
     }
+    diagnostic.update(coverage_recovery_diagnostic)
     return keep, classes, anchor_distance, report, diagnostic
 
 
@@ -5399,6 +6012,23 @@ def main():
             f"criterio anterior: {legacy_count:,}.",
             flush=True,
         )
+        recovery_report = selection_info.get("observed_coverage_recovery", {})
+        if recovery_report.get("enabled"):
+            before_cov = recovery_report.get("coverage_before", {}).get(
+                "spatially_uncovered_ratio", {}
+            )
+            after_cov = recovery_report.get("coverage_after", {}).get(
+                "spatially_uncovered_ratio", {}
+            )
+            print(
+                f"[Paso 11 | cobertura observada] candidatos="
+                f"{recovery_report.get('candidate_points', 0):,}; recuperados="
+                f"{recovery_report.get('accepted_recovered_points', 0):,}; "
+                f"aceptada={bool(recovery_report.get('accepted', False))}; "
+                f">2 vox: {100*float(before_cov.get('2_voxels') or 0):.1f}% -> "
+                f"{100*float(after_cov.get('2_voxels') or 0):.1f}%.",
+                flush=True,
+            )
 
     # V11.6: antes del consenso geométrico regional, usar los residuos por pose
     # de las observaciones originales para estimar y retirar solo el gauge local
@@ -5815,6 +6445,27 @@ def main():
             ),
             dtype=np.float32,
         )[keep],
+        coverage_recovered_observation=np.asarray(
+            selection_diagnostic.get(
+                "coverage_recovered_observation", np.zeros(len(keep))
+            ),
+            dtype=np.uint8,
+        )[keep],
+        coverage_recovery_iteration=np.asarray(
+            selection_diagnostic.get(
+                "coverage_recovery_iteration", np.zeros(len(keep))
+            ),
+            dtype=np.uint8,
+        )[keep],
+        coverage_recovery_score=np.asarray(
+            selection_diagnostic.get(
+                "coverage_recovery_score", np.zeros(len(keep))
+            ),
+            dtype=np.float32,
+        )[keep],
+        observed_coverage_recovery_contract_valid=np.asarray(
+            [1 if bool(args.observed_coverage_recovery) else 0], dtype=np.uint8
+        ),
         regional_pose_consensus_available=np.asarray(
             regional_pose_diagnostic["available"], dtype=np.uint8
         ),
@@ -5968,7 +6619,7 @@ def main():
             )
         ),
         "implementation": {
-            "version": "11.7",
+            "version": "11.8",
             "local_surface_fusion": bool(args.local_surface_fusion),
             "regional_fusion": bool(args.local_surface_fusion and args.regional_fusion),
         },
@@ -6036,7 +6687,11 @@ def main():
             "densidad, continuidad local y consistencia multivista; las extensiones "
             "usan proximidad local. No se clasifica la forma ni se modifica ninguna "
             "pose. El modo de parches independientes sustituye la restricción "
-            "de distancia al núcleo. El completado se guarda separado, no cuenta "
+            "de distancia al núcleo. V11.8 puede recuperar únicamente observaciones "
+            "reales descartadas por exceso de conservadurismo local cuando mantienen "
+            "evidencia multivista, continuidad y compatibilidad de normales; la "
+            "recuperación se revierte si no mejora cobertura o degrada materialmente "
+            "la calidad global. El completado se guarda separado, no cuenta "
             "como evidencia observada y solo se exporta si cada guía supera "
             "validación multivista por silueta, visibilidad, profundidad y espacio libre."
         ),

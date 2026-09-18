@@ -45,6 +45,14 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from PIL import Image, ImageTk
 from openpyxl import Workbook, load_workbook
 
+from procesamiento.utilidades_referencias import (
+    compare_current_sources_to_snapshot,
+    freeze_campaign_references,
+    has_frozen_references,
+    resolve_campaign_references,
+    validate_campaign_references,
+)
+
 PRODUCT_VERSION = "3.1.0"
 APP_TITLE = "Sistema Integrado de Construcción 3D"
 IMAGE_EXT = "png"
@@ -146,7 +154,7 @@ def build_job_metadata(mode: str, object_name: str) -> dict:
     if not object_name:
         raise ValueError("El objeto del trabajo no puede estar vacío.")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "product_version": PRODUCT_VERSION,
         "mode": mode,
         "object": object_name,
@@ -154,13 +162,34 @@ def build_job_metadata(mode: str, object_name: str) -> dict:
         "poses_per_session": CAPTURE_VIEWS,
         "steps_per_revolution": STEPS_PER_REVOLUTION,
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "references": {
+            "policy": "frozen_per_campaign",
+            "directory": "documentacion/referencias",
+            "metadata": "documentacion/referencias_campana.json",
+            "capture_config": "documentacion/configuracion_captura.json",
+        },
     }
 
 
 def write_job_metadata(workspace: Path, mode: str, object_name: str) -> Path:
-    """Guarda el contrato de trabajo de forma atómica."""
+    """Guarda el contrato de trabajo de forma atómica, preservando fecha original."""
     path = Path(workspace) / JOB_METADATA_FILENAME
+    previous = {}
+    if path.is_file():
+        try:
+            previous = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            previous = {}
     payload = build_job_metadata(mode, object_name)
+    if previous.get("created_at"):
+        payload["created_at"] = previous["created_at"]
+    # Campañas heredadas sin snapshot no deben declararse falsamente congeladas.
+    if not has_frozen_references(workspace):
+        payload["references"] = {
+            "policy": "legacy_global_resources",
+            "directory": None,
+            "metadata": None,
+        }
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
@@ -1011,11 +1040,22 @@ class CaptureApp:
                 "capturas": "capturas/S01..S03/{izquierda,derecha}",
                 "reconstruccion": "reconstruccion",
                 "resultado_final": "resultado_final",
-                "documentacion": "documentacion",
+                "documentacion": {
+                    "protocolo": "documentacion/protocolo_captura.md",
+                    "bitacora": "documentacion/bitacora_captura.xlsx",
+                    "referencias": (
+                        "documentacion/referencias/{fondo_vacio,calibracion_estereo,"
+                        "calibracion_plataforma,modelo,firmware}"
+                    ),
+                    "configuracion_captura": "documentacion/configuracion_captura.json",
+                    "metadatos_referencias": "documentacion/referencias_campana.json",
+                },
             },
             "principle": (
-                "Las calibraciones y el modelo pertenecen al sistema. "
-                "Cada trabajo contiene únicamente sus capturas y resultados."
+                "Los recursos globales sirven para crear nuevas campañas. "
+                "Al crear un trabajo se congelan dentro de él las referencias "
+                "científicas necesarias para que cambios posteriores del sistema "
+                "no alteren una campaña histórica."
             ),
         }
         config.write_text(
@@ -1030,6 +1070,114 @@ class CaptureApp:
     def _platform_calibration_path(self):
         """Devuelve la ruta canónica de la calibración de plataforma activa."""
         return self.platform_dir / PLATFORM_CALIBRATION_FILENAME
+
+    def _firmware_path(self):
+        """Devuelve el firmware de referencia del montaje si está disponible."""
+        return self.install_root / "firmware" / "control_plataforma_2055_pasos.ino"
+
+    def _promote_platform_calibration_from_job(self, local_output: Path) -> Path:
+        """Publica la calibración generada por una campaña sin perder la anterior."""
+        local_output = Path(local_output).resolve()
+        candidate = local_output / "calibracion_plataforma_candidata.json"
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                "La campaña terminó sin calibracion_plataforma_candidata.json."
+            )
+
+        staged = self.system_dir / f"calibracion_plataforma.__tmp__{time.time_ns()}"
+        if staged.exists():
+            shutil.rmtree(staged)
+        shutil.copytree(local_output, staged, copy_function=shutil.copy2)
+
+        canonical_staged = staged / PLATFORM_CALIBRATION_FILENAME
+        temporary = canonical_staged.with_suffix(canonical_staged.suffix + ".tmp")
+        shutil.copy2(staged / candidate.name, temporary)
+        temporary.replace(canonical_staged)
+
+        backup = None
+        try:
+            if self.platform_dir.exists() and any(self.platform_dir.rglob("*")):
+                stamp = time.strftime("%Y%m%d_%H%M%S")
+                backup = self.records_dir / f"calibracion_plataforma_reemplazada_{stamp}"
+                if backup.exists():
+                    shutil.rmtree(backup)
+                self.platform_dir.replace(backup)
+            elif self.platform_dir.exists():
+                shutil.rmtree(self.platform_dir)
+
+            staged.replace(self.platform_dir)
+        except Exception:
+            if staged.exists():
+                shutil.rmtree(staged, ignore_errors=True)
+            if backup is not None and backup.exists() and not self.platform_dir.exists():
+                backup.replace(self.platform_dir)
+            raise
+
+        return self._platform_calibration_path()
+
+    def _capture_reference_config(self):
+        """Parámetros de adquisición que se congelan junto con cada campaña."""
+        return {
+            "resolution": [RESOLUTION_W, RESOLUTION_H],
+            "settle_time_s": float(SETTLE_TIME_S),
+            "background_samples": int(BACKGROUND_SAMPLES),
+            "background_sample_interval_s": float(BACKGROUND_SAMPLE_INTERVAL_S),
+            "serial_baud_default": int(SERIAL_BAUD_DEFAULT),
+            "steps_per_revolution": int(STEPS_PER_REVOLUTION),
+            "moves_per_revolution": int(MOVES_PER_REVOLUTION),
+            "poses_per_session": int(CAPTURE_VIEWS),
+            "nominal_step_deg": float(NOMINAL_STEP_DEG),
+            "step_sequence": [int(x) for x in STEP_SEQUENCE],
+            "sessions_per_job": 3,
+            "image_extension": IMAGE_EXT,
+        }
+
+    def _freeze_job_references(self, workspace: Path, mode: str, overwrite: bool = False):
+        """Congela los recursos científicos activos dentro de un trabajo."""
+        return freeze_campaign_references(
+            workspace,
+            mode,
+            model_path=self._model_path(),
+            stereo_dir=self.stereo_dir,
+            background_dir=self.background_dir,
+            platform_dir=(self.platform_dir if mode == "reconstruir" else None),
+            firmware_path=self._firmware_path(),
+            capture_config=self._capture_reference_config(),
+            product_version=PRODUCT_VERSION,
+            overwrite=bool(overwrite),
+        )
+
+    def _resolve_job_references(self, verify_hashes: bool = True):
+        """Resuelve recursos congelados del trabajo o compatibilidad heredada."""
+        if self.root_dir is None:
+            raise RuntimeError("No hay un trabajo activo.")
+        return resolve_campaign_references(
+            self.root_dir,
+            self.job_mode,
+            fallback_model=self._model_path(),
+            fallback_stereo=self.stereo_dir,
+            fallback_background=self.background_dir,
+            fallback_platform=(
+                self._platform_calibration_path()
+                if self.job_mode == "reconstruir"
+                else None
+            ),
+            verify_hashes=bool(verify_hashes),
+        )
+
+    def _reference_sources_changed(self):
+        """Indica si los recursos globales cambiaron desde el congelamiento."""
+        if self.root_dir is None or not has_frozen_references(self.root_dir):
+            return {"changed": [], "details": {}, "frozen_at": None}
+        return compare_current_sources_to_snapshot(
+            self.root_dir,
+            self.job_mode,
+            model_path=self._model_path(),
+            stereo_dir=self.stereo_dir,
+            background_dir=self.background_dir,
+            platform_dir=(self.platform_dir if self.job_mode == "reconstruir" else None),
+            firmware_path=self._firmware_path(),
+        )
 
     def _read_stereo_report(self):
         """Lee el informe estéreo o devuelve None si falta o no puede interpretarse."""
@@ -1257,7 +1405,7 @@ class CaptureApp:
                 f"- Secuencia de pasos: {list(STEP_SEQUENCE)}\n"
                 f"- Resolución: {RESOLUTION_W}x{RESOLUTION_H}\n"
                 "- Cada sesión ejecuta CLOSE y retorna a pose 0.\n"
-                "- El fondo y las calibraciones pertenecen al sistema, no al trabajo.\n"
+                "- Fondo, calibraciones, modelo y firmware se congelan dentro de documentacion/referencias.\n"
             ),
             encoding="utf-8",
         )
@@ -1338,12 +1486,24 @@ class CaptureApp:
                 return False
             shutil.rmtree(workspace)
 
-        # Un trabajo representa exactamente un objeto y contiene directamente
-        # sus capturas, su reconstrucción y su resultado final.
+        # Un trabajo representa exactamente un objeto. Antes de capturar se
+        # congelan las referencias científicas del montaje para que cambios
+        # posteriores del fondo/calibraciones/modelo globales no alteren esta campaña.
         captures = workspace / "capturas"
         for s in range(1, 4):
             (captures / f"S{s:02d}" / "izquierda").mkdir(parents=True, exist_ok=True)
             (captures / f"S{s:02d}" / "derecha").mkdir(parents=True, exist_ok=True)
+
+        try:
+            self._freeze_job_references(workspace, mode, overwrite=False)
+        except Exception as exc:
+            shutil.rmtree(workspace, ignore_errors=True)
+            messagebox.showerror(
+                "Referencias de campaña",
+                "No se pudo crear la copia congelada de los recursos del sistema.\n\n"
+                f"{exc}",
+            )
+            return False
 
         self.root_dir = workspace.resolve()
         self.current_job_name = job_name
@@ -1379,7 +1539,9 @@ class CaptureApp:
         self._create_capture_documentation()
         self._refresh_system_status()
 
-        self.status_var.set("Trabajo creado. Coloca el objeto y captura S01 + S02 + S03.")
+        self.status_var.set(
+            "Trabajo creado con referencias congeladas. Coloca el objeto y captura S01 + S02 + S03."
+        )
         return True
 
     def new_platform_calibration_job(self):
@@ -1460,9 +1622,10 @@ class CaptureApp:
         if not folder:
             return
 
-        workspace = Path(folder).expanduser().resolve()
+        selected = Path(folder).expanduser().resolve()
+        jobs_root = self.jobs_dir.resolve()
         try:
-            workspace.relative_to(self.jobs_dir.resolve())
+            selected.relative_to(jobs_root)
         except Exception:
             messagebox.showerror(
                 "Trabajo inválido",
@@ -1470,11 +1633,17 @@ class CaptureApp:
             )
             return
 
+        # Si el usuario entra por accidente a capturas/, reconstruccion/ u otra
+        # subcarpeta, subir hasta encontrar la raíz real del trabajo.
+        workspace = selected
+        while workspace != jobs_root and not (workspace / JOB_METADATA_FILENAME).is_file():
+            workspace = workspace.parent
+
         metadata_path = workspace / JOB_METADATA_FILENAME
-        if not metadata_path.is_file():
+        if workspace == jobs_root or not metadata_path.is_file():
             messagebox.showerror(
                 "Trabajo inválido",
-                f"No existe {JOB_METADATA_FILENAME} dentro del trabajo.",
+                f"No se encontró {JOB_METADATA_FILENAME} en la carpeta seleccionada ni en sus padres.",
             )
             return
 
@@ -1499,6 +1668,18 @@ class CaptureApp:
                 f"No se pudo validar el tipo de trabajo:\n{exc}",
             )
             return
+
+        frozen_references = has_frozen_references(workspace)
+        if frozen_references:
+            try:
+                validate_campaign_references(workspace, mode, verify_hashes=False)
+            except Exception as exc:
+                messagebox.showerror(
+                    "Referencias de campaña",
+                    "Las referencias congeladas del trabajo están incompletas o dañadas:\n\n"
+                    f"{exc}",
+                )
+                return
 
         # Migra campañas anteriores para que las siguientes reaperturas ya no
         # dependan del nombre de carpeta ni de interpretar documentación libre.
@@ -1536,6 +1717,11 @@ class CaptureApp:
         self.capture_completed, reason = capture_readiness(workspace)
         self.last_session_return_time = None
         self._update_controls()
+        reference_note = (
+            "Referencias congeladas de la campaña: OK."
+            if frozen_references
+            else "Campaña heredada: usa recursos globales porque no conserva referencias congeladas."
+        )
         if self.capture_completed:
             self.status_var.set(
                 "Trabajo reabierto. Puedes procesar o reanudar desde el último checkpoint válido."
@@ -1544,7 +1730,7 @@ class CaptureApp:
             self.status_var.set(
                 "Trabajo con captura incompleta. Conecta el equipo para reiniciar las tres sesiones."
             )
-        self.progress_var.set(reason)
+        self.progress_var.set(f"{reason} · {reference_note}")
 
     def open_current_job_folder(self):
         """Abre el directorio del trabajo activo con el explorador del sistema."""
@@ -1584,20 +1770,48 @@ class CaptureApp:
             )
             return
 
-        status = self._refresh_system_status()
-        required = ("model", "stereo", "background")
-        if any(not status[x] for x in required):
+        # Las campañas nuevas se procesan exclusivamente con sus referencias
+        # congeladas. Así actualizar los recursos globales no altera trabajos
+        # históricos. Las campañas heredadas conservan el comportamiento antiguo.
+        try:
+            references = self._resolve_job_references(verify_hashes=True)
+        except Exception as exc:
             messagebox.showerror(
-                "Sistema",
-                "Modelo, calibración estéreo y fondo deben estar disponibles.",
+                "Referencias de campaña",
+                f"No se pueden validar las referencias congeladas:\n\n{exc}",
             )
             return
-        if self.job_mode == "reconstruir" and not status["platform"]:
-            messagebox.showerror(
-                "Sistema",
-                "No existe calibración de plataforma vigente.",
+
+        if not references.get("frozen"):
+            status = self._refresh_system_status()
+            required = ("model", "stereo", "background")
+            if any(not status[x] for x in required):
+                messagebox.showerror(
+                    "Sistema",
+                    "Esta campaña heredada depende de los recursos globales. "
+                    "Modelo, calibración estéreo y fondo deben estar disponibles.",
+                )
+                return
+            if self.job_mode == "reconstruir" and not status["platform"]:
+                messagebox.showerror(
+                    "Sistema",
+                    "Esta campaña heredada requiere la calibración de plataforma global vigente.",
+                )
+                return
+
+            proceed_legacy = messagebox.askyesno(
+                "Campaña heredada",
+                (
+                    "Este trabajo fue creado antes del congelamiento de referencias.\n\n"
+                    "No es posible saber automáticamente qué fondo y calibraciones "
+                    "tenía el montaje cuando se capturó. Si continúas, se usarán los "
+                    "recursos globales actuales.\n\n"
+                    "¿Continuar de todos modos?"
+                ),
+                icon="warning",
             )
-            return
+            if not proceed_legacy:
+                return
 
         if not resume:
             reconstruction = self.root_dir / "reconstruccion"
@@ -1639,6 +1853,8 @@ class CaptureApp:
             if not runner.is_file():
                 raise FileNotFoundError(runner)
 
+            references = self._resolve_job_references(verify_hashes=True)
+
             cmd = [
                 sys.executable,
                 str(runner),
@@ -1648,22 +1864,28 @@ class CaptureApp:
                 "--object",
                 self.current_object,
                 "--model",
-                str(self._model_path()),
+                str(references["model"]),
                 "--stereo-calibration-dir",
-                str(self.stereo_dir),
+                str(references["stereo"]),
                 "--background-dir",
-                str(self.background_dir),
+                str(references["background"]),
+                "--storage-mode",
+                "reducido",
             ]
 
             if self.job_mode == "calibrar-plataforma":
                 cmd += [
                     "--platform-calibration-output-dir",
-                    str(self.platform_dir),
+                    str(self.root_dir / "resultado_calibracion_plataforma"),
                 ]
             else:
+                if references.get("platform") is None:
+                    raise FileNotFoundError(
+                        "El trabajo no tiene calibración de plataforma disponible."
+                    )
                 cmd += [
                     "--platform-calibration",
-                    str(self._platform_calibration_path()),
+                    str(references["platform"]),
                 ]
 
             if resume:
@@ -1675,7 +1897,7 @@ class CaptureApp:
                     (
                         "Reanudación iniciada: auditando checkpoints del mismo trabajo."
                         if resume
-                        else "Procesamiento desde cero iniciado. No cierres la aplicación."
+                        else "Procesamiento desde cero iniciado. Al finalizar se conservarán solo resultados, resúmenes y diagnósticos globales."
                     ),
                 )
             )
@@ -1731,25 +1953,10 @@ class CaptureApp:
             }
 
             if self.job_mode == "calibrar-plataforma":
-                candidate = self.platform_dir / "calibracion_plataforma_candidata.json"
-                canonical = self._platform_calibration_path()
-
-                # El paso 09 conserva la candidata como parte verificable del
-                # checkpoint. La promoción copia de forma atómica al nombre
-                # canónico, de modo que una reanudación pueda volver a comprobar
-                # el mismo contenido y restaurarlo si el archivo activo cambió.
-                if candidate.is_file():
-                    temporary = canonical.with_suffix(canonical.suffix + ".tmp")
-                    shutil.copy2(candidate, temporary)
-                    temporary.replace(canonical)
-                elif not canonical.is_file():
-                    raise FileNotFoundError(
-                        "La calibración terminó pero no existe ni "
-                        "calibracion_plataforma_candidata.json ni "
-                        "calibracion_plataforma.json."
-                    )
-
+                local_calibration = self.root_dir / "resultado_calibracion_plataforma"
+                canonical = self._promote_platform_calibration_from_job(local_calibration)
                 result["platform_calibration"] = str(canonical)
+                result["platform_calibration_campaign_copy"] = str(local_calibration)
 
             else:
                 validation_summary = (
@@ -2354,7 +2561,8 @@ class CaptureApp:
             (
                 "Retira completamente cualquier objeto de la plataforma.\n\n"
                 f"Se tomarán {BACKGROUND_SAMPLES} pares y el fondo vigente "
-                "del sistema será reemplazado."
+                "del sistema será reemplazado.\n\n"
+                "Los trabajos que ya tienen referencias congeladas NO serán modificados."
             ),
         )
 
@@ -2460,6 +2668,74 @@ class CaptureApp:
     # Campaña
     # ------------------------------------------------------------------
 
+    def _ensure_capture_references_current(self) -> bool:
+        """Asegura que la captura completa use referencias del montaje actual.
+
+        Si los recursos globales cambiaron después de crear el trabajo, solo se
+        permite actualizar la copia congelada porque iniciar/reiniciar captura
+        reemplaza las tres sesiones. Una campaña ya capturada nunca se migra de
+        forma silenciosa durante procesamiento.
+        """
+        if self.root_dir is None:
+            return False
+
+        try:
+            if not has_frozen_references(self.root_dir):
+                proceed = messagebox.askyesno(
+                    "Referencias de campaña",
+                    (
+                        "Este trabajo es heredado y no tiene referencias congeladas.\n\n"
+                        "Como vas a iniciar o reiniciar las tres sesiones, se pueden "
+                        "congelar ahora los recursos actuales del montaje.\n\n"
+                        "¿Continuar y guardar esas referencias?"
+                    ),
+                    icon="warning",
+                )
+                if not proceed:
+                    return False
+                self._freeze_job_references(self.root_dir, self.job_mode, overwrite=False)
+                write_job_metadata(self.root_dir, self.job_mode, self.current_object)
+                return True
+
+            comparison = self._reference_sources_changed()
+            changed = list(comparison.get("changed", []))
+            if not changed:
+                return True
+
+            labels = {
+                "model": "modelo CREStereo",
+                "stereo_calibration": "calibración estéreo",
+                "background": "fondo vacío",
+                "platform_calibration": "calibración de plataforma",
+                "firmware": "firmware",
+            }
+            changed_text = "\n".join(f"- {labels.get(x, x)}" for x in changed)
+            proceed = messagebox.askyesno(
+                "El montaje cambió",
+                (
+                    "Los recursos globales actuales ya no coinciden con los que "
+                    "se congelaron al crear este trabajo:\n\n"
+                    f"{changed_text}\n\n"
+                    "Como la captura completa se va a iniciar/reiniciar, lo correcto "
+                    "es actualizar las referencias del trabajo antes de tomar S01-S03.\n\n"
+                    "¿Actualizar las referencias congeladas y continuar?"
+                ),
+                icon="warning",
+            )
+            if not proceed:
+                return False
+
+            self._freeze_job_references(self.root_dir, self.job_mode, overwrite=True)
+            write_job_metadata(self.root_dir, self.job_mode, self.current_object)
+            self.progress_var.set("Referencias de campaña actualizadas antes de capturar.")
+            return True
+        except Exception as exc:
+            messagebox.showerror(
+                "Referencias de campaña",
+                f"No se pudieron validar/actualizar las referencias:\n\n{exc}",
+            )
+            return False
+
     def start_capture(self):
         """Comprueba las condiciones iniciales e inicia la captura de la campaña."""
         if self._busy() or self._closing:
@@ -2518,8 +2794,19 @@ class CaptureApp:
             if self.ser is not None:
                 self.ser.reset_input_buffer()
             self.serial_command("RESET", expected_prefix="RESET_OK", timeout=3.0)
+
+            # El hardware ya respondió y el usuario confirmó el reinicio. Solo
+            # ahora es seguro actualizar el snapshot antes de borrar capturas.
+            if not self._ensure_capture_references_current():
+                return
+
             if restart:
-                for folder in ("capturas", "reconstruccion", "resultado_final"):
+                for folder in (
+                    "capturas",
+                    "reconstruccion",
+                    "resultado_final",
+                    "resultado_calibracion_plataforma",
+                ):
                     self._remove_path(self.root_dir / folder)
             for item in self.capture_plan:
                 for index in range(1, item["sessions"] + 1):

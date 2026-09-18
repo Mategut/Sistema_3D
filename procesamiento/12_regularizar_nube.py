@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-PASO 12 V4.6 — LIMPIEZA 3D MULTIVISTA Y REGULARIZACIÓN SUPERFICIAL GENERAL
+PASO 12 V4.7 — LIMPIEZA 3D MULTIVISTA Y REGULARIZACIÓN SUPERFICIAL GENERAL
 
 Objetivo
 --------
@@ -2615,6 +2615,47 @@ def main():
             ),
             dtype=np.float64,
         )
+        # V4.7 / 11 V11.8 — contrato de recuperación de COBERTURA OBSERVADA.
+        # No representa geometría sintetizada: solo identifica surfels que ya
+        # existían en la fusión local y que 11 reincorporó tras validar
+        # evidencia multivista, continuidad local y ausencia de degradación
+        # global. 12 debe respetar ese contrato para no volver a descartarlos
+        # únicamente por el veredicto de coherencia previo a la recuperación.
+        has_observed_coverage_recovery_contract = (
+            "observed_coverage_recovery_contract_valid" in d.files
+            and bool(
+                int(
+                    np.asarray(
+                        d["observed_coverage_recovery_contract_valid"]
+                    ).reshape(-1)[0]
+                )
+            )
+            and "coverage_recovered_observation" in d.files
+        )
+        coverage_recovered_all = np.asarray(
+            (
+                d["coverage_recovered_observation"]
+                if "coverage_recovered_observation" in d.files
+                else np.zeros(len(points_all))
+            ),
+            dtype=bool,
+        )
+        coverage_recovery_iteration_all = np.asarray(
+            (
+                d["coverage_recovery_iteration"]
+                if "coverage_recovery_iteration" in d.files
+                else np.zeros(len(points_all))
+            ),
+            dtype=np.uint8,
+        )
+        coverage_recovery_score_all = np.asarray(
+            (
+                d["coverage_recovery_score"]
+                if "coverage_recovery_score" in d.files
+                else np.zeros(len(points_all))
+            ),
+            dtype=np.float64,
+        )
         has_regional_pose_consensus_contract = (
             "regional_pose_consensus_contract_valid" in d.files
             and bool(int(np.asarray(d["regional_pose_consensus_contract_valid"]).reshape(-1)[0]))
@@ -2774,7 +2815,7 @@ def main():
 
     if not has_evidence_contract:
         print(
-            "[WARNING] Paso 12 V4.6: la entrada del paso 11 no publica el contrato "
+            "[WARNING] Paso 12 V4.7: la entrada del paso 11 no publica el contrato "
             "de evidencia pose-diversa/held-out. Se permite procesar para "
             "compatibilidad, pero la salida se marca evidence_contract_valid=0 y "
             "el paso 13 de producción exigirá reejecutar 11 y 12.",
@@ -2886,10 +2927,16 @@ def main():
             & heldout_compatible_all
             & layer_contract_consistent_all
         )
-        # V4.6: además de la separación de hojas, se consume el contrato
-        # regional multiescala por procedencia de poses de 11 V11.5.
+        # V4.7: se conserva el contrato de coherencia local, pero 11 V11.8 puede
+        # publicar una recuperación de cobertura OBSERVADA ya revalidada. Esa
+        # recuperación no crea puntos ni evita los demás filtros de evidencia:
+        # soporte independiente, diversidad angular, conflicto, held-out y
+        # separación de capas siguen siendo obligatorios aquí.
         if has_local_coherence_contract:
-            evidence_safe &= (surface_evidence_all >= 3) | local_coherence_accept_all
+            local_surface_safe = (surface_evidence_all >= 3) | local_coherence_accept_all
+            if has_observed_coverage_recovery_contract:
+                local_surface_safe |= coverage_recovered_all
+            evidence_safe &= local_surface_safe
     else:
         # Compatibilidad con un paso 11 antiguo: no inventar evidencia ausente.
         heldout_vote_ok_all = np.ones(input_count, dtype=bool)
@@ -2951,6 +2998,9 @@ def main():
     pre_local_scale_normal_diff = local_scale_normal_diff_all[pre_keep]
     pre_local_variation = local_variation_all[pre_keep]
     pre_local_same_sheet_fraction = local_same_sheet_fraction_all[pre_keep]
+    pre_coverage_recovered = coverage_recovered_all[pre_keep]
+    pre_coverage_recovery_iteration = coverage_recovery_iteration_all[pre_keep]
+    pre_coverage_recovery_score = coverage_recovery_score_all[pre_keep]
     pre_regional_pose_available = regional_pose_available_all[pre_keep]
     pre_regional_pose_accept = regional_pose_accept_all[pre_keep]
     pre_regional_pose_ambiguous = regional_pose_ambiguous_all[pre_keep]
@@ -3048,6 +3098,9 @@ def main():
     local_scale_normal_diff = pre_local_scale_normal_diff[geometric_keep_mask]
     local_variation = pre_local_variation[geometric_keep_mask]
     local_same_sheet_fraction = pre_local_same_sheet_fraction[geometric_keep_mask]
+    coverage_recovered = pre_coverage_recovered[geometric_keep_mask]
+    coverage_recovery_iteration = pre_coverage_recovery_iteration[geometric_keep_mask]
+    coverage_recovery_score = pre_coverage_recovery_score[geometric_keep_mask]
     regional_pose_available = pre_regional_pose_available[geometric_keep_mask]
     regional_pose_accept = pre_regional_pose_accept[geometric_keep_mask]
     regional_pose_ambiguous = pre_regional_pose_ambiguous[geometric_keep_mask]
@@ -3125,7 +3178,7 @@ def main():
         np.clip(local_coherence_score, 0.35, 1.0),
     )
     # Una característica local coherente (arista/esquina) no se penaliza por
-    # tener varias familias de normales: V11.3 ya la validó explícitamente.
+    # tener varias familias de normales: V11.8 ya la validó explícitamente.
     coherence_score_factor = np.where(
         local_feature_like,
         np.maximum(coherence_score_factor, 0.85),
@@ -3338,6 +3391,12 @@ def main():
         surface_local_same_sheet_fraction=local_same_sheet_fraction.astype(np.float32),
         local_coherence_contract_valid=np.asarray(
             [1 if has_local_coherence_contract else 0], dtype=np.uint8
+        ),
+        coverage_recovered_observation=coverage_recovered.astype(np.uint8),
+        coverage_recovery_iteration=coverage_recovery_iteration.astype(np.uint8),
+        coverage_recovery_score=coverage_recovery_score.astype(np.float32),
+        observed_coverage_recovery_contract_valid=np.asarray(
+            [1 if has_observed_coverage_recovery_contract else 0], dtype=np.uint8
         ),
         evidence_contract_valid=np.asarray([1 if has_evidence_contract else 0], dtype=np.uint8),
     )
@@ -3645,6 +3704,12 @@ def main():
         local_coherence_contract_valid=np.asarray(
             [1 if has_local_coherence_contract else 0], dtype=np.uint8
         ),
+        coverage_recovered_observation=coverage_recovered.astype(np.uint8),
+        coverage_recovery_iteration=coverage_recovery_iteration.astype(np.uint8),
+        coverage_recovery_score=coverage_recovery_score.astype(np.float32),
+        observed_coverage_recovery_contract_valid=np.asarray(
+            [1 if has_observed_coverage_recovery_contract else 0], dtype=np.uint8
+        ),
         evidence_contract_valid=np.asarray([1 if has_evidence_contract else 0], dtype=np.uint8),
     )
 
@@ -3734,6 +3799,12 @@ def main():
             [1 if has_raw_pose_bias_contract else 0], dtype=np.uint8
         ),
         evidence_strength=evidence_strength.astype(np.float32),
+        coverage_recovered_observation=coverage_recovered.astype(np.uint8),
+        coverage_recovery_iteration=coverage_recovery_iteration.astype(np.uint8),
+        coverage_recovery_score=coverage_recovery_score.astype(np.float32),
+        observed_coverage_recovery_contract_valid=np.asarray(
+            [1 if has_observed_coverage_recovery_contract else 0], dtype=np.uint8
+        ),
         evidence_contract_valid=np.asarray([1 if has_evidence_contract else 0], dtype=np.uint8),
     )
 
@@ -3743,7 +3814,7 @@ def main():
         regularized_points,
         support,
         confidence,
-        "12 V4.6 limpieza 3D + regularización superficial",
+        "12 V4.7 limpieza 3D + regularización superficial",
     )
 
     comparison_path = output / "preview_comparacion_regularizacion.png"
@@ -3776,18 +3847,25 @@ def main():
         "shape_specific_assumptions": False,
         "evidence_contract_valid": bool(has_evidence_contract),
         "local_coherence_contract_valid": bool(has_local_coherence_contract),
+        "observed_coverage_recovery_contract_valid": bool(
+            has_observed_coverage_recovery_contract
+        ),
         "regional_pose_consensus_contract_valid": bool(has_regional_pose_consensus_contract),
         "raw_pose_bias_contract_valid": bool(has_raw_pose_bias_contract),
         "evidence_contract_source": (
-            "step_11_pose_diverse_heldout_local_coherence_contract"
-            if has_evidence_contract
-            else "legacy_or_missing_step_11_contract"
+            "step_11_pose_diverse_heldout_local_coherence_observed_coverage_contract"
+            if (has_evidence_contract and has_observed_coverage_recovery_contract)
+            else (
+                "step_11_pose_diverse_heldout_local_coherence_contract"
+                if has_evidence_contract
+                else "legacy_or_missing_step_11_contract"
+            )
         ),
         "surface_regularization_enabled": bool(args.surface_regularization),
         "evidence_filter": {
             "policy": (
                 "integer_heldout_vote_plus_uncertainty_normalized_rescue_"
-                "with_pose_diversity_and_conflict_guard"
+                "with_pose_diversity_conflict_guard_and_validated_observed_coverage_recovery"
             ),
             "heldout_required_fraction_exact": (
                 f"{int(args.minimum_input_heldout_pass_numerator)}/"
@@ -3814,6 +3892,19 @@ def main():
                 int(np.count_nonzero(heldout_rescue_ok_all)) if has_evidence_contract else 0
             ),
             "local_coherence_contract_available": bool(has_local_coherence_contract),
+            "observed_coverage_recovery_contract_available": bool(
+                has_observed_coverage_recovery_contract
+            ),
+            "observed_coverage_recovered_input_points": (
+                int(np.count_nonzero(coverage_recovered_all))
+                if has_observed_coverage_recovery_contract
+                else 0
+            ),
+            "observed_coverage_recovered_after_cleanup": (
+                int(np.count_nonzero(coverage_recovered))
+                if has_observed_coverage_recovery_contract
+                else 0
+            ),
             "regional_pose_consensus_contract_available": bool(
                 has_regional_pose_consensus_contract
             ),
@@ -3851,8 +3942,34 @@ def main():
             "class2_local_coherence_available": int(
                 np.count_nonzero((surface_evidence_all == 2) & (local_coherence_available_all > 0))
             ),
-            "class2_local_coherence_rejected": (
+            "class2_local_coherence_rejected_raw": (
                 int(np.count_nonzero((surface_evidence_all == 2) & (~local_coherence_accept_all)))
+                if has_local_coherence_contract
+                else 0
+            ),
+            "class2_local_coherence_recovered_by_step11": (
+                int(
+                    np.count_nonzero(
+                        (surface_evidence_all == 2)
+                        & (~local_coherence_accept_all)
+                        & coverage_recovered_all
+                    )
+                )
+                if (has_local_coherence_contract and has_observed_coverage_recovery_contract)
+                else 0
+            ),
+            "class2_local_coherence_rejected": (
+                int(
+                    np.count_nonzero(
+                        (surface_evidence_all == 2)
+                        & (~local_coherence_accept_all)
+                        & (
+                            ~coverage_recovered_all
+                            if has_observed_coverage_recovery_contract
+                            else np.ones(input_count, dtype=bool)
+                        )
+                    )
+                )
                 if has_local_coherence_contract
                 else 0
             ),
@@ -3866,8 +3983,10 @@ def main():
             "note": (
                 "2/3 se evalúa con aritmética entera. Un voto held-out insuficiente "
                 "solo puede rescatarse si el error es compatible con la incertidumbre local. "
-                "Las observaciones clase 2 publicadas por 11 V11.3 además incorporan coherencia "
-                "superficial multiescala, preservando aristas/esquinas coherentes sin imponer forma."
+                "Las observaciones clase 2 incorporan coherencia superficial multiescala. "
+                "Cuando 11 V11.8 publica el contrato de recuperación de cobertura observada, 12 "
+                "respeta únicamente los surfels recuperados y revalidados por ese contrato; no se "
+                "acepta geometría sintética ni se omiten los demás filtros multivista."
             ),
         },
         "parameters": vars(args),
@@ -3959,7 +4078,7 @@ def main():
         encoding="utf-8",
     )
 
-    print("\n========== PASO 12 V4.6 COMPLETADO ==========")
+    print("\n========== PASO 12 V4.7 COMPLETADO ==========")
     print(f"Entrada 11: {input_count:,}")
     print(f"Tras SOR/ROR: {pre_filtered_count:,}")
     print(f"Tras limpieza 3D: {filtered_count:,}")

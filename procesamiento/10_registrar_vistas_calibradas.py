@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Paso 10 V3.2 — Registro calibrado y tallado global por siluetas multivista.
+Paso 10 V3.3 — Registro calibrado con evaluación A/B del refinamiento transversal del eje.
 
 Esta fase reemplaza el registro dependiente de geometría durante el runtime.
 
@@ -22,9 +22,12 @@ Sí usa:
 - ángulos mecánicos;
 - transformaciones rígidas de la plataforma.
 
-De forma opcional corrige únicamente la POSICIÓN de la línea del eje en sus
+De forma opcional EVALÚA únicamente la POSICIÓN de la línea del eje en sus
 dos grados de libertad perpendiculares. La dirección del eje y todos los
-ángulos permanecen congelados. La corrección:
+ángulos permanecen congelados. En la ruta normal de reconstrucción la
+calibración congelada sigue siendo autoritativa: el candidato refinado se
+calcula y valida A/B, pero solo se aplica si además se autoriza de forma
+explícita con --apply-axis-line-refinement. La evaluación:
 - no supone ninguna forma concreta;
 - se estima por separado con aristas pares e impares;
 - exige mejoras independientes y de cierre;
@@ -167,6 +170,15 @@ def parser():
         help=(
             "Diagnóstico opcional: refina la línea del eje con el objeto. "
             "Desactivado por defecto para mantener poses congeladas."
+        ),
+    )
+    p.add_argument(
+        "--apply-axis-line-refinement",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Autoriza aplicar el candidato refinado si supera todas las guardas A/B. "
+            "Por defecto solo se evalúa y se conserva la calibración congelada."
         ),
     )
     p.add_argument("--axis-line-search-limit-mm", type=float, default=12.0)
@@ -3093,19 +3105,39 @@ def main():
             "reject_reasons": full_reasons,
             "diagnostics": full_diagnostics,
         }
-        if full_accepted:
+        axis_refinement["ab_policy"] = (
+            "frozen_calibration_authoritative_candidate_only_applied_with_explicit_authorization"
+        )
+        axis_refinement["application_authorized"] = bool(args.apply_axis_line_refinement)
+        axis_refinement["ab_validation_passed"] = bool(full_accepted)
+        if full_accepted and args.apply_axis_line_refinement:
             axis_refinement["applied"] = True
-            axis_refinement["decision"] = "accepted"
+            axis_refinement["decision"] = "accepted_and_applied_explicitly"
             selected_transforms = proposed_transforms
             samples = proposed_metric_samples
             print(
-                "[Paso 10 | 3/8] Corrección aceptada: "
+                "[Paso 10 | 3/8] Candidato A/B validado y APLICADO por autorización explícita: "
                 f"{axis_refinement['selected_offset_magnitude_mm']:.3f} mm."
             )
+        elif full_accepted:
+            # Política V3.3: para una campaña reproducible la calibración congelada
+            # es la referencia. El refinamiento se conserva como diagnóstico A/B,
+            # pero no altera las poses de producción salvo petición explícita.
+            axis_refinement["applied"] = False
+            axis_refinement["decision"] = "validated_not_applied_frozen_calibration_policy"
+            selected_transforms = original_transforms
+            samples = original_metric_samples
+            print(
+                "[Paso 10 | 3/8] Candidato A/B validado, pero NO se aplica: "
+                "se conserva la calibración congelada."
+            )
         else:
+            axis_refinement["applied"] = False
             axis_refinement["decision"] = "fallback_full_resolution_validation_failed"
             samples = original_metric_samples
-            print("[Paso 10 | 3/8] Corrección descartada; se conserva la " "calibración original.")
+            print(
+                "[Paso 10 | 3/8] Corrección descartada; se conserva la calibración original."
+            )
     else:
         samples = original_metric_samples
         print(
@@ -3229,6 +3261,62 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
 
     # Contrato temporal entre 10 y 11. No modifica la calibración global.
+    # V3.3 conserva además dos modelos diagnósticos A/B muy pequeños: el
+    # congelado y, cuando existe, el candidato refinado. El paso 11 consume
+    # únicamente modelo_poses_runtime_validado.json.
+    def _pose_model_payload(transforms, line_point, refinement_applied, role):
+        return {
+            "schema_version": 1,
+            "method": "fixed_axis_direction_fixed_angles_common_line_position",
+            "object": obj,
+            "role": role,
+            "source_calibration_path": str(cal_path),
+            "axis_line_refinement_applied": bool(refinement_applied),
+            "axis_direction_xyz": axis.astype(float).tolist(),
+            "line_point_xyz_mm": np.asarray(line_point, dtype=np.float64).astype(float).tolist(),
+            "mechanical_angles_fixed": True,
+            "runtime_angle_corrections_used": False,
+            "runtime_icp_6dof_used": False,
+            "poses": [
+                {
+                    "pose_index": int(pose),
+                    "physical_angle_deg": float(pose_records[pose].get("physical_angle_deg", 0.0)),
+                    "transform_pose_to_P00_runtime": transforms[pose].astype(float).tolist(),
+                }
+                for pose in sorted(transforms)
+            ],
+        }
+
+    frozen_pose_model_path = output / "modelo_poses_runtime_congelado.json"
+    frozen_pose_model_path.write_text(
+        json.dumps(
+            _pose_model_payload(original_transforms, original_line, False, "frozen_calibration_A"),
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    candidate_pose_model_path = None
+    if (
+        axis_refinement.get("full_resolution_validation") is not None
+        and axis_refinement.get("selected_line_point_xyz_mm") is not None
+    ):
+        candidate_pose_model_path = output / "modelo_poses_runtime_candidato_refinado.json"
+        candidate_pose_model_path.write_text(
+            json.dumps(
+                _pose_model_payload(
+                    proposed_transforms,
+                    axis_refinement["selected_line_point_xyz_mm"],
+                    True,
+                    "refined_candidate_B",
+                ),
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
     runtime_pose_model_path = output / "modelo_poses_runtime_validado.json"
     runtime_pose_model = {
         "schema_version": 1,
@@ -3398,6 +3486,13 @@ def main():
         "runtime_angle_corrections_used": False,
         "runtime_icp_6dof_used": False,
         "runtime_axis_line_refinement_used": bool(axis_refinement["applied"]),
+        "axis_line_ab_evaluated": bool(args.refine_axis_line),
+        "axis_line_application_authorized": bool(args.apply_axis_line_refinement),
+        "axis_line_production_policy": "frozen_calibration_by_default",
+        "runtime_pose_model_frozen_path": str(frozen_pose_model_path),
+        "runtime_pose_model_candidate_path": (
+            None if candidate_pose_model_path is None else str(candidate_pose_model_path)
+        ),
         "per_point_reliability_used": True,
         "input_reliability_filters": [
             {
@@ -3522,7 +3617,7 @@ def main():
         )
     print("Modelo de poses usado por el paso 11:", runtime_pose_model_path)
     print("Salida:", output)
-    print("Sin forma específica, sin ICP 6DoF y sin corrección angular.")
+    print("Sin forma específica, sin ICP 6DoF y sin corrección angular; calibración congelada por defecto.")
     print("=============================================================\n")
     return 0 if quality != "rejected" else 2
 
