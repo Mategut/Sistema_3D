@@ -115,6 +115,19 @@ from clasificador_intersecciones import (
 # =============================================================================
 
 
+def save_inferred_face_provenance(source_path, final_mesh, output):
+    import open3d as o3d
+    import hashlib
+    def keys(mesh):
+        points = np.rint(np.asarray(mesh.vertices) / 1e-5).astype(np.int64)
+        return [tuple(sorted(tuple(points[i]) for i in face)) for face in np.asarray(mesh.triangles)]
+    original = set(keys(o3d.io.read_triangle_mesh(str(source_path))))
+    inferred = np.array([key not in original for key in keys(final_mesh)], dtype=bool)
+    np.savez_compressed(output / "procedencia_caras_relleno.npz",
+        inferred_or_retriangulated=inferred,
+        mesh_sha256=np.array(hashlib.sha256((output / "malla_final_topologica.ply").read_bytes()).hexdigest()),
+        inferred_is_observed=np.array(False))
+
 def make_parser():
     """Construye las opciones de línea de comandos de este paso."""
     p = argparse.ArgumentParser()
@@ -222,6 +235,9 @@ def make_parser():
         type=int,
         default=4,
     )
+    p.add_argument("--fill-existing-holes", action=argparse.BooleanOptionalAction,
+                   default=False, help="Relleno inferido opcional de huecos preexistentes; no es evidencia observada.")
+    p.add_argument("--existing-hole-max-diameter-mm", type=float, default=12.0)
     p.add_argument("--repair-holes", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument(
         "--estimated-terminal-caps",
@@ -2401,12 +2417,13 @@ def close_repair_boundaries(
     c = None if colors is None else colors.copy()
     loops, complex_count = _closure_loops(t)
     info = {
-        "enabled": bool(args.repair_holes or args.estimated_terminal_caps),
+        "enabled": bool(args.repair_holes or args.estimated_terminal_caps or args.fill_existing_holes),
         "existing_vertices_moved": 0,
         "existing_faces_modified": 0,
         "new_triangles_added": 0,
         "new_vertices_added": 0,
         "small_loops_closed": 0,
+        "existing_holes_filled": 0,
         "estimated_terminal_caps_closed": 0,
         "complex_boundaries_skipped": complex_count,
         "records": [],
@@ -2431,7 +2448,11 @@ def close_repair_boundaries(
             ends = [tuple(np.rint(p[i] / quantum).astype(np.int64)) for i in (a, b)]
             keys.add(tuple(sorted(ends)))
         inherited_ratio = len(keys & initial_boundary_keys) / max(len(keys), 1)
+        fill_existing = bool(args.fill_existing_holes and inherited_ratio >= 1.0
+                             and diameter <= args.existing_hole_max_diameter_mm)
+        small = small or fill_existing
         rec = {
+            "inferred_existing_hole": fill_existing,
             "boundary_id": number,
             "rim_vertices": len(loop),
             "diameter_mm": diameter,
@@ -2444,7 +2465,7 @@ def close_repair_boundaries(
             if len(loop) > args.closure_max_loop_vertices:
                 raise ValueError("limite_de_vertices_del_contorno")
             if small:
-                if not args.repair_holes or inherited_ratio >= 1.0:
+                if not fill_existing and (not args.repair_holes or inherited_ratio >= 1.0):
                     raise ValueError("contorno_pequeno_preexistente_o_reparacion_desactivada")
                 # V2.0: un hueco creado durante la reparación solo se vuelve a
                 # cerrar si su borde sigue rodeado por evidencia observacional
@@ -2609,6 +2630,7 @@ def close_repair_boundaries(
             p, t = candidate_p, candidate_t
             info["existing_vertices_moved"] += moved
             info["existing_faces_modified"] += modified
+            info["existing_holes_filled"] += int(fill_existing)
             info["new_triangles_added"] += len(patch)
             info["new_vertices_added"] += len(additions)
             info["small_loops_closed" if small else "estimated_terminal_caps_closed"] += 1
@@ -2663,6 +2685,8 @@ def main():
     root = Path(args.root).expanduser().resolve()
     object_name = args.object.strip()
 
+    if not np.isfinite(args.existing_hole_max_diameter_mm) or args.existing_hole_max_diameter_mm <= 0:
+        raise ValueError("El diámetro máximo de relleno debe ser positivo y finito")
     mesh_dir = root / "reconstruccion" / "multisesion" / args.mesh_source
     cloud_dir = root / "reconstruccion" / "multisesion" / args.cloud_source
 
@@ -3258,6 +3282,9 @@ def main():
     ):
         raise RuntimeError("No se pudo guardar malla_final_topologica.ply")
 
+    if args.fill_existing_holes:
+        save_inferred_face_provenance(mesh_path, final_mesh, output)
+
     # CSV componentes.
     component_csv = output / "analisis_componentes_14.csv"
     write_csv(
@@ -3376,7 +3403,7 @@ def main():
         "pose_reoptimization": False,
         "vertex_displacement": bool(closure_info["existing_vertices_moved"]),
         "new_triangles_added": closure_info["new_triangles_added"],
-        "hole_filling_enabled": bool(args.repair_holes or args.estimated_terminal_caps),
+        "hole_filling_enabled": bool(args.repair_holes or args.estimated_terminal_caps or args.fill_existing_holes),
         "local_closure": closure_info,
         "protected_seams_mesh_sha256": hashlib.sha256(final_path.read_bytes()).hexdigest(),
         "source_mesh": str(mesh_path),
@@ -3424,7 +3451,7 @@ def main():
         },
         "methodological_note": (
             "Solo se permite movimiento débil acotado del borde y retriangulación de una banda local. "
-            "Se retriangulan únicamente huecos pequeños de reparación; las tapas terminales "
+            "Se retriangulan huecos de reparación y, con fill_existing_holes, huecos preexistentes acotados como geometría inferida; las tapas terminales "
             "estimadas permanecen desactivadas. "
             "Los parches añadidos no equivalen a datos observados ni aumentan el soporte multivista. "
             "Los contornos no verificables se conservan abiertos y se documentan. "

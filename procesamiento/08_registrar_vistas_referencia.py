@@ -187,6 +187,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--session", default="multisesion")
     p.add_argument("--cloud-source", default="06_nubes_puntos")
     p.add_argument("--geometry-source", default="07_validacion_geometrica")
+    p.add_argument(
+        "--stereo-calibration-dir",
+        required=True,
+        help=(
+            "Calibración estéreo vigente. La baseline del montaje se deriva de T/P2/Q; "
+            "no se acepta una constante histórica."
+        ),
+    )
     p.add_argument("--output-name", default="08_registro_referencia")
     p.add_argument("--manifest", default="")
     p.add_argument("--clean-output", action=argparse.BooleanOptionalAction, default=True)
@@ -334,7 +342,12 @@ def build_parser() -> argparse.ArgumentParser:
     # Referencia física del montaje.
     # La incertidumbre por defecto es 30 mm porque el documento físico se toma
     # como referencia aproximada, no como metrología rígida.
-    p.add_argument("--stereo-baseline-mm", type=float, default=81.0558)
+    p.add_argument(
+        "--stereo-baseline-mm",
+        type=float,
+        default=None,
+        help="Compatibilidad: si se proporciona, debe coincidir con stereo_initial.yaml.",
+    )
     p.add_argument("--mount-midpoint-axis-distance-mm", type=float, default=400.0)
     p.add_argument("--mount-distance-sigma-mm", type=float, default=30.0)
     p.add_argument("--mount-symmetry-sigma-mm", type=float, default=25.0)
@@ -1354,6 +1367,47 @@ def closest_point_on_axis_line(
     if a is None:
         return c.copy()
     return c + float(np.dot(p - c, a)) * a
+
+
+def load_stereo_baseline_mm(calibration_dir: Path) -> float:
+    yaml_path = Path(calibration_dir).expanduser().resolve() / "stereo_initial.yaml"
+    if not yaml_path.is_file():
+        raise FileNotFoundError(f"Falta calibración estéreo: {yaml_path}")
+    fs = cv2.FileStorage(str(yaml_path), cv2.FILE_STORAGE_READ)
+    if not fs.isOpened():
+        raise RuntimeError(f"No se pudo abrir {yaml_path}")
+    try:
+        T = fs.getNode("T").mat()
+        P1 = fs.getNode("P1").mat()
+        P2 = fs.getNode("P2").mat()
+        Q = fs.getNode("Q").mat()
+    finally:
+        fs.release()
+    if T is None or np.asarray(T).size != 3:
+        raise RuntimeError("La calibración estéreo no contiene T válido.")
+    baseline = float(np.linalg.norm(np.asarray(T, dtype=np.float64).reshape(3)))
+    if not np.isfinite(baseline) or baseline <= 0.0:
+        raise RuntimeError("Baseline inválida en stereo_initial.yaml.")
+    P1 = np.asarray(P1, dtype=np.float64) if P1 is not None else None
+    P2 = np.asarray(P2, dtype=np.float64) if P2 is not None else None
+    if P1 is None or P1.shape != (3,4) or P2 is None or P2.shape != (3,4):
+        raise RuntimeError("P1/P2 inválidas en stereo_initial.yaml.")
+    fx = float(P1[0,0])
+    b_p2 = abs(float(P2[0,3]) / max(abs(fx), 1e-12))
+    tolerance = max(0.25, 0.005 * baseline)
+    if abs(b_p2 - baseline) > tolerance:
+        raise RuntimeError(
+            f"Baseline inconsistente entre T y P2: {baseline:.6f} vs {b_p2:.6f} mm."
+        )
+    if Q is not None and np.asarray(Q).shape == (4,4):
+        q = np.asarray(Q, dtype=np.float64)
+        if abs(float(q[3,2])) > 1e-12:
+            b_q = abs(1.0 / float(q[3,2]))
+            if abs(b_q - baseline) > tolerance:
+                raise RuntimeError(
+                    f"Baseline inconsistente entre T y Q: {baseline:.6f} vs {b_q:.6f} mm."
+                )
+    return baseline
 
 
 def mounting_geometry_diagnostics(
@@ -4408,6 +4462,16 @@ def export_registered(
 def main() -> int:
     """Estima el registro del patrón y exporta la evidencia de calibración."""
     args = build_parser().parse_args()
+    runtime_baseline = load_stereo_baseline_mm(Path(args.stereo_calibration_dir))
+    if args.stereo_baseline_mm is not None:
+        manual = float(args.stereo_baseline_mm)
+        tolerance = max(0.25, 0.005 * runtime_baseline)
+        if not np.isfinite(manual) or abs(manual - runtime_baseline) > tolerance:
+            raise RuntimeError(
+                "--stereo-baseline-mm no coincide con la calibración vigente: "
+                f"manual={manual:.6f}, stereo={runtime_baseline:.6f} mm."
+            )
+    args.stereo_baseline_mm = float(runtime_baseline)
     root = Path(args.root).expanduser().resolve()
     object_name = args.object.strip().lower()
     session = args.session.strip().upper()

@@ -8,16 +8,18 @@ La red recibe RGB float32 en el rango 0..255: el modelo ONNX incluido ya
 contiene su normalización. Se calcula disparidad en ambos sentidos y se
 evalúan consistencia izquierda-derecha, fotometría, gradiente y suavidad.
 
-La profundidad científica (*_depth_mm.npy) y su dominio de confianza
-(*_trusted_mask.png) dependen de rectificación, evidencia estéreo y rango
-físico. La máscara visual (*_object_mask.png) se conserva como diagnóstico
+La profundidad científica (*_depth_mm.npy) conserva evidencia estéreo fuerte
+y observaciones unilaterales débiles con procedencia explícita.
+*_trusted_mask.png contiene solo evidencia fuerte; *_usable_mask.png añade
+observaciones débiles que deberán ser confirmadas por 04/05/06. Ambas dependen
+de rectificación, evidencia estéreo y rango físico. La máscara visual (*_object_mask.png) se conserva como diagnóstico
 y no elimina por sí sola profundidad válida. Se guarda la disparidad del
 fondo para la comparación local del paso 03.
 
-La auditoría epipolar del fondo admite una corrección vertical afín pequeña
-de la imagen derecha: x' = x; y' = (1+b)y + ax + c. La corrección exige
-correspondencias suficientes, cobertura espacial y residuo robusto bajo.
-Si no hay evidencia suficiente, el paso solicita recalibración. La coordenada
+La auditoría epipolar del fondo es diagnóstica y la rectificación calibrada
+permanece congelada. Una tendencia SIFT no modifica automáticamente la imagen
+derecha ni P1/P2/Q; si se confirma físicamente debe repetirse la calibración.
+La coordenada
 horizontal y la escala métrica fx*B/d permanecen definidas por la calibración.
 
 La recuperación visual cerca del soporte exige profundidad fiable, conexión
@@ -567,10 +569,17 @@ def estimate_epipolar_vertical_correction(
         return result
 
     if not bool(args.epipolar_auto_correct):
-        result["status"] = "failed"
-        result["reason"] = (
-            "Se detectó error epipolar sistemático, pero la autocorrección está " "desactivada."
+        result["status"] = (
+            "failed" if bool(getattr(args, "epipolar_audit_strict", False))
+            else "warning_no_correction"
         )
+        result["reason"] = (
+            "El auditor SIFT detectó una tendencia vertical, pero NO se aplica una "
+            "transformación adicional a imágenes ya rectificadas. La geometría oficial "
+            "P1/P2/Q permanece congelada. Recalibre físicamente si la discrepancia se "
+            "confirma con un patrón de calibración."
+        )
+        result["applied"] = False
         return result
 
     result["applied"] = True
@@ -766,7 +775,14 @@ class CREStereoONNX:
     def _prepare_image(
         self,
         image_bgr: np.ndarray,
-    ) -> Tuple[np.ndarray, Tuple[int, int]]:
+    ) -> Tuple[np.ndarray, Dict[str, int | float]]:
+        """Prepara la entrada sin deformar la relación de aspecto.
+
+        Los modelos CREStereo de tamaño fijo suelen aceptar una rejilla concreta,
+        pero deformar 16:9 a 4:3 altera pendientes, bordes y texturas. Se usa
+        letterbox simétrico y luego la disparidad se deshace usando únicamente
+        la escala horizontal real del contenido, no la del canvas completo.
+        """
         original_h, original_w = image_bgr.shape[:2]
 
         if self.target_h > 0 and self.target_w > 0:
@@ -776,35 +792,50 @@ class CREStereoONNX:
             processing_h = int(np.ceil(original_h / 8.0) * 8)
             processing_w = int(np.ceil(original_w / 8.0) * 8)
 
-        # V2.3.0 — IMPORTANTE:
-        # Este ONNX ya implementa internamente:
-        #       input / 255.0 -> * 2.0 -> - 1.0
-        # Por tanto NO se divide por 255 aquí.
-        #
-        # La implementación de referencia para esta familia de ONNX entrega
-        # RGB float32 en rango 0..255. Aplicar /255 externamente provoca una
-        # doble normalización y comprime la entrada interna casi a -1.
+        scale = min(
+            processing_w / float(original_w),
+            processing_h / float(original_h),
+        )
+        content_w = max(1, min(processing_w, int(round(original_w * scale))))
+        content_h = max(1, min(processing_h, int(round(original_h * scale))))
+        pad_left = (processing_w - content_w) // 2
+        pad_top = (processing_h - content_h) // 2
+        pad_right = processing_w - content_w - pad_left
+        pad_bottom = processing_h - content_h - pad_top
+
         interpolation = (
             cv2.INTER_AREA
-            if processing_w <= original_w and processing_h <= original_h
+            if content_w <= original_w and content_h <= original_h
             else cv2.INTER_LINEAR
         )
-        processed = cv2.resize(
+        resized = cv2.resize(
             image_bgr,
-            (processing_w, processing_h),
+            (content_w, content_h),
             interpolation=interpolation,
         )
-        processed = cv2.cvtColor(
-            processed,
-            cv2.COLOR_BGR2RGB,
-        ).astype(np.float32)
+        # REFLECT101 evita crear dos bandas constantes que la red podría
+        # interpretar como estructura. El mismo padding se aplica a ambas vistas.
+        processed = cv2.copyMakeBorder(
+            resized,
+            pad_top, pad_bottom, pad_left, pad_right,
+            borderType=cv2.BORDER_REFLECT_101,
+        )
+        processed = cv2.cvtColor(processed, cv2.COLOR_BGR2RGB).astype(np.float32)
+        processed = np.transpose(processed, (2, 0, 1))[None, ...]
 
-        processed = np.transpose(
-            processed,
-            (2, 0, 1),
-        )[None, ...]
-
-        return processed, (processing_h, processing_w)
+        meta: Dict[str, int | float] = {
+            "processing_h": int(processing_h),
+            "processing_w": int(processing_w),
+            "content_h": int(content_h),
+            "content_w": int(content_w),
+            "pad_left": int(pad_left),
+            "pad_top": int(pad_top),
+            "original_h": int(original_h),
+            "original_w": int(original_w),
+            "scale_x": float(content_w / float(original_w)),
+            "scale_y": float(content_h / float(original_h)),
+        }
+        return processed, meta
 
     def __call__(
         self,
@@ -813,8 +844,15 @@ class CREStereoONNX:
     ) -> np.ndarray:
         original_h, original_w = left_bgr.shape[:2]
 
-        left_input, (processing_h, processing_w) = self._prepare_image(left_bgr)
-        right_input, _ = self._prepare_image(right_bgr)
+        left_input, prep = self._prepare_image(left_bgr)
+        right_input, prep_right = self._prepare_image(right_bgr)
+        if (
+            int(prep["content_h"]) != int(prep_right["content_h"])
+            or int(prep["content_w"]) != int(prep_right["content_w"])
+            or int(prep["pad_left"]) != int(prep_right["pad_left"])
+            or int(prep["pad_top"]) != int(prep_right["pad_top"])
+        ):
+            raise RuntimeError("Las dos cámaras no comparten la misma geometría de letterbox.")
 
         outputs = self.session.run(
             self.output_names,
@@ -835,16 +873,24 @@ class CREStereoONNX:
 
         disparity = disparity.astype(np.float32)
 
-        # La disparidad está expresada en píxeles de la imagen procesada.
-        # Al volver al tamaño original, debe escalarse horizontalmente.
-        scale_x = original_w / float(processing_w)
+        # Retirar el letterbox antes de volver al tamaño original. La disparidad
+        # está expresada en píxeles del contenido redimensionado; solo se escala
+        # por la relación horizontal real original/contenido.
+        y0 = int(prep["pad_top"])
+        x0 = int(prep["pad_left"])
+        ch = int(prep["content_h"])
+        cw = int(prep["content_w"])
+        disparity = disparity[y0:y0 + ch, x0:x0 + cw]
+        if disparity.size == 0:
+            raise RuntimeError("El recorte de letterbox produjo una disparidad vacía.")
+        horizontal_scale = original_w / float(cw)
         disparity = (
             cv2.resize(
                 disparity,
                 (original_w, original_h),
                 interpolation=cv2.INTER_LINEAR,
             )
-            * scale_x
+            * horizontal_scale
         )
 
         return disparity
@@ -1749,6 +1795,22 @@ def robust_median_filter_float(
     return local_reference
 
 
+def local_standard_deviation(gray: np.ndarray, kernel_size: int = 9) -> np.ndarray:
+    """Desviación estándar local, usada solo para observabilidad estéreo.
+
+    No clasifica formas ni materiales. Una región casi uniforme aporta poca
+    evidencia para declarar una contradicción LR como físicamente concluyente.
+    """
+    kernel_size = max(3, int(kernel_size))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    x = np.asarray(gray, dtype=np.float32)
+    mean = cv2.boxFilter(x, cv2.CV_32F, (kernel_size, kernel_size), normalize=True)
+    mean_sq = cv2.boxFilter(x * x, cv2.CV_32F, (kernel_size, kernel_size), normalize=True)
+    variance = np.maximum(mean_sq - mean * mean, 0.0)
+    return np.sqrt(variance).astype(np.float32)
+
+
 def compute_confidence(
     rect_l: np.ndarray,
     rect_r: np.ndarray,
@@ -1767,14 +1829,27 @@ def compute_confidence(
     smoothness_sigma_px: float,
     minimum_confidence: float,
     minimum_disparity_px: float,
+    local_observability_window_px: int = 9,
+    local_observability_minimum_std: float = 4.0,
+    one_sided_minimum_confidence: float = 0.50,
+    one_sided_photo_threshold: float = 50.0,
+    one_sided_minimum_smoothness_score: float = 0.55,
+    lr_contradiction_factor: float = 2.5,
 ) -> Dict[str, object]:
-    """
-    Confianza híbrida.
+    """Confianza estéreo con procedencia explícita y LR no binario.
 
-    La predicción inversa del mismo modelo no siempre es estable. Por eso:
-    - se evalúa su fiabilidad a nivel de vista;
-    - si es coherente, participa como verificación fuerte;
-    - si colapsa, queda solo como diagnóstico y no anula una vista válida.
+    La confianza directa (fotometría + gradiente + suavidad) permanece separada
+    de la consistencia izquierda-derecha. La validación inversa tiene tres
+    resultados útiles:
+
+    - fuerte bidireccional: LR/RL coinciden;
+    - unilateral débil: la medición directa es plausible pero la inversa no es
+      suficientemente observable o solo muestra una discrepancia moderada;
+    - contradicha: existe textura local suficiente y LR/RL discrepan de forma
+      fuerte, por lo que la observación no debe propagarse como evidencia real.
+
+    Esto evita convertir automáticamente ``LR inconsistente`` en ``superficie
+    inexistente`` en zonas oscuras/homogéneas, sin desactivar la protección LR.
     """
     sampled_rl, inside_lr = remap_right_to_left(
         disparity_rl.astype(np.float32),
@@ -1788,10 +1863,7 @@ def compute_confidence(
         lr_abs_tolerance_px + lr_relative_tolerance * np.maximum(disparity_lr, 0.0)
     ).astype(np.float32)
 
-    lr_score = np.zeros_like(
-        disparity_lr,
-        dtype=np.float32,
-    )
+    lr_score = np.zeros_like(disparity_lr, dtype=np.float32)
     valid_lr_error = np.isfinite(lr_error) & np.isfinite(lr_tolerance) & (lr_tolerance > 0)
     lr_score[valid_lr_error] = np.exp(
         -0.5 * np.square(lr_error[valid_lr_error] / lr_tolerance[valid_lr_error])
@@ -1805,7 +1877,6 @@ def compute_confidence(
         & (disparity_lr >= minimum_disparity_px)
         & (disparity_rl >= minimum_disparity_px)
     )
-
     if np.count_nonzero(ratio_mask) >= 500:
         median_lr = float(np.median(disparity_lr[ratio_mask]))
         median_rl = float(np.median(disparity_rl[ratio_mask]))
@@ -1848,49 +1919,23 @@ def compute_confidence(
         border_value=np.nan,
     )
     photo_error = np.abs(left_gray - warped_right).astype(np.float32)
-
-    photo_score = np.zeros_like(
-        disparity_lr,
-        dtype=np.float32,
-    )
+    photo_score = np.zeros_like(disparity_lr, dtype=np.float32)
     valid_photo = np.isfinite(photo_error)
-    safe_photo_sigma = max(
-        photo_sigma,
-        1e-6,
-    )
+    safe_photo_sigma = max(photo_sigma, 1e-6)
     photo_score[valid_photo] = np.exp(-0.5 * np.square(photo_error[valid_photo] / safe_photo_sigma))
 
-    left_gradient = cv2.Sobel(
-        left_gray,
-        cv2.CV_32F,
-        1,
-        0,
-        ksize=3,
-    )
-    right_gradient = cv2.Sobel(
-        right_gray,
-        cv2.CV_32F,
-        1,
-        0,
-        ksize=3,
-    )
+    left_gradient_x = cv2.Sobel(left_gray, cv2.CV_32F, 1, 0, ksize=3)
+    right_gradient_x = cv2.Sobel(right_gray, cv2.CV_32F, 1, 0, ksize=3)
     warped_right_gradient, gradient_inside = remap_right_to_left(
-        right_gradient,
+        right_gradient_x,
         disparity_lr,
         interpolation=cv2.INTER_LINEAR,
         border_value=np.nan,
     )
-    gradient_error = np.abs(left_gradient - warped_right_gradient).astype(np.float32)
-
-    gradient_score = np.zeros_like(
-        disparity_lr,
-        dtype=np.float32,
-    )
+    gradient_error = np.abs(left_gradient_x - warped_right_gradient).astype(np.float32)
+    gradient_score = np.zeros_like(disparity_lr, dtype=np.float32)
     valid_gradient = np.isfinite(gradient_error)
-    safe_gradient_sigma = max(
-        gradient_sigma,
-        1e-6,
-    )
+    safe_gradient_sigma = max(gradient_sigma, 1e-6)
     gradient_score[valid_gradient] = np.exp(
         -0.5 * np.square(gradient_error[valid_gradient] / safe_gradient_sigma)
     )
@@ -1904,22 +1949,11 @@ def compute_confidence(
         & (disparity_lr >= minimum_disparity_px)
     )
 
-    local_median = robust_median_filter_float(
-        disparity_lr,
-        base_valid,
-        kernel_size=9,
-    )
+    local_median = robust_median_filter_float(disparity_lr, base_valid, kernel_size=9)
     smoothness_error = np.abs(disparity_lr - local_median).astype(np.float32)
-
-    smoothness_score = np.zeros_like(
-        disparity_lr,
-        dtype=np.float32,
-    )
+    smoothness_score = np.zeros_like(disparity_lr, dtype=np.float32)
     valid_smoothness = base_valid & np.isfinite(smoothness_error)
-    safe_smoothness_sigma = max(
-        smoothness_sigma_px,
-        1e-6,
-    )
+    safe_smoothness_sigma = max(smoothness_sigma_px, 1e-6)
     smoothness_score[valid_smoothness] = np.exp(
         -0.5 * np.square(smoothness_error[valid_smoothness] / safe_smoothness_sigma)
     )
@@ -1929,39 +1963,101 @@ def compute_confidence(
         * np.clip(gradient_score, 0.0, 1.0)
         * np.clip(smoothness_score, 0.0, 1.0)
     ).astype(np.float32)
+    base_confidence[~base_valid] = 0.0
 
-    if reverse_reliable:
-        confidence = np.sqrt(
-            np.clip(base_confidence, 0.0, 1.0) * np.clip(lr_score, 0.0, 1.0)
-        ).astype(np.float32)
-        reverse_gate = (
-            inside_lr
-            & np.isfinite(sampled_rl)
-            & (sampled_rl >= minimum_disparity_px)
-            & (lr_error <= lr_tolerance)
-        )
-    else:
-        confidence = base_confidence
-        reverse_gate = np.ones_like(
-            base_valid,
-            dtype=bool,
-        )
-
-    confidence[~base_valid] = 0.0
+    # Observabilidad LR local. Para declarar una contradicción fuerte se exige
+    # textura en AMBAS vistas alrededor de la correspondencia predicha.
+    left_texture_std = local_standard_deviation(left_gray, local_observability_window_px)
+    right_texture_std = local_standard_deviation(right_gray, local_observability_window_px)
+    warped_right_texture_std, texture_inside = remap_right_to_left(
+        right_texture_std,
+        disparity_lr,
+        interpolation=cv2.INTER_LINEAR,
+        border_value=np.nan,
+    )
+    local_texture_std = np.minimum(left_texture_std, warped_right_texture_std).astype(np.float32)
+    local_observability_score = np.zeros_like(disparity_lr, dtype=np.float32)
+    observable_valid = base_valid & texture_inside & np.isfinite(local_texture_std)
+    safe_obs_std = max(float(local_observability_minimum_std), 1e-6)
+    local_observability_score[observable_valid] = np.clip(
+        local_texture_std[observable_valid] / safe_obs_std, 0.0, 1.0
+    )
+    local_reverse_observable = observable_valid & (local_texture_std >= safe_obs_std)
 
     photometrically_plausible = (
         base_valid & np.isfinite(photo_error) & (photo_error <= photo_hard_threshold)
     )
+    direct_strong = photometrically_plausible & (base_confidence >= minimum_confidence)
 
-    trusted = (
-        base_valid & photometrically_plausible & reverse_gate & (confidence >= minimum_confidence)
+    reverse_available = (
+        inside_lr
+        & np.isfinite(sampled_rl)
+        & (sampled_rl >= minimum_disparity_px)
+        & np.isfinite(lr_error)
+        & np.isfinite(lr_tolerance)
+    )
+    lr_consistent = reverse_available & (lr_error <= lr_tolerance)
+
+    if reverse_reliable:
+        strong_bidirectional = direct_strong & lr_consistent
+        strong_direct_reverse_unavailable = np.zeros_like(base_valid, dtype=bool)
+    else:
+        strong_bidirectional = np.zeros_like(base_valid, dtype=bool)
+        strong_direct_reverse_unavailable = direct_strong
+
+    # Solo una región localmente observable puede convertir una discrepancia LR
+    # en contradicción dura. En áreas homogéneas se conserva como incertidumbre.
+    contradiction_threshold = np.maximum(
+        float(lr_contradiction_factor) * lr_tolerance,
+        lr_tolerance + float(lr_abs_tolerance_px),
+    )
+    contradicted = (
+        direct_strong
+        & reverse_reliable
+        & reverse_available
+        & local_reverse_observable
+        & (lr_error > contradiction_threshold)
     )
 
-    consistent_mask = (
-        (base_valid & inside_lr & np.isfinite(sampled_rl) & (lr_error <= lr_tolerance))
-        if reverse_reliable
-        else base_valid
+    one_sided_direct = (
+        base_valid
+        & np.isfinite(photo_error)
+        & (photo_error <= min(float(photo_hard_threshold), float(one_sided_photo_threshold)))
+        & (base_confidence >= float(one_sided_minimum_confidence))
+        & (smoothness_score >= float(one_sided_minimum_smoothness_score))
     )
+    weak_one_sided = (
+        one_sided_direct
+        & (~strong_bidirectional)
+        & (~strong_direct_reverse_unavailable)
+        & (~contradicted)
+    )
+
+    # Estado explícito de procedencia LR.
+    # 0 inválido/fuera de dominio
+    # 1 fuerte bidireccional
+    # 2 fuerte directo porque la inversa global no es fiable
+    # 3 unilateral débil, requiere validación posterior
+    # 4 contradicción LR local fuerte
+    # 5 observación física con evidencia directa insuficiente
+    lr_state = np.zeros(disparity_lr.shape, dtype=np.uint8)
+    lr_state[base_valid] = 5
+    lr_state[contradicted] = 4
+    lr_state[weak_one_sided] = 3
+    lr_state[strong_direct_reverse_unavailable] = 2
+    lr_state[strong_bidirectional] = 1
+
+    trusted = strong_bidirectional | strong_direct_reverse_unavailable
+    usable = trusted | weak_one_sided
+    consistent_mask = lr_consistent if reverse_reliable else base_valid
+
+    # `confidence` pasa a significar confianza DIRECTA. LR se exporta por
+    # separado para evitar penalizarlo una segunda vez en pasos posteriores.
+    confidence = base_confidence.copy()
+    legacy_combined_confidence = np.sqrt(
+        np.clip(base_confidence, 0.0, 1.0) * np.clip(lr_score, 0.0, 1.0)
+    ).astype(np.float32)
+    legacy_combined_confidence[~base_valid] = 0.0
 
     return {
         "sampled_disparity_rl": sampled_rl,
@@ -1976,9 +2072,17 @@ def compute_confidence(
         "smoothness_score": smoothness_score,
         "base_confidence": base_confidence,
         "confidence": confidence,
+        "legacy_combined_confidence": legacy_combined_confidence,
+        "local_texture_std": local_texture_std,
+        "local_observability_score": local_observability_score,
+        "local_reverse_observable": (local_reverse_observable.astype(np.uint8) * 255),
+        "lr_state": lr_state,
         "geometry_valid": (base_valid.astype(np.uint8) * 255),
         "consistent_mask": (consistent_mask.astype(np.uint8) * 255),
         "trusted_mask": (trusted.astype(np.uint8) * 255),
+        "weak_one_sided_mask": (weak_one_sided.astype(np.uint8) * 255),
+        "contradicted_mask": (contradicted.astype(np.uint8) * 255),
+        "usable_mask": (usable.astype(np.uint8) * 255),
         "reverse_reliable": reverse_reliable,
         "reverse_ratio": reverse_ratio,
         "median_reverse_error_px": median_reverse_error,
@@ -1991,6 +2095,149 @@ def compute_confidence(
 # ---------------------------------------------------------------------------
 # Estadísticas y control de calidad
 # ---------------------------------------------------------------------------
+
+
+
+def secondary_roi_evidence(estimator, left, right, valid, object_mask,
+                           base_disparity, base_depth, base_sigma, base, calibration, args):
+    """Escala adicional diagnóstica. Nunca escribe en los arrays base.
+
+    Ambas cámaras usan exactamente el mismo recorte. El estimador devuelve
+    disparidad en píxeles del recorte original: no se vuelve a escalar fx*B/d.
+    """
+    shape = valid.shape
+    result = {key: np.full(shape, np.nan, np.float32) for key in (
+        'disparity_px', 'depth_mm', 'uncertainty_mm', 'direct_confidence',
+        'photo_error', 'base_delta_mm', 'base_tolerance_mm')}
+    for key in ('lr_state', 'candidate_mask', 'base_agrees', 'improves_evidence'):
+        result[key] = np.zeros(shape, np.uint8)
+    result['roi_xyxy'] = np.empty((0, 4), np.int32)
+    result['effective_scale_gain'] = np.array(np.nan, np.float32)
+    domain = (object_mask > 0) & (valid > 0)
+    useful = (base['usable_mask'] > 0) & np.isfinite(base_sigma)
+    # Seleccionar la celda con peor cobertura; una sola inferencia adicional
+    # bidireccional por vista mantiene acotado el coste.
+    h, w = shape
+    choices = []
+    for ys in np.array_split(np.arange(h), 3):
+        for xs in np.array_split(np.arange(w), 3):
+            tile = np.zeros(shape, bool)
+            tile[np.ix_(ys, xs)] = True
+            target = tile & domain
+            count = int(target.sum())
+            if count >= 64 and np.count_nonzero(target & useful) / count < 0.75:
+                choices.append((int(np.count_nonzero(target & ~useful)), target))
+    if not choices:
+        return result
+    target = max(choices, key=lambda item: item[0])[1]
+    yy, xx = np.where(target)
+    fb = float(calibration['P1'][0, 0]) * float(calibration['baseline_mm'])
+    # Margen epipolar de todo el rango físico, no solo de la predicción base.
+    margin = int(np.ceil(fb / max(args.minimum_depth_mm, 1.0))) + 16
+    x0, x1 = max(0, int(xx.min()) - margin), min(w, int(xx.max()) + 33)
+    y0, y1 = max(0, int(yy.min()) - 32), min(h, int(yy.max()) + 33)
+    if (x1-x0) >= w and (y1-y0) >= h:
+        return result
+    sl = np.s_[y0:y1, x0:x1]
+    # Registrar el aumento real, teniendo en cuenta el letterbox del modelo.
+    if getattr(estimator, 'target_h', None) and getattr(estimator, 'target_w', None):
+        scale_base = min(estimator.target_h/h, estimator.target_w/w)
+        scale_roi = min(estimator.target_h/(y1-y0), estimator.target_w/(x1-x0))
+        result['effective_scale_gain'] = np.array(scale_roi/scale_base, np.float32)
+    dl, dr = estimator.predict_bidirectional(left[sl], right[sl])
+    kwargs = {name: getattr(args, name) for name in (
+        'lr_abs_tolerance_px', 'lr_relative_tolerance', 'reverse_ratio_minimum',
+        'reverse_ratio_maximum', 'reverse_median_error_factor', 'photo_sigma',
+        'photo_hard_threshold', 'gradient_sigma', 'smoothness_sigma_px',
+        'minimum_confidence', 'minimum_disparity_px', 'local_observability_window_px',
+        'local_observability_minimum_std', 'one_sided_minimum_confidence',
+        'one_sided_photo_threshold', 'one_sided_minimum_smoothness_score',
+        'lr_contradiction_factor')}
+    c = compute_confidence(left[sl], right[sl], dl, dr, valid[sl],
+                           object_mask[sl], **kwargs)
+    depth = disparity_to_depth_mm(dl, calibration, valid[sl])
+    sigma_d = (0.55 + 1.75*(1-np.clip(c['base_confidence'],0,1))
+               + 0.85*(1-np.clip(c['smoothness_score'],0,1))
+               + 0.85*(1-np.clip(c['local_observability_score'],0,1)))
+    sigma_d[c['lr_state'] == 3] *= 1.60
+    sigma_d[c['trusted_mask'] > 0] *= 0.85
+    sigma = fb * sigma_d / np.maximum(dl, 1e-6)**2
+    # Excluir el contexto de borde y correspondencias que abandonan el recorte.
+    cy, cx = np.indices(dl.shape)
+    interior = (cy >= 8) & (cy < dl.shape[0]-8) & (cx >= 8) & (cx < dl.shape[1]-8)
+    interior &= (cx-dl >= 8) & (cx-dl < dl.shape[1]-8)
+    candidate = (domain[sl] & interior & (c['usable_mask'] > 0)
+                 & (c['lr_state'] != 4) & (base['lr_state'][sl] != 4)
+                 & np.isfinite(depth) & (depth >= args.minimum_depth_mm)
+                 & (depth <= args.maximum_depth_mm) & np.isfinite(sigma))
+    delta = np.abs(depth-base_depth[sl])
+    tolerance = np.minimum(6.0, 2.5*np.hypot(sigma, base_sigma[sl]))
+    agrees = candidate & np.isfinite(tolerance) & (delta <= tolerance)
+    better = (candidate & (c['base_confidence'] > base['base_confidence'][sl])
+              & (c['photo_error'] < base['photo_error'][sl])
+              & np.isfinite(base_sigma[sl]) & (sigma < base_sigma[sl]))
+    for key, value in (('disparity_px',dl), ('depth_mm',depth), ('uncertainty_mm',sigma),
+                       ('direct_confidence',c['base_confidence']), ('photo_error',c['photo_error']),
+                       ('lr_state',c['lr_state']), ('base_delta_mm',delta),
+                       ('base_tolerance_mm',tolerance), ('candidate_mask',candidate),
+                       ('base_agrees',agrees), ('improves_evidence',better)):
+        result[key][sl] = value
+    result['roi_xyxy'] = np.array([[x0,y0,x1,y1]], np.int32)
+    return result
+
+
+def compare_roi_sessions(root, output_name):
+    """Comparación diagnóstica por pose física, con registro residual de imagen.
+
+    Actualiza todas las sesiones disponibles para no depender del orden de
+    ejecución. Sin manifiesto o registro fiable no se declara coherencia.
+    """
+    manifest = root/'reconstruccion/multisesion/01_mapa_angular/mapa_angular_multisesion.json'
+    if not manifest.exists():
+        return
+    groups = {}
+    for rec in json.loads(manifest.read_text(encoding='utf-8'))['records']:
+        directory = root/'reconstruccion'/rec['session']/output_name
+        path = directory/(rec['stem']+'_roi_evidence.npz')
+        image_path = directory/(rec['stem']+'_rect_L.png')
+        if path.exists() and image_path.exists():
+            groups.setdefault(rec['pose_index'], []).append((rec['session'],path,image_path))
+    for members in groups.values():
+        for session, path, image_path in members:
+            with np.load(path, allow_pickle=False) as data:
+                ref = {k:data[k] for k in data.files}
+            support = np.zeros(ref['depth_mm'].shape, np.uint8)
+            compared = support.copy()
+            image = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
+            used = set()
+            for other_session, other_path, other_image_path in members:
+                if other_session == session or other_session in used:
+                    continue
+                other_image = cv2.imread(str(other_image_path), cv2.IMREAD_GRAYSCALE)
+                if image is None or other_image is None or image.shape != other_image.shape:
+                    continue
+                shift, response = cv2.phaseCorrelate(np.float32(image), np.float32(other_image))
+                if not np.isfinite(response) or response < 0.5 or not np.all(np.isfinite(shift)) or max(map(abs,shift)) > 4:
+                    continue
+                with np.load(other_path, allow_pickle=False) as data:
+                    if data['depth_mm'].shape != support.shape:
+                        continue
+                    matrix = np.float32([[1,0,-shift[0]],[0,1,-shift[1]]])
+                    def warp(key, fill):
+                        return cv2.warpAffine(data[key], matrix, (support.shape[1],support.shape[0]),
+                            flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT, borderValue=fill)
+                    depth = warp('depth_mm', float('nan'))
+                    sigma = warp('uncertainty_mm', float('nan'))
+                    valid = (warp('candidate_mask',0)>0) & (ref['candidate_mask']>0)
+                    tolerance = np.minimum(6.0,2.5*np.hypot(sigma,ref['uncertainty_mm']))
+                    valid &= np.isfinite(depth) & np.isfinite(tolerance)
+                    compared += valid.astype(np.uint8)
+                    support += (valid & (np.abs(depth-ref['depth_mm'])<=tolerance)).astype(np.uint8)
+                    used.add(other_session)
+            # Archivo distinto: el paquete de evidencia de inferencia es inmutable.
+            np.savez_compressed(path.with_name(path.stem+'_sessions.npz'),
+                compared_sessions=compared, agreeing_sessions=support,
+                diagnostic_only=np.array(True))
 
 
 def centered_roi_mask(
@@ -2106,14 +2353,16 @@ def classify_local_quality(
 ) -> Tuple[str, List[str]]:
     reasons: List[str] = []
 
-    trusted_ratio = float(metrics["trusted_ratio_of_object"])
+    usable_ratio = float(
+        metrics.get("usable_ratio_of_object", metrics["trusted_ratio_of_object"])
+    )
     center_depth_pixels = int(metrics["center_depth"]["count"])
-    median_confidence = metrics["confidence_trusted"]["median"]
+    median_confidence = metrics.get("confidence_usable", metrics["confidence_trusted"])["median"]
 
-    if trusted_ratio < minimum_trusted_ratio:
+    if usable_ratio < minimum_trusted_ratio:
         reasons.append(
-            "Cobertura confiable insuficiente: "
-            f"{trusted_ratio:.2%} < "
+            "Cobertura estéreo utilizable insuficiente: "
+            f"{usable_ratio:.2%} < "
             f"{minimum_trusted_ratio:.2%}"
         )
 
@@ -2211,7 +2460,12 @@ def apply_session_quality_control(
     )
 
     trusted_ratios = [
-        float(record["metrics"]["trusted_ratio_of_object"]) for record in local_candidates
+        float(
+            record["metrics"].get(
+                "usable_ratio_of_object", record["metrics"]["trusted_ratio_of_object"]
+            )
+        )
+        for record in local_candidates
     ]
     ratio_median, ratio_mad, ratio_sigma = robust_median_mad(trusted_ratios)
     effective_minimum_ratio = max(
@@ -2241,7 +2495,11 @@ def apply_session_quality_control(
             depth_error = abs(center_depth - depth_median)
             record["metrics"]["session_depth_error_mm"] = depth_error
 
-            trusted_ratio = float(record["metrics"]["trusted_ratio_of_object"])
+            trusted_ratio = float(
+                record["metrics"].get(
+                    "usable_ratio_of_object", record["metrics"]["trusted_ratio_of_object"]
+                )
+            )
 
             if depth_error > effective_depth_tolerance:
                 reasons.append(
@@ -2318,11 +2576,12 @@ def save_initial_outputs(
         object_overlay,
     )
 
-    # Compatibilidad con las etapas posteriores:
-    # valid_mask representa ahora profundidad confiable.
+    # Compatibilidad con las etapas posteriores: valid_mask representa el
+    # dominio científico utilizable (fuerte + unilateral débil). La máscara
+    # trusted_mask conserva exclusivamente evidencia fuerte.
     imwrite_checked(
         str(out_dir / f"{stem}_valid_mask.png"),
-        trusted_mask,
+        confidence_data.get("usable_mask", trusted_mask),
     )
     imwrite_checked(
         str(out_dir / f"{stem}_trusted_mask.png"),
@@ -2335,6 +2594,23 @@ def save_initial_outputs(
     imwrite_checked(
         str(out_dir / f"{stem}_consistent_mask.png"),
         confidence_data["consistent_mask"],
+    )
+
+    imwrite_checked(
+        str(out_dir / f"{stem}_weak_one_sided_mask.png"),
+        confidence_data["weak_one_sided_mask"],
+    )
+    imwrite_checked(
+        str(out_dir / f"{stem}_contradicted_mask.png"),
+        confidence_data["contradicted_mask"],
+    )
+    imwrite_checked(
+        str(out_dir / f"{stem}_usable_mask.png"),
+        confidence_data["usable_mask"],
+    )
+    imwrite_checked(
+        str(out_dir / f"{stem}_local_reverse_observable.png"),
+        confidence_data["local_reverse_observable"],
     )
 
     rect_pair = np.hstack([rect_l, rect_r])
@@ -2531,6 +2807,31 @@ def save_initial_outputs(
         str(out_dir / f"{stem}_confidence.npy"),
         confidence_data["confidence"],
     )
+
+    np.save(
+        str(out_dir / f"{stem}_base_confidence.npy"),
+        confidence_data["base_confidence"],
+    )
+    np.save(
+        str(out_dir / f"{stem}_lr_score.npy"),
+        confidence_data["lr_score"],
+    )
+    np.save(
+        str(out_dir / f"{stem}_lr_state.npy"),
+        confidence_data["lr_state"],
+    )
+    np.save(
+        str(out_dir / f"{stem}_local_observability_score.npy"),
+        confidence_data["local_observability_score"],
+    )
+    np.save(
+        str(out_dir / f"{stem}_local_texture_std.npy"),
+        confidence_data["local_texture_std"],
+    )
+    np.save(
+        str(out_dir / f"{stem}_legacy_combined_confidence.npy"),
+        confidence_data["legacy_combined_confidence"],
+    )
     np.save(
         str(out_dir / f"{stem}_depth_raw_mm.npy"),
         raw_depth_mm,
@@ -2572,24 +2873,22 @@ def finalize_view_output(
 
     before_qc_path = out_dir / f"{stem}_depth_before_session_qc_mm.npy"
     trusted_mask_path = out_dir / f"{stem}_trusted_mask.png"
+    usable_mask_path = out_dir / f"{stem}_usable_mask.png"
 
     depth_before_qc = np.load(str(before_qc_path)).astype(np.float32)
-    trusted_mask = cv2.imread(
-        str(trusted_mask_path),
-        cv2.IMREAD_GRAYSCALE,
-    )
+    trusted_mask = cv2.imread(str(trusted_mask_path), cv2.IMREAD_GRAYSCALE)
+    usable_mask = cv2.imread(str(usable_mask_path), cv2.IMREAD_GRAYSCALE)
 
     if trusted_mask is None:
-        trusted_mask = np.zeros(
-            depth_before_qc.shape,
-            dtype=np.uint8,
-        )
+        trusted_mask = np.zeros(depth_before_qc.shape, dtype=np.uint8)
+    if usable_mask is None:
+        usable_mask = trusted_mask.copy()
 
     # V2.3.0: el QC de vista/sesión queda como diagnóstico.
     # Nunca se destruye una observación estéreo que ya pasó los filtros por
     # píxel. La aceptación final se resolverá en los pasos posteriores.
     final_depth = depth_before_qc
-    final_mask = trusted_mask
+    final_mask = usable_mask
 
     np.save(
         str(out_dir / f"{stem}_depth_mm.npy"),
@@ -2913,6 +3212,49 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.35,
     )
 
+    parser.add_argument(
+        "--local-observability-window-px",
+        type=int,
+        default=9,
+        help="Ventana local para medir si LR/RL es observable por textura.",
+    )
+    parser.add_argument(
+        "--local-observability-minimum-std",
+        type=float,
+        default=4.0,
+        help=(
+            "Desviación estándar local mínima (0..255) exigida en ambas vistas "
+            "para tratar una discrepancia LR como contradicción fuerte."
+        ),
+    )
+    parser.add_argument(
+        "--one-sided-minimum-confidence",
+        type=float,
+        default=0.50,
+        help="Confianza directa mínima para conservar una observación unilateral débil.",
+    )
+    parser.add_argument(
+        "--one-sided-photo-threshold",
+        type=float,
+        default=50.0,
+        help="Error fotométrico máximo para una observación unilateral débil.",
+    )
+    parser.add_argument(
+        "--one-sided-minimum-smoothness-score",
+        type=float,
+        default=0.55,
+        help="Suavidad local mínima para una observación unilateral débil.",
+    )
+    parser.add_argument(
+        "--lr-contradiction-factor",
+        type=float,
+        default=2.5,
+        help=(
+            "Una discrepancia LR solo se considera contradicción fuerte cuando "
+            "supera este múltiplo de la tolerancia y la región es observable."
+        ),
+    )
+
     # Rango físico.
     parser.add_argument(
         "--minimum-depth-mm",
@@ -2981,10 +3323,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--epipolar-auto-correct",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
-            "Permite una corrección vertical afín de la imagen derecha "
-            "rectificada, manteniendo x sin cambios."
+            "Compatibilidad experimental. Por defecto NO modifica imágenes ya "
+            "rectificadas: una discrepancia del auditor se reporta y debe resolverse "
+            "recalibrando, no deformando la imagen derecha sin actualizar P1/P2/Q."
         ),
     )
     parser.add_argument("--epipolar-sift-features", type=int, default=12000)
@@ -3001,6 +3344,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epipolar-maximum-correction-px", type=float, default=8.0)
     parser.add_argument("--epipolar-maximum-vertical-scale-delta", type=float, default=0.025)
     parser.add_argument("--epipolar-no-correction-max-px", type=float, default=1.50)
+    parser.add_argument(
+        "--epipolar-audit-strict",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Si está activo, una discrepancia sistemática detectada por SIFT detiene "
+            "el paso. Por defecto el auditor es diagnóstico: nunca altera P1/P2/Q ni "
+            "las imágenes rectificadas."
+        ),
+    )
 
     # Calidad de sesión.
     parser.add_argument(
@@ -3431,6 +3784,12 @@ def main() -> None:
             smoothness_sigma_px=(args.smoothness_sigma_px),
             minimum_confidence=(args.minimum_confidence),
             minimum_disparity_px=(args.minimum_disparity_px),
+            local_observability_window_px=(args.local_observability_window_px),
+            local_observability_minimum_std=(args.local_observability_minimum_std),
+            one_sided_minimum_confidence=(args.one_sided_minimum_confidence),
+            one_sided_photo_threshold=(args.one_sided_photo_threshold),
+            one_sided_minimum_smoothness_score=(args.one_sided_minimum_smoothness_score),
+            lr_contradiction_factor=(args.lr_contradiction_factor),
         )
 
         physical_depth_mask = (
@@ -3503,30 +3862,70 @@ def main() -> None:
         trusted_scene_mask = (
             (stereo_trusted_before_object > 0) & physical_depth_mask & (rect_valid_mask > 0)
         )
+        usable_scene_mask = (
+            (np.asarray(confidence_data["usable_mask"]) > 0)
+            & physical_depth_mask
+            & (rect_valid_mask > 0)
+        )
+        weak_scene_mask = usable_scene_mask & (~trusted_scene_mask)
 
-        # Solo diagnóstico: intersección entre confianza estéreo y la
-        # segmentación visual histórica. NO gobierna depth_mm.npy.
+        # Solo diagnóstico: intersección con la segmentación visual. La
+        # profundidad científica puede incluir observaciones unilaterales, pero
+        # su procedencia queda explícita para 04/05/06.
         trusted_object_diagnostic_mask = trusted_scene_mask & (object_mask > 0)
+        usable_object_diagnostic_mask = usable_scene_mask & (object_mask > 0)
 
         trusted_mask = trusted_scene_mask
         confidence_data["trusted_mask"] = trusted_scene_mask.astype(np.uint8) * 255
+        confidence_data["usable_mask"] = usable_scene_mask.astype(np.uint8) * 255
+        confidence_data["weak_one_sided_mask"] = weak_scene_mask.astype(np.uint8) * 255
         confidence_data["trusted_object_diagnostic_mask"] = (
             trusted_object_diagnostic_mask.astype(np.uint8) * 255
         )
 
-        confident_depth_mm = np.full(
-            raw_depth_mm.shape,
-            np.nan,
-            dtype=np.float32,
-        )
-        confident_depth_mm[trusted_scene_mask] = raw_depth_mm[trusted_scene_mask]
+        confident_depth_mm = np.full(raw_depth_mm.shape, np.nan, dtype=np.float32)
+        confident_depth_mm[usable_scene_mask] = raw_depth_mm[usable_scene_mask]
+
+        # Incertidumbre métrica para el consenso multisesión. No deriva del
+        # error LR cuando la observación es unilateral: se calcula a partir de
+        # confianza directa, suavidad y observabilidad, y se infla de forma
+        # explícita para el estado débil.
+        fx_rectified = float(calibration["P1"][0, 0])
+        fb_px_mm = fx_rectified * float(calibration["baseline_mm"])
+        disparity_uncertainty_px = (
+            0.55
+            + 1.75 * (1.0 - np.clip(confidence_data["base_confidence"], 0.0, 1.0))
+            + 0.85 * (1.0 - np.clip(confidence_data["smoothness_score"], 0.0, 1.0))
+            + 0.85 * (1.0 - np.clip(confidence_data["local_observability_score"], 0.0, 1.0))
+        ).astype(np.float32)
+        disparity_uncertainty_px[weak_scene_mask] *= np.float32(1.60)
+        disparity_uncertainty_px[trusted_scene_mask] *= np.float32(0.85)
+        depth_uncertainty_mm = np.full(raw_depth_mm.shape, np.nan, dtype=np.float32)
+        valid_uncertainty = usable_scene_mask & np.isfinite(disparity_lr) & (disparity_lr > 1e-6)
+        depth_uncertainty_mm[valid_uncertainty] = (
+            fb_px_mm
+            * disparity_uncertainty_px[valid_uncertainty]
+            / np.square(disparity_lr[valid_uncertainty])
+        ).astype(np.float32)
+        np.save(str(output_dir / f"{stem}_disparity_uncertainty_px.npy"), disparity_uncertainty_px)
+        np.save(str(output_dir / f"{stem}_depth_uncertainty_mm.npy"), depth_uncertainty_mm)
+
+        roi_evidence = secondary_roi_evidence(
+            estimator, rect_l, rect_r, rect_valid_mask, object_mask,
+            disparity_lr, raw_depth_mm, depth_uncertainty_mm,
+            confidence_data, calibration, args)
+        np.savez_compressed(output_dir / f"{stem}_roi_evidence.npz",
+                            **roi_evidence, diagnostic_only=np.array(True))
 
         rect_valid_pixels = int(np.count_nonzero(rect_valid_mask))
         trusted_scene_pixels = int(np.count_nonzero(trusted_scene_mask))
+        weak_scene_pixels = int(np.count_nonzero(weak_scene_mask))
+        usable_scene_pixels = int(np.count_nonzero(usable_scene_mask))
         trusted_object_pixels = int(np.count_nonzero(trusted_object_diagnostic_mask))
+        usable_object_pixels = int(np.count_nonzero(usable_object_diagnostic_mask))
         object_pixels = int(np.count_nonzero(object_mask))
 
-        center_depth_mask = trusted_object_diagnostic_mask
+        center_depth_mask = usable_object_diagnostic_mask
         geometry_valid = confidence_data["geometry_valid"] > 0
 
         metrics: Dict[str, object] = {
@@ -3553,10 +3952,15 @@ def main() -> None:
             # el QC histórico, pero ya no decide la profundidad científica.
             "trusted_pixels": trusted_object_pixels,
             "trusted_scene_pixels": trusted_scene_pixels,
+            "weak_one_sided_scene_pixels": weak_scene_pixels,
+            "usable_scene_pixels": usable_scene_pixels,
             "trusted_object_diagnostic_pixels": trusted_object_pixels,
+            "usable_object_diagnostic_pixels": usable_object_pixels,
             "trusted_ratio_of_object": (trusted_object_pixels / max(object_pixels, 1)),
+            "usable_ratio_of_object": (usable_object_pixels / max(object_pixels, 1)),
             "trusted_ratio_of_rect_valid": (trusted_scene_pixels / max(rect_valid_pixels, 1)),
-            "scientific_depth_pixels": trusted_scene_pixels,
+            "usable_ratio_of_rect_valid": (usable_scene_pixels / max(rect_valid_pixels, 1)),
+            "scientific_depth_pixels": usable_scene_pixels,
             "scientific_depth_depends_on_object_mask": False,
             "reverse_reliable": bool(confidence_data["reverse_reliable"]),
             "reverse_ratio": (
@@ -3603,6 +4007,19 @@ def main() -> None:
                 confidence_data["confidence"][geometry_valid]
             ),
             "confidence_trusted": finite_statistics(confidence_data["confidence"][trusted_mask]),
+            "confidence_usable": finite_statistics(
+                confidence_data["confidence"][usable_scene_mask]
+            ),
+            "confidence_weak_one_sided": finite_statistics(
+                confidence_data["confidence"][weak_scene_mask]
+            ),
+            "lr_state_counts": {
+                str(code): int(np.count_nonzero(confidence_data["lr_state"] == code))
+                for code in range(6)
+            },
+            "depth_uncertainty_mm": finite_statistics(
+                depth_uncertainty_mm[usable_scene_mask & np.isfinite(depth_uncertainty_mm)]
+            ),
             "raw_depth": finite_statistics(raw_depth_mm[np.isfinite(raw_depth_mm)]),
             "trusted_depth": finite_statistics(confident_depth_mm[np.isfinite(confident_depth_mm)]),
             "center_depth": finite_statistics(confident_depth_mm[center_depth_mask]),
@@ -3665,6 +4082,8 @@ def main() -> None:
     if not records:
         raise RuntimeError("No se procesó ninguna vista.")
 
+    compare_roi_sessions(root, output_name)
+
     session_qc = apply_session_quality_control(
         records=records,
         absolute_depth_tolerance_mm=(args.session_depth_tolerance_mm),
@@ -3718,15 +4137,15 @@ def main() -> None:
         "session_quality_control": session_qc,
         "views": records,
         "confidence_scope_note": (
-            "El mapa *_confidence.npy se calcula sobre todo el dominio válido "
-            "de rectificación, con erosión mínima de borde. No hay recorte central "
-            "capaz de amputar el objeto. El anchor adaptativo es solo prior/diagnóstico."
+            "*_confidence.npy representa confianza DIRECTA (fotometría, gradiente y "
+            "suavidad) y no incorpora LR. La consistencia LR se exporta por separado "
+            "en *_lr_state.npy y *_lr_score.npy para evitar penalización doble."
         ),
         "compatibility_note": (
-            "Los archivos *_depth_mm.npy y *_valid_mask.png "
-            "solo conservan información en vistas aceptadas, salvo "
-            "que se use --keep-rejected-depth. Los datos previos al "
-            "control permanecen en *_depth_before_session_qc_mm.npy."
+            "*_trusted_mask.png contiene evidencia fuerte. *_usable_mask.png y "
+            "*_depth_mm.npy pueden incluir observaciones unilaterales débiles; estas "
+            "no adquieren autoridad fuerte hasta ser validadas en 04/05/06. El QC "
+            "de vista/sesión es diagnóstico y no destruye profundidad por píxel."
         ),
     }
 

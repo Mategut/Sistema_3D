@@ -320,9 +320,9 @@ def build_parser():
     # ya medidos que quedaron fuera por el filtro local, siempre que estén
     # respaldados por varias poses y conectados a superficie validada.
     p.add_argument("--observed-coverage-recovery", action=argparse.BooleanOptionalAction, default=True)
-    p.add_argument("--coverage-recovery-iterations", type=int, default=4)
-    p.add_argument("--coverage-recovery-max-distance-voxels", type=float, default=2.35)
-    p.add_argument("--coverage-recovery-candidate-radius-voxels", type=float, default=2.10)
+    p.add_argument("--coverage-recovery-iterations", type=int, default=6)
+    p.add_argument("--coverage-recovery-max-distance-voxels", type=float, default=3.00)
+    p.add_argument("--coverage-recovery-candidate-radius-voxels", type=float, default=2.75)
     p.add_argument("--coverage-recovery-min-kept-neighbors", type=int, default=1)
     p.add_argument("--coverage-recovery-min-candidate-neighbors", type=int, default=2)
     p.add_argument("--coverage-recovery-normal-angle-deg", type=float, default=42.0)
@@ -331,20 +331,39 @@ def build_parser():
     p.add_argument("--coverage-recovery-min-support", type=int, default=2)
     p.add_argument("--coverage-recovery-min-independent-support", type=int, default=2)
     p.add_argument("--coverage-recovery-min-angular-span", type=int, default=2)
-    p.add_argument("--coverage-recovery-min-confidence", type=float, default=0.60)
-    p.add_argument("--coverage-recovery-min-agreement", type=float, default=0.60)
-    p.add_argument("--coverage-recovery-min-normal-consistency", type=float, default=0.86)
+    p.add_argument("--coverage-recovery-min-confidence", type=float, default=0.55)
+    p.add_argument("--coverage-recovery-min-agreement", type=float, default=0.55)
+    p.add_argument("--coverage-recovery-min-normal-consistency", type=float, default=0.82)
     p.add_argument("--coverage-recovery-max-conflict-ratio", type=float, default=0.32)
-    p.add_argument("--coverage-recovery-max-uncertainty-voxel", type=float, default=0.55)
+    p.add_argument("--coverage-recovery-max-uncertainty-voxel", type=float, default=0.70)
     p.add_argument("--coverage-recovery-rejected-class2-min-score", type=float, default=0.58)
     p.add_argument("--coverage-recovery-rejected-class2-max-red-flags", type=int, default=4)
     p.add_argument("--coverage-recovery-rejected-class2-min-support", type=int, default=3)
     p.add_argument("--coverage-recovery-rejected-class2-min-confidence", type=float, default=0.70)
-    p.add_argument("--coverage-recovery-max-fraction-of-initial", type=float, default=0.60)
+    p.add_argument("--coverage-recovery-max-fraction-of-initial", type=float, default=1.25)
     p.add_argument("--coverage-recovery-min-coverage-improvement", type=float, default=0.005)
     p.add_argument("--coverage-recovery-max-confidence-drop", type=float, default=0.06)
     p.add_argument("--coverage-recovery-max-normal-consistency-drop", type=float, default=0.04)
     p.add_argument("--coverage-recovery-max-uncertainty-p90-factor", type=float, default=1.35)
+    p.add_argument(
+        "--minimum-final-occupied-cell-retention",
+        type=float,
+        default=0.35,
+        help=(
+            "V2: fracción mínima de celdas originales con TODOS sus candidatos a <=1 voxel "
+            "de la selección final. El nombre de opción se conserva por compatibilidad; no es "
+            "la razón entre cantidades de celdas finales y originales."
+        ),
+    )
+    p.add_argument(
+        "--minimum-final-two-voxel-coverage",
+        type=float,
+        default=0.80,
+        help=(
+            "Fracción mínima de candidatos observados que debe quedar a <=2 voxels de "
+            "algún surfel retenido. Es cobertura de muestreo, no área física."
+        ),
+    )
 
     # V11.4 — separación post-fit de hojas respaldadas por grupos de poses.
     # Se aplica antes de declarar una observación como clase 3. No presupone
@@ -5676,6 +5695,49 @@ def estimate_missing_patches(
     }, report
 
 
+def measure_final_coverage(reference_points, final_points, selected, voxel):
+    """Ocupación final y distancia contra TODOS los candidatos antes del ajuste.
+
+    La razón de ocupación es un indicador de muestreo, no área superficial.
+    El denominador y las consultas no se mueven con los puntos seleccionados.
+    """
+    reference = np.asarray(reference_points, dtype=np.float64)
+    final = np.asarray(final_points, dtype=np.float64)
+    keep = np.asarray(selected, dtype=bool)
+    if (reference.shape != final.shape or reference.ndim != 2 or reference.shape[1] != 3
+            or keep.shape != (len(reference),) or not np.isfinite(voxel) or voxel <= 0
+            or not np.isfinite(reference).all() or not np.isfinite(final).all()):
+        raise ValueError('Referencia de cobertura o geometría final incompatible.')
+    reference_cells, cell_inverse = np.unique(
+        np.floor(reference / voxel).astype(np.int64), axis=0, return_inverse=True)
+    final_cells = np.unique(np.floor(final[keep] / voxel).astype(np.int64), axis=0)
+    original_selected_cells = np.unique(np.floor(reference[keep] / voxel).astype(np.int64), axis=0)
+    report = {
+        'reference': 'immutable_all_candidates_before_support_selection',
+        'candidate_points': int(len(reference)), 'selected_points': int(keep.sum()),
+        'reference_occupied_cells': int(len(reference_cells)),
+        'final_occupied_cells': int(len(final_cells)),
+        'selected_original_occupied_cells': int(len(original_selected_cells)),
+        'occupied_cell_retention': len(final_cells) / max(1,len(reference_cells)),
+        'pre_adjustment_selected_cell_retention': len(original_selected_cells) / max(1,len(reference_cells)),
+        'within_one_voxel_fraction': 0.0, 'within_two_voxels_fraction': 0.0,
+        'reference_cell_coverage_one_voxel': 0.0,
+        'reference_cell_coverage_two_voxels': 0.0,
+        'cell_coverage_policy': 'Every original candidate in a cell must lie within the distance limit; all cells have equal weight.',
+        'note': 'Final occupied cells / original occupied cells; not measured surface area.',
+    }
+    if keep.any():
+        distances, _ = cKDTree(final[keep]).query(reference, workers=query_threads())
+        cell_max_distance = np.zeros(len(reference_cells), dtype=np.float64)
+        np.maximum.at(cell_max_distance, cell_inverse, distances)
+        report['reference_cell_coverage_one_voxel'] = float(np.mean(cell_max_distance <= voxel))
+        report['reference_cell_coverage_two_voxels'] = float(np.mean(cell_max_distance <= 2*voxel))
+        report['distance_to_retained_mm'] = finite_stats(distances)
+        report['within_one_voxel_fraction'] = float(np.mean(distances <= voxel))
+        report['within_two_voxels_fraction'] = float(np.mean(distances <= 2*voxel))
+    return report
+
+
 def main():
     """Fusiona las observaciones registradas y exporta nube, atributos y diagnósticos."""
     args = build_parser().parse_args()
@@ -5985,6 +6047,8 @@ def main():
         singleton_minimum_confidence=float(args.singleton_minimum_confidence),
     )
 
+    # Referencia inmutable: las correcciones posteriores solo mueven retenidos.
+    coverage_reference_points = np.asarray(fused_p, dtype=np.float64).copy()
     selection_diagnostic = {}
     if args.independent_patches:
         legacy_count = int(np.count_nonzero(keep))
@@ -6181,31 +6245,40 @@ def main():
         )
     # Cobertura respecto a TODOS los candidatos, incluidos los que perdieron
     # respaldo durante el ajuste. No oculta pérdidas cambiando el denominador.
-    coverage_report = {
-        "reference": "all_candidates_before_support_selection",
-        "candidate_points": int(len(fused_p)),
-        "selected_points": int(keep.sum()),
-    }
+    coverage_report = measure_final_coverage(
+        coverage_reference_points, fused_p, keep, float(args.fusion_voxel_mm))
     if np.any(keep):
-        distances, _ = cKDTree(fused_p[keep]).query(fused_p, workers=query_threads())
-        coverage_report["distance_to_retained_mm"] = finite_stats(distances)
-        coverage_report["within_one_voxel_fraction"] = float(
-            np.mean(distances <= args.fusion_voxel_mm)
-        )
-        coverage_report["within_two_voxels_fraction"] = float(
-            np.mean(distances <= 2 * args.fusion_voxel_mm)
-        )
-        cells = np.floor(fused_p / args.fusion_voxel_mm).astype(np.int64)
-        coverage_report["occupied_cell_retention"] = float(
-            len(np.unique(cells[keep], axis=0)) / max(1, len(np.unique(cells, axis=0)))
-        )
         print(
-            f"[Paso 11] Cobertura de candidatos a un vóxel: "
+            f"[Paso 11] Cobertura de candidatos originales a un vóxel: "
             f"{100*coverage_report['within_one_voxel_fraction']:.1f}%; "
-            f"celdas retenidas: {100*coverage_report['occupied_cell_retention']:.1f}%.",
+            f"celdas finales/referencia: {100*coverage_report['occupied_cell_retention']:.1f}%.",
             flush=True,
         )
+    coverage_report["gate_method"] = "spatial_reference_cell_coverage_v2"
+    coverage_report["gate_note"] = "Cell-count retention is diagnostic only. Require original-cell proximity at one and two voxels, plus point proximity at two voxels."
     local_summary["all_candidate_coverage"] = coverage_report
+
+    # V11.9 — contrato de cobertura mínimo. Una nube puede tener excelentes
+    # métricas locales y aun así estar demasiado fragmentada para reconstruir una
+    # superficie sin extrapolación. En ese caso se detiene aquí y no se delega a
+    # Poisson la tarea de inventar las regiones faltantes.
+    if np.any(keep):
+        occupied_retention = float(coverage_report.get("reference_cell_coverage_one_voxel", 0.0))
+        two_voxel_coverage = float(coverage_report.get("within_two_voxels_fraction", 0.0))
+        coverage_report["minimum_required_reference_cell_coverage_one_voxel"] = float(
+            args.minimum_final_occupied_cell_retention
+        )
+        coverage_report["minimum_required_two_voxel_coverage"] = float(
+            args.minimum_final_two_voxel_coverage
+        )
+        coverage_report["passes_surface_sampling_gate"] = bool(
+            occupied_retention >= float(args.minimum_final_occupied_cell_retention)
+            and two_voxel_coverage >= float(args.minimum_final_two_voxel_coverage)
+            and coverage_report["reference_cell_coverage_two_voxels"] >= float(args.minimum_final_two_voxel_coverage)
+        )
+    else:
+        coverage_report["passes_surface_sampling_gate"] = False
+
     diagnostic_points = fused_p.copy()
     if args.align_platform_axis:
         diagnostic_rotation, diagnostic_origin, _ = platform_canonical_frame(
@@ -6215,6 +6288,10 @@ def main():
     np.savez_compressed(
         output / "diagnostico_seleccion_parches.npz",
         points=diagnostic_points.astype(np.float32),
+        coverage_reference_points=(
+            (coverage_reference_points - diagnostic_origin[None, :]) @ diagnostic_rotation.T
+            if args.align_platform_axis else coverage_reference_points
+        ).astype(np.float64),
         selected=keep,
         support_views=support,
         confidence=confidence,
@@ -6273,6 +6350,34 @@ def main():
             f"seleccionados: {np.count_nonzero(keep):,}. "
             f"Diagnóstico: {local_diagnostic_path.name}",
             flush=True,
+        )
+
+    # Persistir la auditoría también cuando el gate bloquea el mallado.
+    audit = {
+        "schema_version": 1,
+        "quality": "accepted" if coverage_report.get("passes_surface_sampling_gate") else "rejected",
+        "method": "immutable_candidate_reference_coverage_audit",
+        "parameters": vars(args),
+        "registration_summary": str(registration_summary_path),
+        "coverage": coverage_report,
+        "selection": selection_info,
+        "local_surface_fusion": local_summary,
+    }
+    (output / "auditoria_11_cobertura.json").write_text(
+        json.dumps(audit, indent=2, ensure_ascii=False, default=lambda x: x.tolist()
+                   if isinstance(x, np.ndarray) else x.item()
+                   if isinstance(x, np.generic) else str(x)), encoding="utf-8")
+    if not bool(coverage_report.get("passes_surface_sampling_gate", False)):
+        raise RuntimeError(
+            "La nube fusionada conserva evidencia local pero no cobertura superficial "
+            "suficiente para un mallado fiable: "
+            f"celdas originales cubiertas a 1vox={100.0*float(coverage_report.get('reference_cell_coverage_one_voxel',0.0)):.1f}% "
+            f"(mín {100.0*float(args.minimum_final_occupied_cell_retention):.1f}%), "
+            f"celdas a 2vox={100.0*float(coverage_report.get('reference_cell_coverage_two_voxels',0.0)):.1f}%; "
+            f"puntos a 2vox={100.0*float(coverage_report.get('within_two_voxels_fraction',0.0)):.1f}% "
+            f"(mín {100.0*float(args.minimum_final_two_voxel_coverage):.1f}%). "
+            "Revise pasos 02–10 o aumente cobertura observada; no se permite que Poisson "
+            "complete automáticamente una nube insuficiente."
         )
 
     if int(np.count_nonzero(keep)) < 500:

@@ -114,7 +114,7 @@ except Exception as exc:
     raise SystemExit("Paso 13 V5.0 requiere Open3D 0.19.x. " f"Detalle: {exc}")
 
 
-VERSION = "V5.6"
+VERSION = "V5.8"
 STEP = "13"
 
 
@@ -155,10 +155,11 @@ def make_parser():
     p.add_argument(
         "--poisson-density-trim-quantile",
         type=float,
-        default=0.0,
+        default=0.01,
         help=(
-            "0 conserva la continuidad. Valores mayores pueden abrir la "
-            "base y fragmentar paredes."
+            "Recorte conservador de densidad Poisson. 0 lo desactiva; el valor "
+            "por defecto elimina únicamente el 1%% de menor densidad antes de "
+            "aplicar los gates de evidencia observacional."
         ),
     )
     p.add_argument("--bbox-margin-mm", type=float, default=4.0)
@@ -284,7 +285,9 @@ def make_parser():
         ),
     )
     p.add_argument("--candidate-max-components", type=int, default=20)
-    p.add_argument("--candidate-max-boundary-edge-ratio", type=float, default=0.30)
+    p.add_argument("--candidate-max-boundary-edge-ratio", type=float, default=0.15)
+    p.add_argument("--adaptive-observed-refinement", action=argparse.BooleanOptionalAction,
+                   default=True, help="Si ningún candidato cumple, repetir BPA con menos reducción de muestras observadas.")
     p.add_argument("--evaluation-cloud-samples", type=int, default=30000)
     p.add_argument("--evaluation-mesh-samples", type=int, default=30000)
     p.add_argument("--coverage-gate-mm", type=float, default=3.0)
@@ -1752,10 +1755,21 @@ def evaluate(mesh, cloud_points, gate_mm, cloud_samples, mesh_samples, name="can
         int(mesh_samples),
         max(5000, len(np.asarray(mesh.vertices))),
     )
-    sampled = mesh.sample_points_uniformly(number_of_points=sample_count)
+    vertices = np.asarray(mesh.vertices)
+    triangles = np.asarray(mesh.triangles)
+    faces = vertices[triangles]
+    areas = np.linalg.norm(np.cross(faces[:, 1] - faces[:, 0], faces[:, 2] - faces[:, 0]), axis=1)
+    if not np.isfinite(areas).all() or areas.sum() <= 0:
+        raise ValueError("Candidato sin área finita para evaluar.")
+    sampled_faces = faces[rng.choice(len(faces), sample_count, p=areas / areas.sum())]
+    uv = rng.random((sample_count, 2))
+    root_u = np.sqrt(uv[:, 0])
+    sampled_points = ((1-root_u)[:, None] * sampled_faces[:, 0]
+                      + (root_u*(1-uv[:, 1]))[:, None] * sampled_faces[:, 1]
+                      + (root_u*uv[:, 1])[:, None] * sampled_faces[:, 2])
     mesh_to_cloud, _ = query_tree(
         cKDTree(cloud_points),
-        np.asarray(sampled.points, dtype=np.float64),
+        np.asarray(sampled_points, dtype=np.float64),
         k=1,
     )
     cloud_extent = np.ptp(cloud_points, axis=0)
@@ -1866,35 +1880,60 @@ def candidate_selection_score(evaluation, spacing):
     return float(score)
 
 
+def candidate_observational_fidelity_gate(evaluation, spacing, args):
+    """Gate duro de fidelidad; no depende de la forma ni del método.
+
+    Una topología reparable puede pasar a 14, pero una superficie situada varios
+    espaciamientos lejos de todas las observaciones no se considera un candidato
+    geométrico válido.
+    """
+    h = max(float(spacing), 1e-6)
+    p90 = _finite_metric(evaluation, "mesh_to_cloud_mm", "p90")
+    p95 = _finite_metric(evaluation, "mesh_to_cloud_mm", "p95")
+    ratios = np.asarray(evaluation.get("bbox_extent_ratio_xyz", []), dtype=float)
+    expansion = (
+        float(np.nanmax(np.maximum(ratios - 1.0, 0.0)))
+        if ratios.size else float("inf")
+    )
+    failures = []
+    if p90 > float(args.poisson_risk_p90_spacing_factor) * h:
+        failures.append("mesh_to_cloud_p90_exceeds_spacing_gate")
+    if p95 > float(args.poisson_risk_p95_spacing_factor) * h:
+        failures.append("mesh_to_cloud_p95_exceeds_spacing_gate")
+    if expansion > float(args.poisson_risk_bbox_expansion_ratio):
+        failures.append("bbox_expansion_exceeds_gate")
+    return not failures, {
+        "passed": not failures,
+        "failures": failures,
+        "mesh_to_cloud_p90_mm": float(p90),
+        "mesh_to_cloud_p95_mm": float(p95),
+        "spacing_mm": float(h),
+        "p90_limit_mm": float(args.poisson_risk_p90_spacing_factor) * h,
+        "p95_limit_mm": float(args.poisson_risk_p95_spacing_factor) * h,
+        "maximum_bbox_expansion_ratio": float(expansion),
+        "bbox_limit_ratio": float(args.poisson_risk_bbox_expansion_ratio),
+    }
+
+
 def choose_surface_candidate(candidates, spacing, args):
-    """Selecciona sin conocimiento del objeto entre candidatos ya limpiados."""
+    """Selecciona únicamente entre candidatos geométricamente admisibles.
+
+    V5.7 elimina el ganador Poisson por defecto. Si todos los métodos fallan
+    fidelidad observacional o presentan fragmentación extrema, se rechaza la
+    reconstrucción y se obliga a volver a la nube.
+    """
     if not candidates:
         raise RuntimeError("Paso 13: no hay candidatos de superficie para seleccionar.")
-    poisson = candidates.get("screened_poisson_adaptive")
-    if poisson is None:
-        name, data = next(iter(candidates.items()))
-        return name, data, {"reason": "poisson_unavailable", "selected": name}
-    p_eval = poisson[1]
-    p_score = candidate_selection_score(p_eval, spacing)
+
     report = {
-        "policy": "symmetric_observational_fidelity_first_topology_repairable_penalty",
-        "poisson_score": p_score,
+        "policy": "hard_observational_fidelity_then_quality_score",
         "minimum_absolute_coverage": float(args.candidate_min_absolute_coverage),
-        "minimum_relative_coverage": float(args.candidate_min_relative_coverage),
-        "minimum_score_gain_to_switch": float(args.candidate_switch_min_score_gain),
         "minimum_largest_component_ratio": float(args.candidate_min_largest_component_ratio),
         "maximum_components": int(args.candidate_max_components),
         "maximum_boundary_edge_ratio": float(args.candidate_max_boundary_edge_ratio),
         "candidates": {},
     }
-    best_name = "screened_poisson_adaptive"
-    best_data = poisson
-    best_score = p_score
-    p_cov = float(p_eval.get("coverage_within_gate") or 0.0)
-    required_cov = max(
-        float(args.candidate_min_absolute_coverage),
-        float(args.candidate_min_relative_coverage) * p_cov,
-    )
+    eligible_candidates = []
     for name, data in candidates.items():
         ev = data[1]
         score = candidate_selection_score(ev, spacing)
@@ -1905,38 +1944,53 @@ def choose_surface_candidate(candidates, spacing, args):
         components = topo.get("connected_components")
         components = int(components) if components is not None else 999
         boundary_ratio = float(topo.get("boundary_edge_ratio") or 0.0)
-        eligibility_reasons = []
-        if cov < required_cov:
-            eligibility_reasons.append("coverage_below_required")
+        fidelity_ok, fidelity = candidate_observational_fidelity_gate(ev, spacing, args)
+        reasons = []
+        if not fidelity_ok:
+            reasons.extend(fidelity["failures"])
+        if cov < float(args.candidate_min_absolute_coverage):
+            reasons.append("coverage_below_absolute_minimum")
         if largest < float(args.candidate_min_largest_component_ratio):
-            eligibility_reasons.append("extreme_fragmentation_largest_component")
+            reasons.append("extreme_fragmentation_largest_component")
         if components > int(args.candidate_max_components):
-            eligibility_reasons.append("too_many_connected_components")
+            reasons.append("too_many_connected_components")
         if boundary_ratio > float(args.candidate_max_boundary_edge_ratio):
-            eligibility_reasons.append("excessive_open_boundary_ratio")
-        eligible = not eligibility_reasons
+            reasons.append("excessive_open_boundary_ratio")
+        eligible = not reasons
         report["candidates"][name] = {
-            "score": score,
-            "coverage": cov,
-            "largest_component_triangle_ratio": largest,
-            "connected_components": components,
-            "boundary_edge_ratio": boundary_ratio,
+            "score": float(score),
+            "coverage": float(cov),
+            "largest_component_triangle_ratio": float(largest),
+            "connected_components": int(components),
+            "boundary_edge_ratio": float(boundary_ratio),
+            "observational_fidelity": fidelity,
             "eligible": bool(eligible),
-            "ineligibility_reasons": eligibility_reasons,
+            "ineligibility_reasons": reasons,
         }
-        if name == "screened_poisson_adaptive":
-            continue
-        gain = (p_score - score) / max(abs(p_score), 1e-9)
-        report["candidates"][name]["relative_score_gain_vs_poisson"] = float(gain)
-        if eligible and gain >= float(args.candidate_switch_min_score_gain) and score < best_score:
-            best_name, best_data, best_score = name, data, score
+        if eligible:
+            eligible_candidates.append((float(score), name, data))
+
+    if not eligible_candidates:
+        compact = {
+            k: v["ineligibility_reasons"]
+            for k, v in report["candidates"].items()
+        }
+        error = RuntimeError(
+            "Paso 13 rechazado: ningún candidato de superficie conserva a la vez "
+            "fidelidad observacional, cobertura y conectividad suficientes. "
+            "No se seleccionará Poisson solo por ser continuo. Diagnóstico: "
+            + json.dumps(compact, ensure_ascii=False)
+        )
+        error.selection_report = report
+        raise error
+
+    eligible_candidates.sort(key=lambda item: item[0])
+    best_score, best_name, best_data = eligible_candidates[0]
     report["selected"] = best_name
     report["selected_score"] = float(best_score)
-    report["required_coverage_for_alternative"] = float(required_cov)
     report["selection_note"] = (
-        "La fidelidad observacional mesh->cloud y cloud->mesh domina. "
-        "Fragmentación y bordes abiertos penalizan, pero no pueden por sí solos "
-        "hacer ganar una superficie que extrapola lejos de la nube observada."
+        "Ningún candidato puede ganar si extrapola más allá de los gates relativos "
+        "al espaciado observado. La continuidad topológica nunca anula fidelidad."
     )
     return best_name, best_data, report
 
@@ -2885,6 +2939,13 @@ def main():
             "risk": True, "reasons": [f"poisson_error:{exc}"]
         }
 
+    observed_pcd = poisson_pcd
+    observed_spacing = poisson_spacing
+    if len(estimated_p):
+        observed_pcd, _, _ = prepare_poisson_cloud(
+            points, colors, normals, confidence, independent_support, spacing, extent, args,
+            evidence_strength=evidence_strength, evidence_contract=bool(evidence_contract_available))
+        observed_spacing = nearest_spacing(np.asarray(observed_pcd.points))
     should_try_bpa = bool(args.bpa_fallback) and (
         not candidates or (bool(args.adaptive_bpa_competition) and risk)
     )
@@ -2895,7 +2956,7 @@ def main():
                 "evaluando BPA como candidato observacional..."
             )
             bpa_mesh, bpa_radii = create_bpa_fallback(
-                poisson_pcd, poisson_spacing, float(fusion_voxel or 0.0),
+                observed_pcd, observed_spacing, float(fusion_voxel or 0.0),
                 args.bpa_radius_factors,
             )
             if len(bpa_mesh.triangles) < 100:
@@ -2922,9 +2983,44 @@ def main():
             f"Poisson: {poisson_error}; BPA: {candidate_comparison.get('bpa_error')}"
         )
 
-    selected_method, selected_data, selection_report = choose_surface_candidate(
-        candidates, spacing, args
-    )
+    try:
+        selected_method, selected_data, selection_report = choose_surface_candidate(candidates, spacing, args)
+    except RuntimeError as initial_failure:
+        candidate_comparison["initial_selection"] = getattr(initial_failure, "selection_report", {})
+        if args.adaptive_observed_refinement and args.bpa_fallback:
+            print("[Paso 13] Ningún candidato admisible: conservando más muestras observadas para BPA.", flush=True)
+            refined_args = argparse.Namespace(**vars(args))
+            refined_args.meshing_minimum_voxel_mm = min(float(args.meshing_minimum_voxel_mm), 0.5*spacing)
+            refined_args.input_voxel_spacing_factor = min(float(args.input_voxel_spacing_factor), 0.5)
+            refined_pcd, _, refined_report = prepare_poisson_cloud(
+                points, colors, normals, confidence, independent_support, spacing, extent, refined_args,
+                evidence_strength=evidence_strength, evidence_contract=bool(evidence_contract_available))
+            refined_spacing = nearest_spacing(np.asarray(refined_pcd.points))
+            refined_mesh, refined_radii = create_bpa_fallback(
+                refined_pcd, refined_spacing, float(fusion_voxel or 0.0), args.bpa_radius_factors)
+            if len(refined_mesh.triangles) >= 100:
+                refined_mesh, refined_cleanup = retain_supported_components(
+                    refined_mesh, points, evidence_confidence, evidence_support,
+                    refined_spacing, confidence_available, support_available, args)
+                refined_eval = evaluate(refined_mesh, points, args.coverage_gate_mm,
+                    args.evaluation_cloud_samples, args.evaluation_mesh_samples,
+                    name="ball_pivoting_observed_refined")
+                candidates["ball_pivoting_observed_refined"] = (refined_mesh, refined_eval, refined_cleanup)
+                candidate_comparison["attempted"].append("ball_pivoting_observed_refined")
+                candidate_comparison["observed_refinement"] = {
+                    "proxy": refined_report, "radii_mm": refined_radii,
+                    "estimated_guides_used": False, "thresholds_relaxed": False}
+        try:
+            selected_method, selected_data, selection_report = choose_surface_candidate(candidates, spacing, args)
+        except RuntimeError as failure:
+            candidate_comparison["selection"] = getattr(failure, "selection_report", {})
+            (output / "resumen_13_reconstruccion_superficie.json").write_text(
+                json.dumps({"quality": "rejected", "version": VERSION,
+                    "candidate_comparison": candidate_comparison, "reason": str(failure)},
+                    indent=2, ensure_ascii=False), encoding="utf-8")
+            raise
+    if selected_method == "ball_pivoting_observed_refined":
+        bpa_radii = refined_radii
     mesh, pre_selection_evaluation, component_cleanup = selected_data
     candidate_comparison["selection"] = selection_report
     fallback_used = selected_method != "screened_poisson_adaptive"
@@ -3006,6 +3102,17 @@ def main():
     ):
         warning_reasons.append(f"mesh_to_cloud_p90_mm={mesh_to_cloud_p90}")
 
+    if float(topology.get("boundary_edge_ratio") or 0.0) > 0.03:
+        warning_reasons.append(f"open_boundary_edge_ratio={topology['boundary_edge_ratio']:.6f}")
+    # Revalidate the actual exported geometry after smoothing/retraction.
+    try:
+        choose_surface_candidate({selected_method: (mesh, evaluation, component_cleanup)}, spacing, args)
+    except RuntimeError as failure:
+        (output / "resumen_13_reconstruccion_superficie.json").write_text(
+            json.dumps({"quality": "rejected", "version": VERSION,
+                "reason": "postprocessing_failed_surface_contract", "evaluation": evaluation,
+                "candidate_comparison": candidate_comparison}, indent=2, ensure_ascii=False), encoding="utf-8")
+        raise RuntimeError("Paso 13: la geometría final incumple el contrato después del posprocesamiento.") from failure
     quality = "accepted" if not warning_reasons else "warning"
     selected_path = output / "malla_final_seleccionada.ply"
     if not o3d.io.write_triangle_mesh(

@@ -41,6 +41,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import cv2
 import numpy as np
 
 STEPS_PER_REVOLUTION = 2055
@@ -93,7 +94,15 @@ def parser():
         required=True,
         help="Calibración estéreo vigente; no se buscan calibraciones históricas.",
     )
-    p.add_argument("--baseline-mm", type=float, default=81.0558)
+    p.add_argument(
+        "--baseline-mm",
+        type=float,
+        default=None,
+        help=(
+            "Compatibilidad manual únicamente. La baseline se lee siempre de "
+            "stereo_initial.yaml; si se proporciona este valor debe coincidir."
+        ),
+    )
     p.add_argument("--mount-reference-distance-mm", type=float, default=400.0)
     p.add_argument("--mount-reference-sigma-mm", type=float, default=30.0)
 
@@ -136,6 +145,71 @@ def hash_existing(paths: Sequence[Path]) -> Dict[str, str]:
         if p.is_file():
             out[str(p.resolve())] = sha256_file(p)
     return out
+
+
+def load_stereo_metric_contract(folder: Path) -> dict:
+    """Lee la geometría métrica directamente de la calibración estéreo vigente.
+
+    Nunca hereda baseline desde un registro de objeto. Esto evita asociar hashes
+    de una calibración nueva con una geometría calculada usando una baseline vieja.
+    """
+    folder = Path(folder).expanduser().resolve()
+    yaml_path = folder / "stereo_initial.yaml"
+    maps_path = folder / "rectification_maps.npz"
+    if not yaml_path.is_file() or not maps_path.is_file():
+        raise FileNotFoundError(
+            "La calibración estéreo debe contener stereo_initial.yaml y rectification_maps.npz."
+        )
+    fs = cv2.FileStorage(str(yaml_path), cv2.FILE_STORAGE_READ)
+    if not fs.isOpened():
+        raise RuntimeError(f"No se pudo abrir {yaml_path}")
+    try:
+        T = fs.getNode("T").mat()
+        P1 = fs.getNode("P1").mat()
+        P2 = fs.getNode("P2").mat()
+        Q = fs.getNode("Q").mat()
+    finally:
+        fs.release()
+    if T is None or np.asarray(T).size != 3:
+        raise RuntimeError("stereo_initial.yaml no contiene T válido.")
+    baseline = float(np.linalg.norm(np.asarray(T, dtype=np.float64).reshape(3)))
+    if not np.isfinite(baseline) or baseline <= 0.0:
+        raise RuntimeError("Baseline estéreo inválida.")
+    P1 = np.asarray(P1, dtype=np.float64) if P1 is not None else None
+    P2 = np.asarray(P2, dtype=np.float64) if P2 is not None else None
+    Q = np.asarray(Q, dtype=np.float64) if Q is not None else None
+    if P1 is None or P1.shape != (3, 4) or P2 is None or P2.shape != (3, 4):
+        raise RuntimeError("P1/P2 inválidas en stereo_initial.yaml.")
+    fx = float(P1[0, 0])
+    baseline_from_p = abs(float(P2[0, 3]) / max(abs(fx), 1e-12))
+    if abs(baseline_from_p - baseline) > max(0.25, 0.005 * baseline):
+        raise RuntimeError(
+            "La baseline derivada de P2 no coincide con ||T||: "
+            f"{baseline_from_p:.6f} vs {baseline:.6f} mm."
+        )
+    if Q is not None and Q.shape == (4, 4) and abs(float(Q[3, 2])) > 1e-12:
+        baseline_from_q = abs(1.0 / float(Q[3, 2]))
+        if abs(baseline_from_q - baseline) > max(0.25, 0.005 * baseline):
+            raise RuntimeError(
+                "La baseline derivada de Q no coincide con ||T||: "
+                f"{baseline_from_q:.6f} vs {baseline:.6f} mm."
+            )
+    else:
+        baseline_from_q = None
+    with np.load(str(maps_path), allow_pickle=False) as maps:
+        shapes = [np.asarray(maps[k]).shape[:2] for k in maps.files if np.asarray(maps[k]).ndim >= 2]
+    image_shape = list(shapes[0]) if shapes and all(tuple(x) == tuple(shapes[0]) for x in shapes) else None
+    return {
+        "baseline_mm": baseline,
+        "baseline_from_P2_mm": baseline_from_p,
+        "baseline_from_Q_mm": baseline_from_q,
+        "fx_rectified_px": fx,
+        "image_shape_hw": image_shape,
+        "stereo_initial_sha256": sha256_file(yaml_path),
+        "rectification_maps_sha256": sha256_file(maps_path),
+        "stereo_initial_path": str(yaml_path),
+        "rectification_maps_path": str(maps_path),
+    }
 
 
 def finite(values):
@@ -551,12 +625,30 @@ def main():
 
     axis, center_raw, sign = extract_axis_center(summary)
 
-    baseline = float(
-        summary.get("mounting_geometry", {}).get(
-            "baseline_mm",
-            args.baseline_mm,
-        )
-    )
+    stereo_contract = load_stereo_metric_contract(Path(args.stereo_calibration_dir))
+    baseline = float(stereo_contract["baseline_mm"])
+    if args.baseline_mm is not None:
+        supplied = float(args.baseline_mm)
+        tolerance = max(0.25, 0.005 * baseline)
+        if not np.isfinite(supplied) or abs(supplied - baseline) > tolerance:
+            raise RuntimeError(
+                "--baseline-mm no coincide con la calibración estéreo vigente: "
+                f"manual={supplied:.6f} mm, stereo={baseline:.6f} mm."
+            )
+    source_baseline = summary.get("mounting_geometry", {}).get("baseline_mm")
+    if source_baseline is not None and np.isfinite(float(source_baseline)):
+        source_baseline = float(source_baseline)
+        baseline_delta = abs(source_baseline - baseline)
+        tolerance = max(0.25, 0.005 * baseline)
+        if baseline_delta > tolerance:
+            raise RuntimeError(
+                "El registro de referencia fue calculado con una baseline distinta a "
+                "la calibración estéreo vigente. Repita el Paso 08 antes de congelar "
+                f"la plataforma: registro={source_baseline:.6f} mm, "
+                f"stereo={baseline:.6f} mm."
+            )
+    else:
+        baseline_delta = None
     midpoint = np.array([baseline / 2.0, 0.0, 0.0], dtype=np.float64)
 
     # Representación canónica de la MISMA línea de eje.
@@ -637,9 +729,24 @@ def main():
         },
         "stereo_geometry": {
             "baseline_mm": baseline,
+            "baseline_source": "stereo_initial.yaml::norm(T)",
+            "baseline_from_P2_mm": stereo_contract["baseline_from_P2_mm"],
+            "baseline_from_Q_mm": stereo_contract["baseline_from_Q_mm"],
+            "fx_rectified_px": stereo_contract["fx_rectified_px"],
+            "image_shape_hw": stereo_contract["image_shape_hw"],
             "stereo_midpoint_xyz_mm": midpoint.tolist(),
             "mount_reference_distance_mm": float(args.mount_reference_distance_mm),
             "mount_reference_sigma_mm": float(args.mount_reference_sigma_mm),
+            "source_registration_reported_baseline_mm": source_baseline,
+            "source_registration_baseline_delta_mm": baseline_delta,
+        },
+        "stereo_calibration_contract": {
+            "stereo_initial_sha256": stereo_contract["stereo_initial_sha256"],
+            "rectification_maps_sha256": stereo_contract["rectification_maps_sha256"],
+            "baseline_mm": baseline,
+            "fx_rectified_px": stereo_contract["fx_rectified_px"],
+            "image_shape_hw": stereo_contract["image_shape_hw"],
+            "policy": "platform_calibration_is_valid_only_with_exact_stereo_geometry",
         },
         "rotation_axis": {
             "unit_axis_xyz": axis.astype(float).tolist(),

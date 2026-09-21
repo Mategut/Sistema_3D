@@ -153,6 +153,13 @@ def _json_digest(payload) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def is_session_roi_diagnostic(path: Path) -> bool:
+    return (
+        path.parent.name == DEPTH
+        and path.name.endswith("_roi_evidence_sessions.npz")
+    )
+
+
 def fingerprint_path(path: Path) -> dict:
     """Firma estable de una entrada.
 
@@ -177,6 +184,11 @@ def fingerprint_path(path: Path) -> dict:
     records = []
     metadata_exts = {".json", ".csv", ".yaml", ".yml", ".xml", ".txt"}
     for f in sorted((x for x in path.rglob("*") if x.is_file()), key=lambda x: str(x).lower()):
+        # Paso 02 actualiza estos diagnósticos al incorporar otras sesiones.
+        # Ningún consumidor científico los lee: no invalidan 03/04 ya terminados.
+        # La evidencia ROI original y todas las demás entradas sí se firman.
+        if is_session_roi_diagnostic(f):
+            continue
         st = f.stat()
         rec = {
             "rel": str(f.relative_to(path)).replace("\\", "/"),
@@ -253,7 +265,7 @@ def latest_mtime(paths: Iterable[Path]) -> float:
             latest = max(latest, p.stat().st_mtime)
         else:
             for f in p.rglob("*"):
-                if f.is_file():
+                if f.is_file() and not is_session_roi_diagnostic(f):
                     try:
                         latest = max(latest, f.stat().st_mtime)
                     except OSError:
@@ -1001,6 +1013,8 @@ def run_pipeline(a, base, workspace, obj, py, stereo, background, model):
                     CLOUD,
                     "--geometry-source",
                     GEOM,
+                    "--stereo-calibration-dir",
+                    str(stereo),
                 ],
                 [reg_summary, reg_poses, reg_edges, reg_obs],
                 [cloud_dir, geom_dir],
@@ -1068,6 +1082,8 @@ def run_pipeline(a, base, workspace, obj, py, stereo, background, model):
                 obj,
                 "--calibration",
                 str(platform),
+                "--stereo-calibration-dir",
+                str(stereo),
                 # Se evalúa el candidato A/B, pero Paso 10 V3.3 conserva
                 # la calibración congelada salvo autorización explícita.
                 "--refine-axis-line",

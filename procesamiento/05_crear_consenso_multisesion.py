@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Paso 05 V5.0 — consenso multisesión robusto en profundidad inversa.
+"""Paso 05 V5.2 — consenso multisesión robusto con confirmación ROI independiente.
 
 Las sesiones representan la misma pose física por ``pose_index``. Solo se
 permite una traslación 2D pequeña para compensar tolerancia mecánica; no se
@@ -16,11 +16,14 @@ Principios del consenso:
 3. El desacuerdo entre sesiones no se oculta ampliando automáticamente el
    umbral. Se conserva como confianza, dispersión y soporte por píxel para que
    las etapas 06, 10 y 11 puedan ponderarlo.
-4. Un píxel observado por al menos dos sesiones puede mantenerse con confianza
-   baja. Esto evita convertir incertidumbre en huecos sin declarar el riesgo.
-5. La alineación residual continúa limitada a traslación 2D entera, sin escala,
+4. Una observación sin respaldo independiente queda fuera de la profundidad
+   científica y se conserva únicamente como diagnóstico.
+5. La evidencia ROI/multiescala del Paso 02 solo puede cubrir un hueco si al
+   menos dos sesiones independientes confirman la misma capa métrica; nunca
+   reemplaza automáticamente una profundidad base aceptada.
+6. La alineación residual continúa limitada a traslación 2D entera, sin escala,
    rotación ni deformación.
-6. El veto de plataforma por profundidad continúa DESACTIVADO por defecto.
+7. El veto de plataforma por profundidad continúa DESACTIVADO por defecto.
 
 No se usa geometría específica de cubo, no se fuerzan superficies planas y no
 se rellenan huecos por interpolación espacial.
@@ -87,6 +90,25 @@ def build_parser():
     )
     p.add_argument("--depth-agreement-max-mm", type=float, default=12.0)
     p.add_argument("--depth-agreement-mad-factor", type=float, default=3.5)
+    p.add_argument(
+        "--uncertainty-agreement-sigma",
+        type=float,
+        default=2.5,
+        help=(
+            "Factor de sigma usado para convertir la incertidumbre métrica por "
+            "píxel en una tolerancia de acuerdo multisesión, siempre acotada "
+            "entre depth-agreement-mm y depth-agreement-max-mm."
+        ),
+    )
+    p.add_argument(
+        "--weak-one-sided-weight",
+        type=float,
+        default=0.70,
+        help=(
+            "Peso relativo de una observación unilateral débil antes de que "
+            "otra sesión independiente la confirme."
+        ),
+    )
     p.add_argument(
         "--depth-bias-correction",
         action=argparse.BooleanOptionalAction,
@@ -221,10 +243,13 @@ def load_observation(root, obj, manifest_record, regional, depth_source, sil_sou
     )
     depth_path = base / reg_source / f"{stem}_depth_regularized_mm.npy"
     conf_path = base / depth_source / f"{stem}_confidence.npy"
+    uncertainty_path = base / depth_source / f"{stem}_depth_uncertainty_mm.npy"
+    lr_state_path = base / depth_source / f"{stem}_lr_state.npy"
     raw_depth_path = base / depth_source / f"{stem}_depth_raw_mm.npy"
     background_depth_path = base / depth_source / "background_depth_mm.npy"
     support_mask_path = base / depth_source / "background_support_mask.png"
     regional_residual_path = base / reg_source / f"{stem}_regional_residual.npy"
+    roi_evidence_path = base / depth_source / f"{stem}_roi_evidence.npz"
 
     if silhouette is None or cloud_mask is None or image is None or not depth_path.is_file():
         return None
@@ -234,6 +259,16 @@ def load_observation(root, obj, manifest_record, regional, depth_source, sil_sou
         np.load(conf_path).astype(np.float32)
         if conf_path.is_file()
         else np.full(depth.shape, np.nan, np.float32)
+    )
+    depth_uncertainty = (
+        np.load(uncertainty_path).astype(np.float32)
+        if uncertainty_path.is_file()
+        else np.full(depth.shape, np.nan, np.float32)
+    )
+    lr_state = (
+        np.load(lr_state_path).astype(np.uint8)
+        if lr_state_path.is_file()
+        else np.ones(depth.shape, np.uint8)
     )
     raw_depth = (
         np.load(raw_depth_path).astype(np.float32)
@@ -254,15 +289,64 @@ def load_observation(root, obj, manifest_record, regional, depth_source, sil_sou
         else np.full(depth.shape, np.nan, np.float32)
     )
 
+    # Evidencia ROI/multiescala del Paso 02. Es deliberadamente diagnóstica en
+    # origen: aquí solo se conserva como una fuente independiente que puede
+    # promoverse si otra sesión confirma la misma profundidad. La ausencia del
+    # archivo mantiene compatibilidad total con ejecuciones anteriores.
+    roi_depth = np.full(depth.shape, np.nan, np.float32)
+    roi_uncertainty = np.full(depth.shape, np.nan, np.float32)
+    roi_confidence = np.zeros(depth.shape, np.float32)
+    roi_photo_error = np.full(depth.shape, np.nan, np.float32)
+    roi_lr_state = np.zeros(depth.shape, np.uint8)
+    roi_candidate_mask = np.zeros(depth.shape, np.uint8)
+    roi_base_agrees = np.zeros(depth.shape, np.uint8)
+    roi_improves_evidence = np.zeros(depth.shape, np.uint8)
+    roi_available = False
+    roi_diagnostic_only = True
+    if roi_evidence_path.is_file():
+        with np.load(roi_evidence_path, allow_pickle=False) as roi_data:
+            required_roi = {
+                "depth_mm",
+                "uncertainty_mm",
+                "direct_confidence",
+                "photo_error",
+                "lr_state",
+                "candidate_mask",
+            }
+            if required_roi.issubset(set(roi_data.files)):
+                roi_depth = np.asarray(roi_data["depth_mm"], dtype=np.float32)
+                roi_uncertainty = np.asarray(roi_data["uncertainty_mm"], dtype=np.float32)
+                roi_confidence = np.asarray(roi_data["direct_confidence"], dtype=np.float32)
+                roi_photo_error = np.asarray(roi_data["photo_error"], dtype=np.float32)
+                roi_lr_state = np.asarray(roi_data["lr_state"], dtype=np.uint8)
+                roi_candidate_mask = np.asarray(roi_data["candidate_mask"], dtype=np.uint8)
+                if "base_agrees" in roi_data.files:
+                    roi_base_agrees = np.asarray(roi_data["base_agrees"], dtype=np.uint8)
+                if "improves_evidence" in roi_data.files:
+                    roi_improves_evidence = np.asarray(roi_data["improves_evidence"], dtype=np.uint8)
+                if "diagnostic_only" in roi_data.files:
+                    roi_diagnostic_only = bool(np.asarray(roi_data["diagnostic_only"]).item())
+                roi_available = True
+
     shapes = {
         silhouette.shape,
         cloud_mask.shape,
         depth.shape,
         confidence.shape,
+        depth_uncertainty.shape,
+        lr_state.shape,
         raw_depth.shape,
         background_depth.shape,
         support_mask.shape,
         regional_residual.shape,
+        roi_depth.shape,
+        roi_uncertainty.shape,
+        roi_confidence.shape,
+        roi_photo_error.shape,
+        roi_lr_state.shape,
+        roi_candidate_mask.shape,
+        roi_base_agrees.shape,
+        roi_improves_evidence.shape,
         image.shape[:2],
     }
     if len(shapes) != 1:
@@ -278,10 +362,23 @@ def load_observation(root, obj, manifest_record, regional, depth_source, sil_sou
         "image": image,
         "depth": depth,
         "confidence": confidence,
+        "depth_uncertainty": depth_uncertainty,
+        "lr_state": lr_state,
         "raw_depth": raw_depth,
         "background_depth": background_depth,
         "support_mask": support_mask,
         "regional_residual": regional_residual,
+        "roi_depth": roi_depth,
+        "roi_uncertainty": roi_uncertainty,
+        "roi_confidence": roi_confidence,
+        "roi_photo_error": roi_photo_error,
+        "roi_lr_state": roi_lr_state,
+        "roi_candidate_mask": roi_candidate_mask,
+        "roi_base_agrees": roi_base_agrees,
+        "roi_improves_evidence": roi_improves_evidence,
+        "roi_available": bool(roi_available),
+        "roi_diagnostic_only": bool(roi_diagnostic_only),
+        "roi_evidence_path": str(roi_evidence_path) if roi_evidence_path.is_file() else None,
     }
 
 
@@ -346,15 +443,17 @@ def estimate_translation(ref_mask, moving_mask, args):
     dx0 = int(np.clip(dx0, -max_x, max_x))
     dy0 = int(np.clip(dy0, -max_y, max_y))
 
-    best = (-1.0, dx0, dy0)
+    # Explorar todo el dominio permitido a baja resolución: el centroide
+    # cambia con errores de silueta y no debe excluir la solución correcta.
+    best = (-1.0, 0, 0)
     r = max(0, int(args.alignment_local_radius))
 
-    for dy in range(max(-max_y, dy0 - r), min(max_y, dy0 + r) + 1):
-        for dx in range(max(-max_x, dx0 - r), min(max_x, dx0 + r) + 1):
+    for dy in range(-max_y, max_y + 1):
+        for dx in range(-max_x, max_x + 1):
             shifted = shift_array(mov_small, dx, dy, 0)
             score = mask_iou(ref_small, shifted)
             score = -1.0 if score is None else score
-            if score > best[0]:
+            if score > best[0] or (score == best[0] and dx*dx + dy*dy < best[1]**2 + best[2]**2):
                 best = (score, dx, dy)
 
     coarse_dx = int(best[1] * factor)
@@ -367,7 +466,9 @@ def estimate_translation(ref_mask, moving_mask, args):
     # en múltiplos de ``factor``; sin este paso podía quedar un residual de
     # varios píxeles que perjudicara la comparación Z en bordes y esquinas.
     rr = max(0, int(args.alignment_fullres_refine_radius))
-    best_full = (-1.0, coarse_dx, coarse_dy)
+    # La identidad es un candidato real: una búsqueda local nunca debe
+    # empeorar el solape que ya existía a resolución completa.
+    best_full = (-1.0 if raw is None else float(raw), 0, 0)
     for fy in range(
         max(-int(args.alignment_max_y_px), coarse_dy - rr),
         min(int(args.alignment_max_y_px), coarse_dy + rr) + 1,
@@ -391,8 +492,45 @@ def estimate_translation(ref_mask, moving_mask, args):
         "dy": dy,
         "raw_iou": raw,
         "aligned_iou": aligned,
+        "identity_selected": bool(dx == 0 and dy == 0),
         "valid": bool(aligned is not None and aligned >= args.minimum_aligned_silhouette_iou),
     }
+
+
+def estimate_observation_translation(reference, moving, args):
+    """No dejar que plataforma incluida en la silueta gobierne la alineación.
+
+    Esta máscara solo estima el desplazamiento: no cambia silueta, profundidad
+    ni soporte científico. Sin evidencia suficiente se conserva la vía previa.
+    """
+    masks = []
+    counts = []
+    sufficient = True
+    for obs in (reference, moving):
+        z = obs["depth"]
+        bg = obs["background_depth"]
+        sigma = obs["depth_uncertainty"]
+        silhouette = obs["silhouette"] > 0
+        foreground = (silhouette & np.isfinite(z) & np.isfinite(bg)
+                      & np.isfinite(sigma) & (sigma >= 0)
+                      & ((bg - z) > np.maximum(8.0, 3.0 * sigma)))
+        count = int(np.count_nonzero(foreground))
+        sufficient &= count >= max(1000, 0.25 * np.count_nonzero(silhouette))
+        masks.append(foreground.astype(np.uint8) * 255)
+        counts.append(count)
+    if not sufficient:
+        masks = [reference["silhouette"], moving["silhouette"]]
+    result = estimate_translation(masks[0], masks[1], args)
+    result["alignment_evidence"] = (
+        "depth_separated_foreground" if sufficient else "full_silhouette_fallback"
+    )
+    result["alignment_foreground_pixels"] = counts
+    result["full_silhouette_raw_iou"] = mask_iou(reference["silhouette"], moving["silhouette"])
+    result["full_silhouette_aligned_iou"] = mask_iou(
+        reference["silhouette"],
+        shift_array(moving["silhouette"], result["dx"], result["dy"], 0),
+    )
+    return result
 
 
 def align_observation(obs, alignment):
@@ -407,10 +545,20 @@ def align_observation(obs, alignment):
         result["image"] = shift_array(obs["image"], dx, dy, 0)
         result["depth"] = shift_array(obs["depth"], dx, dy, np.nan)
         result["confidence"] = shift_array(obs["confidence"], dx, dy, np.nan)
+        result["depth_uncertainty"] = shift_array(obs["depth_uncertainty"], dx, dy, np.nan)
+        result["lr_state"] = shift_array(obs["lr_state"], dx, dy, 0)
         result["raw_depth"] = shift_array(obs["raw_depth"], dx, dy, np.nan)
         result["background_depth"] = shift_array(obs["background_depth"], dx, dy, np.nan)
         result["support_mask"] = shift_array(obs["support_mask"], dx, dy, 0)
         result["regional_residual"] = shift_array(obs["regional_residual"], dx, dy, np.nan)
+        result["roi_depth"] = shift_array(obs["roi_depth"], dx, dy, np.nan)
+        result["roi_uncertainty"] = shift_array(obs["roi_uncertainty"], dx, dy, np.nan)
+        result["roi_confidence"] = shift_array(obs["roi_confidence"], dx, dy, 0.0)
+        result["roi_photo_error"] = shift_array(obs["roi_photo_error"], dx, dy, np.nan)
+        result["roi_lr_state"] = shift_array(obs["roi_lr_state"], dx, dy, 0)
+        result["roi_candidate_mask"] = shift_array(obs["roi_candidate_mask"], dx, dy, 0)
+        result["roi_base_agrees"] = shift_array(obs["roi_base_agrees"], dx, dy, 0)
+        result["roi_improves_evidence"] = shift_array(obs["roi_improves_evidence"], dx, dy, 0)
     result["alignment"] = alignment
     return result
 
@@ -667,6 +815,9 @@ def consensus_depth(
     triplet_rescue=False,
     triplet_rescue_max_span_mm=18.0,
     regional_residual_reference_px=3.0,
+    uncertainty_sigma_factor=2.5,
+    maximum_agreement_mm=12.0,
+    weak_one_sided_weight=0.70,
 ):
     """Consenso V5 robusto, métrico y sin correcciones globales de Z.
 
@@ -674,14 +825,22 @@ def consensus_depth(
     esa capa se combinan en 1/Z con pesos de confianza, residual y Huber. Nunca
     se mezclan capas incompatibles ni se aplica un desplazamiento global Z.
 
-    ``agreement_mm`` se usa como escala de confianza. Un desacuerdo no borra
-    automáticamente el píxel si existen al menos ``minimum_support`` medidas:
-    se conserva con confianza baja para que la nube y la fusión decidan usando
-    evidencia espacial y multivista.
+    ``agreement_mm`` se usa como escala de confianza. Una observación sin
+    respaldo independiente dentro de la tolerancia derivada de incertidumbre
+    se conserva únicamente como diagnóstico (``low_agreement`` y ``spread``),
+    pero no se exporta como profundidad científica ni como máscara de nube.
     """
     depths = np.stack([o["depth"] for o in observations]).astype(np.float32)
     masks = np.stack([o["cloud_mask"] > 0 for o in observations])
-    valid = masks & np.isfinite(depths)
+    source_uncertainty = np.stack(
+        [np.asarray(o.get("depth_uncertainty"), dtype=np.float32) for o in observations]
+    )
+    source_lr_state = np.stack(
+        [np.asarray(o.get("lr_state"), dtype=np.uint8) for o in observations]
+    )
+    # Estado 4 = contradicción LR local fuerte. Aunque un paso anterior la
+    # hubiera conservado por compatibilidad, no participa del consenso.
+    valid = masks & np.isfinite(depths) & (source_lr_state != 4)
     n = len(observations)
 
     source_confidence = np.stack(
@@ -692,6 +851,18 @@ def consensus_depth(
         np.clip(source_confidence, 0.0, 1.0),
         0.50,
     ).astype(np.float32)
+    uncertainty_fallback = max(float(agreement_mm) / 2.5, 0.75)
+    source_uncertainty = np.where(
+        np.isfinite(source_uncertainty) & (source_uncertainty > 0),
+        source_uncertainty,
+        uncertainty_fallback,
+    ).astype(np.float32)
+    evidence_weight = np.ones_like(source_confidence, dtype=np.float32)
+    evidence_weight[source_lr_state == 3] = np.float32(
+        np.clip(float(weak_one_sided_weight), 0.05, 1.0)
+    )
+    evidence_weight[source_lr_state == 5] = np.float32(0.45)
+    evidence_weight[source_lr_state == 4] = 0.0
     residuals = np.stack(
         [np.asarray(o["regional_residual"], dtype=np.float32) for o in observations]
     )
@@ -731,7 +902,15 @@ def consensus_depth(
         denominator = np.zeros((h, w), np.float32)
         for j in range(n):
             comparable = candidate_valid & valid[j]
-            weight = 0.25 + 0.75 * source_confidence[j]
+            # La selección de capa debe priorizar repetibilidad geométrica.
+            # La calidad de evidencia solo modula suavemente este coste para que
+            # dos sesiones débiles coherentes puedan vencer a un único outlier
+            # fuerte. El peso fuerte/débil se aplica con mayor intensidad al
+            # fusionar dentro de la capa ya seleccionada.
+            weight = (
+                (0.65 + 0.35 * source_confidence[j])
+                * (0.85 + 0.15 * evidence_weight[j])
+            )
             delta = np.abs(depths[i] - depths[j])
             numerator[comparable] += (weight[comparable] * delta[comparable]).astype(np.float32)
             denominator[comparable] += weight[comparable].astype(np.float32)
@@ -743,13 +922,25 @@ def consensus_depth(
 
     selected_index = np.argmin(costs, axis=0).astype(np.int16)
     selected_depth = np.take_along_axis(depths, selected_index[None, :, :], axis=0)[0]
-    selected_confidence = np.take_along_axis(source_confidence, selected_index[None, :, :], axis=0)[
-        0
-    ]
+    selected_confidence = np.take_along_axis(source_confidence, selected_index[None, :, :], axis=0)[0]
     selected_residual = np.take_along_axis(residuals, selected_index[None, :, :], axis=0)[0]
+    selected_uncertainty = np.take_along_axis(
+        source_uncertainty, selected_index[None, :, :], axis=0
+    )[0]
+    selected_lr_state = np.take_along_axis(
+        source_lr_state, selected_index[None, :, :], axis=0
+    )[0]
 
     distance_to_selected = np.abs(depths - selected_depth[None, :, :])
-    agrees = valid & (distance_to_selected <= max(float(agreement_mm), 1e-6))
+    pair_tolerance = float(uncertainty_sigma_factor) * np.sqrt(
+        np.square(source_uncertainty) + np.square(selected_uncertainty[None, :, :])
+    )
+    pair_tolerance = np.clip(
+        pair_tolerance,
+        max(float(agreement_mm), 1e-6),
+        max(float(maximum_agreement_mm), float(agreement_mm)),
+    ).astype(np.float32)
+    agrees = valid & (distance_to_selected <= pair_tolerance)
     agreement_count = np.sum(agrees, axis=0)
 
     # Distancia al respaldo independiente más cercano. A diferencia del span,
@@ -793,9 +984,11 @@ def consensus_depth(
         np.exp(-0.5 * np.square(residuals / residual_reference)),
         0.75,
     ).astype(np.float32)
-    base_weight = ((0.15 + 0.85 * source_confidence) * (0.60 + 0.40 * residual_weight)).astype(
-        np.float32
-    )
+    base_weight = (
+        (0.15 + 0.85 * source_confidence)
+        * (0.60 + 0.40 * residual_weight)
+        * evidence_weight
+    ).astype(np.float32)
     inverse_depth = np.zeros_like(depths, dtype=np.float32)
     np.divide(1.0, depths, out=inverse_depth, where=valid & (depths > 1e-6))
     fused_inverse = np.zeros((h, w), np.float32)
@@ -848,33 +1041,274 @@ def consensus_depth(
         np.exp(-0.5 * np.square(selected_residual / residual_reference)),
         0.75,
     )
+    selected_evidence_weight = np.take_along_axis(
+        evidence_weight, selected_index[None, :, :], axis=0
+    )[0]
     combined = (
         0.42 * selected_confidence + 0.28 * nearest_score + 0.15 * span_score + 0.15 * support_score
-    ) * (0.65 + 0.35 * residual_score)
+    ) * (0.65 + 0.35 * residual_score) * (0.70 + 0.30 * selected_evidence_weight)
     confidence[enough] = np.clip(combined[enough], 0.0, 1.0).astype(np.float32)
 
     strong = enough & (agreement_count >= int(minimum_support))
+    selected_is_weak = np.isin(selected_lr_state, (3, 5))
+    # Una observación unilateral no se exporta solo porque existan dos mapas
+    # válidos: exige que al menos otra sesión coincida métricamente con ella.
+    confirmed_domain = enough & ((~selected_is_weak) | strong)
+    consensus[~confirmed_domain] = np.nan
+    spread[~confirmed_domain] = np.nan
+    confidence[~confirmed_domain] = np.nan
+
     all_agree = strong & (agreement_count >= min(3, n))
     pair_agree = strong & ~all_agree
-    low_agreement = enough & ~strong
+    # Si el medoide no encuentra al menos ``minimum_support`` observaciones
+    # dentro de la tolerancia por incertidumbre, la capa no tiene respaldo
+    # independiente suficiente. Se conserva su dispersión/procedencia para
+    # diagnóstico, pero queda fuera de la profundidad científica.
+    low_agreement = confirmed_domain & ~strong
+    scientific_domain = confirmed_domain & ~low_agreement
     selection_mode[low_agreement] = 1
     selection_mode[pair_agree] = 2
     selection_mode[all_agree] = 3
     low_agreement_map[low_agreement] = 255
 
-    consensus[~enough] = np.nan
-    spread[~enough] = np.nan
-    confidence[~enough] = np.nan
+    consensus[~scientific_domain] = np.nan
+    # ``spread`` se mantiene en low_agreement para poder auditar cuánto
+    # discrepaban las sesiones aunque el píxel haya sido excluido.
+    spread[~confirmed_domain] = np.nan
+    confidence[~scientific_domain] = np.nan
 
     return (
         consensus,
         support,
         spread,
-        enough.astype(np.uint8) * 255,
+        scientific_domain.astype(np.uint8) * 255,
         low_agreement_map,
         agreement_support,
         confidence,
         selection_mode,
+    )
+
+
+
+def consensus_roi_evidence(
+    observations,
+    agreement_mm,
+    minimum_support=2,
+    uncertainty_sigma_factor=2.5,
+    maximum_agreement_mm=12.0,
+):
+    """Confirma evidencia ROI/multiescala exclusivamente entre sesiones.
+
+    La segunda inferencia del Paso 02 se guarda como evidencia diagnóstica y
+    nunca sustituye por sí sola la profundidad base. Esta función exige que al
+    menos ``minimum_support`` sesiones independientes describan una misma capa
+    dentro de una tolerancia métrica derivada de sus incertidumbres. El estado
+    LR=4 (contradicción fuerte) queda vetado incondicionalmente.
+
+    La confianza directa, el error fotométrico y la incertidumbre solo
+    ponderan la elección/fusión dentro de una capa ya confirmada; ninguno de
+    ellos puede convertir una única observación en profundidad científica.
+    """
+    h, w = observations[0]["depth"].shape
+    empty_depth = np.full((h, w), np.nan, np.float32)
+    empty_mask = np.zeros((h, w), np.uint8)
+    empty_support = np.zeros((h, w), np.uint8)
+    empty_conf = np.full((h, w), np.nan, np.float32)
+    empty_spread = np.full((h, w), np.nan, np.float32)
+
+    if len(observations) < int(minimum_support):
+        return (
+            empty_depth,
+            empty_mask,
+            empty_support,
+            empty_spread,
+            empty_conf,
+            {
+                "available_sessions": int(sum(bool(o.get("roi_available")) for o in observations)),
+                "candidate_pixels": 0,
+                "confirmed_pixels": 0,
+                "contradicted_lr_pixels": 0,
+                "incoherent_pixels": 0,
+                "reason": "insufficient_independent_sessions",
+            },
+        )
+
+    available = [o for o in observations if bool(o.get("roi_available"))]
+    if len(available) < int(minimum_support):
+        return (
+            empty_depth,
+            empty_mask,
+            empty_support,
+            empty_spread,
+            empty_conf,
+            {
+                "available_sessions": int(len(available)),
+                "candidate_pixels": 0,
+                "confirmed_pixels": 0,
+                "contradicted_lr_pixels": 0,
+                "incoherent_pixels": 0,
+                "reason": "roi_evidence_missing_in_sessions",
+            },
+        )
+
+    depths = np.stack([np.asarray(o["roi_depth"], dtype=np.float32) for o in observations])
+    uncertainties = np.stack(
+        [np.asarray(o["roi_uncertainty"], dtype=np.float32) for o in observations]
+    )
+    direct_conf = np.stack(
+        [np.asarray(o["roi_confidence"], dtype=np.float32) for o in observations]
+    )
+    photo_error = np.stack(
+        [np.asarray(o["roi_photo_error"], dtype=np.float32) for o in observations]
+    )
+    lr_state = np.stack([np.asarray(o["roi_lr_state"], dtype=np.uint8) for o in observations])
+    candidates = np.stack(
+        [np.asarray(o["roi_candidate_mask"], dtype=np.uint8) > 0 for o in observations]
+    )
+
+    contradicted = candidates & (lr_state == 4)
+    valid = (
+        candidates
+        & np.isfinite(depths)
+        & (depths > 1e-6)
+        & np.isfinite(uncertainties)
+        & (uncertainties > 0)
+        & (lr_state != 4)
+    )
+    n = len(observations)
+    valid_count = np.sum(valid, axis=0)
+
+    direct_conf = np.where(
+        np.isfinite(direct_conf), np.clip(direct_conf, 0.0, 1.0), 0.0
+    ).astype(np.float32)
+    uncertainty_fallback = max(float(agreement_mm) / 2.5, 0.75)
+    uncertainties = np.where(
+        np.isfinite(uncertainties) & (uncertainties > 0),
+        uncertainties,
+        uncertainty_fallback,
+    ).astype(np.float32)
+
+    # El error fotométrico se usa de manera relativa y continua, sin crear un
+    # nuevo umbral de aceptación. La escala robusta se estima únicamente sobre
+    # candidatos ROI válidos de esta pose.
+    valid_photo_values = photo_error[valid & np.isfinite(photo_error) & (photo_error >= 0)]
+    if valid_photo_values.size:
+        photo_center = float(np.median(valid_photo_values))
+        photo_mad = float(np.median(np.abs(valid_photo_values - photo_center)))
+        photo_scale = max(photo_center + 2.0 * 1.4826 * photo_mad, 1.0)
+    else:
+        photo_scale = 16.0
+    photo_score = np.where(
+        np.isfinite(photo_error) & (photo_error >= 0),
+        np.exp(-0.5 * np.square(photo_error / max(photo_scale, 1e-6))),
+        0.50,
+    ).astype(np.float32)
+    uncertainty_score = 1.0 / (
+        1.0 + np.square(uncertainties / max(float(agreement_mm), 1e-6))
+    )
+    evidence_weight = (
+        (0.15 + 0.85 * direct_conf)
+        * (0.45 + 0.55 * photo_score)
+        * (0.55 + 0.45 * uncertainty_score)
+    ).astype(np.float32)
+    evidence_weight[~valid] = 0.0
+
+    # Medoide ponderado entre sesiones: identifica una sola capa antes de
+    # fusionar, evitando mezclar dos profundidades incompatibles.
+    costs = np.full((n, h, w), np.inf, np.float32)
+    for i in range(n):
+        candidate_valid = valid[i]
+        numerator = np.zeros((h, w), np.float32)
+        denominator = np.zeros((h, w), np.float32)
+        for j in range(n):
+            comparable = candidate_valid & valid[j]
+            delta = np.abs(depths[i] - depths[j])
+            numerator[comparable] += (
+                evidence_weight[j, comparable] * delta[comparable]
+            ).astype(np.float32)
+            denominator[comparable] += evidence_weight[j, comparable].astype(np.float32)
+        usable = candidate_valid & (denominator > 1e-8)
+        costs[i, usable] = numerator[usable] / denominator[usable]
+
+    selected_index = np.argmin(costs, axis=0).astype(np.int16)
+    selected_depth = np.take_along_axis(depths, selected_index[None], axis=0)[0]
+    selected_uncertainty = np.take_along_axis(
+        uncertainties, selected_index[None], axis=0
+    )[0]
+
+    distance = np.abs(depths - selected_depth[None])
+    pair_tolerance = float(uncertainty_sigma_factor) * np.sqrt(
+        np.square(uncertainties) + np.square(selected_uncertainty[None])
+    )
+    pair_tolerance = np.clip(
+        pair_tolerance,
+        max(float(agreement_mm), 1e-6),
+        max(float(maximum_agreement_mm), float(agreement_mm)),
+    ).astype(np.float32)
+    agrees = valid & (distance <= pair_tolerance)
+    agreement_count = np.sum(agrees, axis=0)
+    confirmed = agreement_count >= int(minimum_support)
+
+    # Dispersión de la capa confirmada.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        agreeing_min = np.nanmin(np.where(agrees, depths, np.nan), axis=0)
+        agreeing_max = np.nanmax(np.where(agrees, depths, np.nan), axis=0)
+    roi_spread = (agreeing_max - agreeing_min).astype(np.float32)
+
+    # Fusión robusta en profundidad inversa con pesos de evidencia. Solo usa
+    # las sesiones ya compatibles con el medoide.
+    inverse_depth = np.zeros_like(depths, np.float32)
+    np.divide(1.0, depths, out=inverse_depth, where=valid & (depths > 1e-6))
+    weights = np.where(agrees, evidence_weight, 0.0).astype(np.float32)
+    weight_sum = np.sum(weights, axis=0)
+    numerator = np.sum(weights * inverse_depth, axis=0)
+    fused_inverse = np.zeros((h, w), np.float32)
+    np.divide(numerator, weight_sum, out=fused_inverse, where=weight_sum > 1e-8)
+    fused_depth = np.full((h, w), np.nan, np.float32)
+    np.divide(1.0, fused_inverse, out=fused_depth, where=fused_inverse > 1e-12)
+    fused_depth[~confirmed] = np.nan
+
+    conf_numerator = np.sum(
+        np.where(agrees, direct_conf * (0.55 + 0.45 * photo_score), 0.0), axis=0
+    )
+    conf_denominator = np.sum(agrees.astype(np.float32), axis=0)
+    roi_conf = np.full((h, w), np.nan, np.float32)
+    np.divide(
+        conf_numerator,
+        conf_denominator,
+        out=roi_conf,
+        where=conf_denominator > 0,
+    )
+    support_factor = np.clip(
+        agreement_count.astype(np.float32) / max(float(n), 1.0), 0.0, 1.0
+    )
+    roi_conf[confirmed] = np.clip(
+        roi_conf[confirmed] * (0.75 + 0.25 * support_factor[confirmed]), 0.0, 1.0
+    )
+    roi_conf[~confirmed] = np.nan
+    roi_spread[~confirmed] = np.nan
+
+    candidate_union = np.any(valid, axis=0)
+    incoherent = candidate_union & ~confirmed
+    diagnostics = {
+        "available_sessions": int(len(available)),
+        "candidate_pixels": int(np.count_nonzero(candidate_union)),
+        "confirmed_pixels": int(np.count_nonzero(confirmed)),
+        "contradicted_lr_pixels": int(np.count_nonzero(np.any(contradicted, axis=0))),
+        "incoherent_pixels": int(np.count_nonzero(incoherent)),
+        "photo_error_scale": float(photo_scale),
+        "agreement_mm_floor": float(agreement_mm),
+        "agreement_mm_cap": float(maximum_agreement_mm),
+        "minimum_independent_support": int(minimum_support),
+    }
+    return (
+        fused_depth,
+        confirmed.astype(np.uint8) * 255,
+        np.clip(agreement_count, 0, 255).astype(np.uint8),
+        roi_spread,
+        roi_conf,
+        diagnostics,
     )
 
 
@@ -971,7 +1405,7 @@ def _procesar_unidad_independiente(task):
             }
         ]
         for obs in loaded[1:]:
-            estimate = estimate_translation(reference["silhouette"], obs["silhouette"], args)
+            estimate = estimate_observation_translation(reference, obs, args)
             alignment_info.append(
                 {"session": obs["session"], "stem": obs["stem"], "reference": False, **estimate}
             )
@@ -1081,8 +1515,95 @@ def _procesar_unidad_independiente(task):
                 triplet_rescue=bool(args.triplet_interior_rescue),
                 triplet_rescue_max_span_mm=float(args.triplet_rescue_max_span_mm),
                 regional_residual_reference_px=float(args.regional_residual_reference_px),
+                uncertainty_sigma_factor=float(args.uncertainty_agreement_sigma),
+                maximum_agreement_mm=float(args.depth_agreement_max_mm),
+                weak_one_sided_weight=float(args.weak_one_sided_weight),
             )
+        # La inferencia ROI/multiescala del Paso 02 es una fuente paralela de
+        # evidencia. Nunca reemplaza profundidad científica ya aceptada: solo
+        # puede cubrir un hueco cuando al menos dos sesiones independientes
+        # confirman la misma capa métrica.
+        (
+            roi_depth_consensus,
+            roi_depth_valid,
+            roi_agreement_support,
+            roi_depth_spread,
+            roi_confidence_consensus,
+            roi_diag,
+        ) = consensus_roi_evidence(
+            aligned,
+            adaptive_agreement_mm,
+            minimum_support=args.minimum_independent_depth_support,
+            uncertainty_sigma_factor=float(args.uncertainty_agreement_sigma),
+            maximum_agreement_mm=float(args.depth_agreement_max_mm),
+        )
+        roi_candidate_union = np.zeros(depth.shape, bool)
+        roi_contradicted_union = np.zeros(depth.shape, bool)
+        for roi_obs in aligned:
+            roi_candidates = np.asarray(roi_obs["roi_candidate_mask"], dtype=np.uint8) > 0
+            roi_candidate_union |= (
+                roi_candidates
+                & np.isfinite(np.asarray(roi_obs["roi_depth"], dtype=np.float32))
+            )
+            roi_contradicted_union |= roi_candidates & (
+                np.asarray(roi_obs["roi_lr_state"], dtype=np.uint8) == 4
+            )
+
+        roi_promoted = (
+            (roi_depth_valid > 0)
+            & (depth_valid == 0)
+            & (silhouette > 0)
+            & np.isfinite(roi_depth_consensus)
+        )
+        # Blindaje explícito adicional: una contradicción LR fuerte jamás puede
+        # formar parte de una promoción, incluso si otro mapa ROI coincide.
+        # ``consensus_roi_evidence`` ya la excluye por sesión; este veto evita
+        # que un píxel cuya evidencia ROI disponible sea exclusivamente
+        # contradictoria llegue a científico por una ruta accidental.
+        roi_only_contradicted = roi_contradicted_union & ~np.any(
+            np.stack(
+                [
+                    (np.asarray(o["roi_candidate_mask"], dtype=np.uint8) > 0)
+                    & (np.asarray(o["roi_lr_state"], dtype=np.uint8) != 4)
+                    & np.isfinite(np.asarray(o["roi_depth"], dtype=np.float32))
+                    for o in aligned
+                ]
+            ),
+            axis=0,
+        )
+        roi_promoted &= ~roi_only_contradicted
+
+        if np.any(roi_promoted):
+            depth[roi_promoted] = roi_depth_consensus[roi_promoted]
+            depth_valid[roi_promoted] = 255
+            depth_support[roi_promoted] = roi_agreement_support[roi_promoted]
+            depth_agreement_support[roi_promoted] = roi_agreement_support[roi_promoted]
+            depth_spread[roi_promoted] = roi_depth_spread[roi_promoted]
+            confidence[roi_promoted] = roi_confidence_consensus[roi_promoted]
+            selection_mode[roi_promoted & (roi_agreement_support == 2)] = 5
+            selection_mode[roi_promoted & (roi_agreement_support >= 3)] = 6
+            # Si una profundidad base había quedado únicamente como
+            # low_agreement, dos ROI independientes la sustituyen por una capa
+            # ya confirmada; el diagnóstico ROI queda guardado por separado.
+            low_agreement_map[roi_promoted] = 0
+
+        roi_promoted_mask = roi_promoted.astype(np.uint8) * 255
+        roi_rejected_mask = (
+            roi_candidate_union & ~(roi_depth_valid > 0)
+        ).astype(np.uint8) * 255
+
         cloud_mask = cv2.bitwise_and(silhouette, depth_valid)
+        # Los píxeles low_agreement ya no pertenecen a ``depth_valid``. Para
+        # conservar una métrica comparable con ejecuciones anteriores, se
+        # cuentan aparte dentro de la silueta antes del veto de soporte.
+        low_agreement_in_silhouette = (low_agreement_map > 0) & (silhouette > 0)
+        low_agreement_pixels = int(np.count_nonzero(low_agreement_in_silhouette))
+        # Unión, no suma: en el fallback monosesión ``low_agreement`` puede
+        # solaparse con ``cloud_mask`` y no debe contarse dos veces.
+        candidate_depth_mask = (cloud_mask > 0) | low_agreement_in_silhouette
+        low_agreement_reference_pixels = int(np.count_nonzero(candidate_depth_mask))
+        low_agreement_ratio = low_agreement_pixels / max(low_agreement_reference_pixels, 1)
+
         support_veto, support_object_votes, support_veto_diag = support_depth_veto(aligned, args)
         support_veto &= cloud_mask > 0
         cloud_mask[support_veto] = 0
@@ -1093,8 +1614,6 @@ def _procesar_unidad_independiente(task):
         silhouette_pixels = int(np.count_nonzero(silhouette))
         valid_pixels = int(np.count_nonzero(cloud_mask))
         valid_ratio = valid_pixels / max(silhouette_pixels, 1)
-        low_agreement_pixels = int(np.count_nonzero((low_agreement_map > 0) & (cloud_mask > 0)))
-        low_agreement_ratio = low_agreement_pixels / max(valid_pixels, 1)
         physical = float(members[0]["physical_angle_deg"])
         nominal = float(members[0]["nominal_angle_deg"])
         steps = int(members[0]["cumulative_steps"])
@@ -1158,6 +1677,11 @@ def _procesar_unidad_independiente(task):
             "depth_spread_vis": output / f"{stem}_depth_spread_vis.png",
             "low_agreement": output / f"{stem}_low_agreement.png",
             "selection_mode": output / f"{stem}_selection_mode.npy",
+            "roi_promoted": output / f"{stem}_roi_promoted.png",
+            "roi_rejected": output / f"{stem}_roi_rejected.png",
+            "roi_agreement_support": output / f"{stem}_roi_agreement_support.npy",
+            "roi_depth_spread": output / f"{stem}_roi_depth_spread_mm.npy",
+            "roi_confidence": output / f"{stem}_roi_confidence_consensus.npy",
             "stable_interior": output / f"{stem}_stable_interior.png",
             "confidence": output / f"{stem}_confidence_consensus.npy",
             "support_veto": output / f"{stem}_support_veto.png",
@@ -1189,6 +1713,11 @@ def _procesar_unidad_independiente(task):
         )
         cv2.imwrite(str(paths["low_agreement"]), low_agreement_map)
         np.save(paths["selection_mode"], selection_mode)
+        cv2.imwrite(str(paths["roi_promoted"]), roi_promoted_mask)
+        cv2.imwrite(str(paths["roi_rejected"]), roi_rejected_mask)
+        np.save(paths["roi_agreement_support"], roi_agreement_support)
+        np.save(paths["roi_depth_spread"], roi_depth_spread)
+        np.save(paths["roi_confidence"], roi_confidence_consensus)
         cv2.imwrite(str(paths["stable_interior"]), stable_interior.astype(np.uint8) * 255)
         np.save(paths["confidence"], confidence)
         cv2.imwrite(str(paths["support_veto"]), support_veto.astype(np.uint8) * 255)
@@ -1214,6 +1743,9 @@ def _procesar_unidad_independiente(task):
         previews.append(paths["overlay"])
         depth_values = depth[(cloud_mask > 0) & np.isfinite(depth)]
         spread_values = depth_spread[(cloud_mask > 0) & np.isfinite(depth_spread)]
+        low_agreement_spread_values = depth_spread[
+            (low_agreement_map > 0) & np.isfinite(depth_spread)
+        ]
         ious = pairwise_iou(masks)
         sources = []
         for o in aligned:
@@ -1223,6 +1755,9 @@ def _procesar_unidad_independiente(task):
                     "stem": o["stem"],
                     "regional_quality": o["regional"].get("quality"),
                     "alignment": o["alignment"],
+                    "roi_available": bool(o.get("roi_available")),
+                    "roi_diagnostic_only": bool(o.get("roi_diagnostic_only", True)),
+                    "roi_evidence_path": o.get("roi_evidence_path"),
                 }
             )
         record = {
@@ -1248,9 +1783,31 @@ def _procesar_unidad_independiente(task):
             "depth_bias_diagnostics": depth_bias_diag,
             "stable_interior_pixels": int(np.count_nonzero(stable_interior)),
             "low_agreement_pixels": low_agreement_pixels,
+            "low_agreement_ratio_of_candidate_depth": low_agreement_ratio,
+            # Alias histórico para no romper consumidores existentes; desde V5.1
+            # el denominador incluye profundidad científica + low_agreement.
             "low_agreement_ratio_of_valid": low_agreement_ratio,
+            "low_agreement_depth_spread_mm": finite_stats(low_agreement_spread_values),
             "confidence": finite_stats(confidence[(cloud_mask > 0) & np.isfinite(confidence)]),
             "agreement_support": finite_stats(depth_agreement_support[cloud_mask > 0]),
+            "roi_multiscale": {
+                **roi_diag,
+                "promoted_pixels": int(np.count_nonzero(roi_promoted)),
+                "candidate_union_pixels": int(np.count_nonzero(roi_candidate_union)),
+                "rejected_incoherent_pixels": int(np.count_nonzero(roi_rejected_mask)),
+                "promoted_fraction_of_scientific_depth": float(
+                    np.count_nonzero(roi_promoted) / max(valid_pixels, 1)
+                ),
+                "promoted_depth_mm": finite_stats(
+                    roi_depth_consensus[roi_promoted & np.isfinite(roi_depth_consensus)]
+                ),
+                "promoted_spread_mm": finite_stats(
+                    roi_depth_spread[roi_promoted & np.isfinite(roi_depth_spread)]
+                ),
+                "promoted_confidence": finite_stats(
+                    roi_confidence_consensus[roi_promoted & np.isfinite(roi_confidence_consensus)]
+                ),
+            },
             "support_depth_veto": support_veto_diag,
             "support_veto_pixels": int(np.count_nonzero(support_veto)),
             "alignment": alignment_info,
@@ -1275,6 +1832,7 @@ def _procesar_unidad_independiente(task):
                 "low_agreement_pixels": low_agreement_pixels,
                 "low_agreement_ratio_of_valid": low_agreement_ratio,
                 "confidence_median": record["confidence"]["median"],
+                "roi_promoted_pixels": int(np.count_nonzero(roi_promoted)),
                 "support_veto_pixels": int(np.count_nonzero(support_veto)),
                 "silhouette_iou_median_after_alignment": record[
                     "pairwise_silhouette_iou_after_alignment"
@@ -1284,7 +1842,7 @@ def _procesar_unidad_independiente(task):
         )
         shifts = [f"{a['session']}({a['dx']:+d},{a['dy']:+d})" for a in alignment_info]
         print(
-            f"[P{pose:02d}] {physical:9.3f}° | obs={len(aligned)} | valid={valid_ratio:6.2%} | tol={adaptive_agreement_mm:.2f}mm | acuerdo_bajo={low_agreement_pixels}px ({low_agreement_ratio:.1%}) | veto_plato={int(np.count_nonzero(support_veto))}px | shift={' '.join(shifts)} | {quality}"
+            f"[P{pose:02d}] {physical:9.3f}° | obs={len(aligned)} | valid={valid_ratio:6.2%} | tol={adaptive_agreement_mm:.2f}mm | acuerdo_bajo={low_agreement_pixels}px ({low_agreement_ratio:.1%}) | ROI+={int(np.count_nonzero(roi_promoted))}px | veto_plato={int(np.count_nonzero(support_veto))}px | shift={' '.join(shifts)} | {quality}"
         )
     return {"records_out": records_out, "csv_rows": csv_rows, "previews": previews}
 
@@ -1351,10 +1909,11 @@ def main():
         )
 
     summary = {
-        "schema_version": 6,
+        "schema_version": 7,
         "method": (
             "restricted_2d_alignment_single_layer_medoid_then_robust_"
-            "inverse_depth_fusion_with_explicit_per_pixel_reliability"
+            "inverse_depth_fusion_with_explicit_per_pixel_reliability_"
+            "and_independent_roi_multiscale_confirmation"
         ),
         "object": obj,
         "session": "multisesion",
@@ -1374,8 +1933,14 @@ def main():
             "La alineación multisesión solo permite traslación 2D pequeña. "
             "No se deforma la geometría con escala, rotación ni desplazamiento "
             "Z. El medoide selecciona una sola capa y únicamente sus medidas "
-            "compatibles se fusionan robustamente en 1/Z. El desacuerdo se "
-            "conserva como confianza, dispersión y soporte "
+            "compatibles se fusionan robustamente en 1/Z. La tolerancia de acuerdo "
+            "usa incertidumbre métrica por píxel, acotada por límites físicos. Una "
+            "observación unilateral débil solo se exporta cuando otra sesión independiente "
+            "la confirma. La evidencia ROI/multiescala del Paso 02 permanece separada de "
+            "la profundidad base y solo puede cubrir huecos cuando al menos dos sesiones "
+            "independientes coinciden dentro de la incertidumbre métrica; nunca sobrescribe "
+            "profundidad científica ya aceptada. El desacuerdo se conserva como confianza, "
+            "dispersión y soporte "
             "para las etapas geométricas posteriores. Si una pose pierde el "
             "respaldo independiente únicamente por fallo de alineación residual, "
             "se conserva una sola observación como warning con soporte=1 y confianza "
@@ -1399,6 +1964,7 @@ def main():
         "low_agreement_pixels",
         "low_agreement_ratio_of_valid",
         "confidence_median",
+        "roi_promoted_pixels",
         "support_veto_pixels",
         "silhouette_iou_median_after_alignment",
         "reasons",

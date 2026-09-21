@@ -12,9 +12,8 @@ Criterios de validación:
   no como auto-intersección física transversal.
 - el gate mesh->cloud se adapta al espaciado real de muestreo, pero conserva
   un límite máximo absoluto de seguridad.
-- una superficie interpolada conectada y estructuralmente coherente no se
-  rechaza únicamente porque mesh->cloud P90 sea alto; los demás controles
-  geométricos, multivista y topológicos siguen siendo obligatorios.
+- mesh->cloud conserva un umbral duro de seguridad: la continuidad o una
+  topología limpia no pueden sustituir evidencia observacional local.
 
 No se fuerza watertight.
 No se calcula volumen en una superficie abierta o con contactos coincidentes.
@@ -130,11 +129,10 @@ def parser():
     p.add_argument(
         "--allow-coherent-interpolation",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
-            "Permite que mesh->cloud P90 sea solo una advertencia cuando "
-            "la superficie interpolada conserva cobertura, envolvente, "
-            "componente principal y topología coherentes."
+            "Compatibilidad diagnóstica. La coherencia puede documentarse, pero "
+            "nunca anula el umbral duro mesh->cloud de rechazo."
         ),
     )
     p.add_argument(
@@ -1069,22 +1067,19 @@ def main():
     )
 
     if mesh_cloud_exceeds_reject:
-        if coherent_interpolation:
-            mesh_cloud_decision = "warning_coherent_interpolation"
-            warning.append(
-                "P90 mesh->cloud supera el gate de muestras discretas "
-                f"({m2c_stats['p90']:.3f} mm), pero la superficie "
-                "interpolada es coherente con la cobertura multivista, la "
-                "envolvente, la conectividad y la topología; no bloquea por "
-                "sí solo."
-            )
-        else:
-            mesh_cloud_decision = "reject_not_coherent"
-            reject.append(
-                f"P90 mesh->cloud alto: {m2c_stats['p90']:.3f} mm; "
-                "la interpolación no superó todos los controles de "
-                "coherencia independientes."
-            )
+        mesh_cloud_decision = (
+            "reject_despite_coherent_interpolation"
+            if coherent_interpolation else "reject_not_coherent"
+        )
+        detail = (
+            " La superficie cumple los controles auxiliares de coherencia, "
+            "pero éstos no sustituyen evidencia observacional local."
+            if coherent_interpolation else ""
+        )
+        reject.append(
+            f"P90 mesh->cloud alto: {m2c_stats['p90']:.3f} mm > "
+            f"{reject_mesh_cloud_p90_mm:.3f} mm.{detail}"
+        )
     elif mesh_cloud_exceeds_warning:
         mesh_cloud_decision = "warning_within_reject_limit"
         warning.append(f"P90 mesh->cloud: {m2c_stats['p90']:.3f} mm.")

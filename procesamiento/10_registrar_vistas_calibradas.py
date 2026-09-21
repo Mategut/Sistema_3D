@@ -66,6 +66,7 @@ _configurar_recursos(__file__)
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -100,6 +101,14 @@ def parser():
         "--calibration",
         required=True,
         help="Calibración de plataforma vigente. Nunca se buscan resultados previos.",
+    )
+    p.add_argument(
+        "--stereo-calibration-dir",
+        required=True,
+        help=(
+            "Calibración estéreo vigente. Debe coincidir exactamente con el contrato "
+            "con el que se generó la calibración de plataforma."
+        ),
     )
     p.add_argument(
         "--cloud-source",
@@ -264,6 +273,24 @@ def parser():
     p.add_argument("--registration-warning-rmse-uncertainty-ratio", type=float, default=0.60)
     p.add_argument("--registration-warning-p90-uncertainty-ratio", type=float, default=0.95)
     p.add_argument("--registration-warning-closure-overlap", type=float, default=0.85)
+    p.add_argument(
+        "--registration-reject-closure-overlap",
+        type=float,
+        default=0.70,
+        help=(
+            "Gate duro para P24->P00 cuando el cierre tiene correspondencias informativas. "
+            "Una vuelta mecánica no puede terminar mucho peor que sus pares consecutivos."
+        ),
+    )
+    p.add_argument(
+        "--registration-min-closure-to-primary-overlap-ratio",
+        type=float,
+        default=0.75,
+        help=(
+            "Relación mínima entre overlap de cierre y mediana de overlaps primarios "
+            "informativos. Es agnóstica a la forma porque compara el objeto consigo mismo."
+        ),
+    )
     p.add_argument("--registration-warning-input-confidence-median", type=float, default=0.72)
 
     p.add_argument("--axis-line-maximum-evaluations", type=int, default=220)
@@ -355,6 +382,104 @@ def weighted_stats(values, weights):
         "p95": weighted_quantile(values, weights, 0.95),
         "max": float(np.max(values)),
     }
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with Path(path).open("rb") as fh:
+        while True:
+            chunk = fh.read(1024 * 1024)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def load_runtime_stereo_contract(folder: Path) -> dict:
+    folder = Path(folder).expanduser().resolve()
+    yaml_path = folder / "stereo_initial.yaml"
+    maps_path = folder / "rectification_maps.npz"
+    if not yaml_path.is_file() or not maps_path.is_file():
+        raise FileNotFoundError(
+            "La calibración estéreo runtime debe contener stereo_initial.yaml y rectification_maps.npz."
+        )
+    fs = cv2.FileStorage(str(yaml_path), cv2.FILE_STORAGE_READ)
+    if not fs.isOpened():
+        raise RuntimeError(f"No se pudo abrir {yaml_path}")
+    try:
+        T = fs.getNode("T").mat()
+        P1 = fs.getNode("P1").mat()
+        P2 = fs.getNode("P2").mat()
+        Q = fs.getNode("Q").mat()
+    finally:
+        fs.release()
+    if T is None or np.asarray(T).size != 3:
+        raise RuntimeError("T ausente o inválido en stereo_initial.yaml.")
+    baseline = float(np.linalg.norm(np.asarray(T, dtype=np.float64).reshape(3)))
+    P1 = np.asarray(P1, dtype=np.float64) if P1 is not None else None
+    P2 = np.asarray(P2, dtype=np.float64) if P2 is not None else None
+    Q = np.asarray(Q, dtype=np.float64) if Q is not None else None
+    if P1 is None or P1.shape != (3,4) or P2 is None or P2.shape != (3,4):
+        raise RuntimeError("P1/P2 inválidas en la calibración estéreo runtime.")
+    fx = float(P1[0,0])
+    from_p2 = abs(float(P2[0,3]) / max(abs(fx), 1e-12))
+    tol = max(0.25, 0.005 * baseline)
+    if abs(from_p2 - baseline) > tol:
+        raise RuntimeError("P2 y T no describen la misma baseline estéreo.")
+    from_q = None
+    if Q is not None and Q.shape == (4,4) and abs(float(Q[3,2])) > 1e-12:
+        from_q = abs(1.0 / float(Q[3,2]))
+        if abs(from_q - baseline) > tol:
+            raise RuntimeError("Q y T no describen la misma baseline estéreo.")
+    with np.load(str(maps_path), allow_pickle=False) as maps:
+        shapes = [np.asarray(maps[k]).shape[:2] for k in maps.files if np.asarray(maps[k]).ndim >= 2]
+    image_shape = list(shapes[0]) if shapes and all(tuple(x)==tuple(shapes[0]) for x in shapes) else None
+    return {
+        "baseline_mm": baseline,
+        "fx_rectified_px": fx,
+        "image_shape_hw": image_shape,
+        "stereo_initial_sha256": sha256_file(yaml_path),
+        "rectification_maps_sha256": sha256_file(maps_path),
+    }
+
+
+def validate_stereo_platform_contract(cal: dict, runtime: dict) -> None:
+    contract = cal.get("stereo_calibration_contract")
+    if not isinstance(contract, dict):
+        raise RuntimeError(
+            "La calibración de plataforma no contiene stereo_calibration_contract. "
+            "Fue generada con una versión antigua y debe recalibrarse."
+        )
+    required_hashes = ("stereo_initial_sha256", "rectification_maps_sha256")
+    for key in required_hashes:
+        frozen = str(contract.get(key) or "").lower()
+        current = str(runtime.get(key) or "").lower()
+        if not frozen or frozen != current:
+            raise RuntimeError(
+                f"Calibración de plataforma incompatible: {key} no coincide con la "
+                "calibración estéreo vigente. Recalibre la plataforma."
+            )
+    frozen_baseline = float(contract.get("baseline_mm"))
+    current_baseline = float(runtime.get("baseline_mm"))
+    tol = max(0.25, 0.005 * current_baseline)
+    if abs(frozen_baseline - current_baseline) > tol:
+        raise RuntimeError(
+            "Baseline incompatible entre plataforma y estéreo: "
+            f"{frozen_baseline:.6f} vs {current_baseline:.6f} mm."
+        )
+    frozen_fx = float(contract.get("fx_rectified_px"))
+    current_fx = float(runtime.get("fx_rectified_px"))
+    if abs(frozen_fx - current_fx) > max(0.5, 0.001 * abs(current_fx)):
+        raise RuntimeError(
+            "Focal rectificada incompatible entre plataforma y estéreo: "
+            f"{frozen_fx:.6f} vs {current_fx:.6f} px."
+        )
+    frozen_shape = contract.get("image_shape_hw")
+    current_shape = runtime.get("image_shape_hw")
+    if frozen_shape is not None and current_shape is not None and list(frozen_shape) != list(current_shape):
+        raise RuntimeError(
+            f"Resolución geométrica incompatible: plataforma={frozen_shape}, stereo={current_shape}."
+        )
 
 
 def resolve_calibration(root: Path, explicit: str) -> Path:
@@ -2744,6 +2869,45 @@ def evaluate_registration(samples, args, expected_views):
                 "uninformative y no se fuerza una correspondencia inexistente."
             )
 
+    primary_overlap_values = [
+        float(edge["overlap"]) for edge in informative
+        if edge.get("overlap") is not None and np.isfinite(float(edge["overlap"]))
+    ]
+    primary_overlap_stats = stats(primary_overlap_values)
+    primary_overlap_median = primary_overlap_stats.get("median")
+    closure_overlap_value = (
+        float(closure["overlap"])
+        if closure is not None and closure.get("overlap") is not None
+        else None
+    )
+    closure_relative_ratio = None
+    if (
+        closure_overlap_value is not None
+        and primary_overlap_median is not None
+        and np.isfinite(float(primary_overlap_median))
+        and float(primary_overlap_median) > 1e-9
+    ):
+        closure_relative_ratio = closure_overlap_value / float(primary_overlap_median)
+
+    if closure is not None and bool(closure.get("informative")):
+        if closure_overlap_value is not None and closure_overlap_value < float(
+            args.registration_reject_closure_overlap
+        ):
+            rejected.append(
+                "El cierre P24->P00 tiene solape informativo pero insuficiente para "
+                f"una vuelta consistente ({closure_overlap_value:.3f} < "
+                f"{float(args.registration_reject_closure_overlap):.3f})."
+            )
+        if (
+            closure_relative_ratio is not None
+            and closure_relative_ratio < float(args.registration_min_closure_to_primary_overlap_ratio)
+        ):
+            rejected.append(
+                "El cierre P24->P00 se degrada respecto a los pares consecutivos: "
+                f"ratio={closure_relative_ratio:.3f} < "
+                f"{float(args.registration_min_closure_to_primary_overlap_ratio):.3f}."
+            )
+
     quality = "rejected" if rejected else ("warning" if warnings_out else "accepted")
     metrics = {
         "informative_primary_count": len(informative),
@@ -2752,6 +2916,8 @@ def evaluate_registration(samples, args, expected_views):
         "accepted_informative_primary_ratio": accepted_ratio,
         "primary_point_plane_rmse_mm": stats(pp_rmse),
         "primary_point_plane_p90_mm": stats(pp_p90),
+        "primary_overlap": primary_overlap_stats,
+        "closure_to_primary_overlap_ratio": closure_relative_ratio,
         "closure": (
             None
             if closure is None
@@ -2957,6 +3123,8 @@ def main():
     cal_path = resolve_calibration(root, args.calibration)
     cal = load_json(cal_path)
     validate_platform_calibration(cal, int(args.expected_views))
+    runtime_stereo = load_runtime_stereo_contract(Path(args.stereo_calibration_dir))
+    validate_stereo_platform_contract(cal, runtime_stereo)
 
     cloud_dir, cloud_summary_path = resolve_cloud_summary(root, obj, args.cloud_source)
     cloud_summary = load_json(cloud_summary_path)
