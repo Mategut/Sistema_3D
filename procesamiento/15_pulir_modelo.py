@@ -5674,6 +5674,7 @@ def main():
     quality = "accepted" if not warning_reasons else "warning"
 
     report = {
+        "estimated_completion": topology_info.get("estimated_completion", {}),
         "schema_version": "1.2",
         "implementation": identity,
         "step": "15",

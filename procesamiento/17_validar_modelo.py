@@ -1115,9 +1115,16 @@ def main():
     except Exception:
         surface_area = None
 
+    if intersection_info.get("estimated_completion", {}).get("all_faces_are_estimated", False):
+        warning.append("Superficie completada por estimacion: el cierre no valida exactitud dimensional.")
+
+    if intersection_info.get("estimated_completion", {}).get("has_estimated_patches", False):
+        warning.append("Contiene parches locales estimados con respaldo observacional; no son muestras nuevas.")
+
     quality = "rejected" if reject else ("warning" if warning else "accepted")
 
     report = {
+        "estimated_completion": intersection_info.get("estimated_completion", {}),
         "schema_version": "1.5",
         "version": VERSION,
         "method": (

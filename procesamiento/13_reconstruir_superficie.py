@@ -114,7 +114,7 @@ except Exception as exc:
     raise SystemExit("Paso 13 V5.0 requiere Open3D 0.19.x. " f"Detalle: {exc}")
 
 
-VERSION = "V5.8"
+VERSION = "V6.3"
 STEP = "13"
 
 
@@ -130,6 +130,15 @@ def make_parser():
     p.add_argument("--object", required=True)
     p.add_argument("--source", default="12_regularizacion_nube")
     p.add_argument("--output-name", default="13_reconstruccion_superficie")
+    p.add_argument("--permissive-completion", action=argparse.BooleanOptionalAction, default=None, help="Compatibilidad: fuerza o desactiva el relleno local.")
+    p.add_argument("--completion-mode", choices=("auto", "always", "never"), default="auto")
+    p.add_argument("--completion-min-contours", type=int, default=20, help=argparse.SUPPRESS)
+    p.add_argument("--completion-min-boundary-ratio", type=float, default=0.04, help=argparse.SUPPRESS)
+    p.add_argument("--completion-min-perimeter-ratio", type=float, default=2.0, help=argparse.SUPPRESS)
+    p.add_argument("--local-hole-max-diameter-mm", type=float, default=0.0, help="0 evalua aberturas de cualquier tamano; un valor positivo limita su diametro")
+    p.add_argument("--local-hole-max-distance-mm", type=float, default=2.0)
+    p.add_argument("--complete-walls-open-base", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--wall-voxel-mm", type=float, default=0.7)
 
     p.add_argument(
         "--threads",
@@ -2570,6 +2579,426 @@ def load_estimated_completion(root, source_cloud_path, source_name, enabled):
     return p, c, n, q, report
 
 
+from collections import defaultdict
+
+def _local_edge_incidence(triangles):
+    """
+    edge -> [(face_id, direction_relative_to_sorted_edge), ...]
+    direction = +1 si la cara recorre min->max, -1 si max->min.
+    """
+    edge_faces = defaultdict(list)
+    for fi, tri in enumerate(triangles):
+        a, b, c = map(int, tri)
+        for u, v in ((a, b), (b, c), (c, a)):
+            if u < v:
+                key, direction = (u, v), 1
+            else:
+                key, direction = (v, u), -1
+            edge_faces[key].append((fi, direction))
+    return edge_faces
+
+
+
+def _closure_loops(triangles):
+    """Recorre las aristas de frontera para identificar contornos cerrados."""
+    incidence = _local_edge_incidence(triangles)
+    adjacency = defaultdict(list)
+    for (a, b), inc in incidence.items():
+        if len(inc) == 1:
+            adjacency[a].append(b)
+            adjacency[b].append(a)
+    seen, loops, invalid = set(), [], 0
+    for seed in sorted(adjacency):
+        if seed in seen:
+            continue
+        stack, comp = [seed], set([seed])
+        while stack:
+            for nb in adjacency[stack.pop()]:
+                if nb not in comp:
+                    comp.add(nb)
+                    stack.append(nb)
+        seen.update(comp)
+        if len(comp) < 3 or any(len(adjacency[i]) != 2 for i in comp):
+            invalid += 1
+            continue
+        # Recorrido contrario a la cara existente: orientación de la tapa.
+        a, b = seed, adjacency[seed][0]
+        direction = incidence[tuple(sorted((a, b)))][0][1]
+        if (1 if a < b else -1) == direction:
+            b = adjacency[a][1]
+        loop, previous, current = [a], a, b
+        while current != a and len(loop) <= len(comp):
+            loop.append(current)
+            nxt = [x for x in adjacency[current] if x != previous][0]
+            previous, current = current, nxt
+        if current != a or len(loop) != len(comp):
+            invalid += 1
+            continue
+        loops.append(np.asarray(loop, dtype=np.int64))
+    return loops, invalid
+
+
+def _closure_cross(a, b):
+    """Calcula el producto cruzado escalar de vectores bidimensionales."""
+    return a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]
+
+
+def _closure_chart(points):
+    """Proyecta el contorno en un marco local y rechaza configuraciones colineales."""
+    center = points.mean(axis=0)
+    _, singular, basis = np.linalg.svd(points - center, full_matrices=False)
+    if len(singular) < 3 or singular[1] < 1e-10:
+        raise ValueError("contorno_colineal")
+    xy = (points - center) @ basis[:2].T
+    area = np.sum(_closure_cross(xy, np.roll(xy, -1, axis=0))) / 2
+    if area < 0:
+        basis[1] *= -1
+        xy[:, 1] *= -1
+    normal = np.cross(basis[0], basis[1])
+    return center, basis[:2], normal, xy
+
+
+def _closure_earclip(xy):
+    """Triangulación restringida a un polígono simple, incluso cóncavo."""
+    n = len(xy)
+    eps = max(1e-14, float(np.ptp(xy, axis=0).max()) ** 2 * 1e-12)
+    # Rechazar cruces y contactos no adyacentes en la proyección.
+    for i in range(n):
+        a, b = xy[i], xy[(i + 1) % n]
+        for j in range(i + 1, n):
+            if j == (i + 1) % n or (j + 1) % n == i:
+                continue
+            c, d = xy[j], xy[(j + 1) % n]
+            if np.any(
+                np.maximum(np.minimum(a, b), np.minimum(c, d))
+                > np.minimum(np.maximum(a, b), np.maximum(c, d)) + np.sqrt(eps) * 1e-3
+            ):
+                continue
+            ab = [_closure_cross(b - a, c - a), _closure_cross(b - a, d - a)]
+            cd = [_closure_cross(d - c, a - c), _closure_cross(d - c, b - c)]
+            if min(ab) <= eps and max(ab) >= -eps and min(cd) <= eps and max(cd) >= -eps:
+                raise ValueError("contorno_proyectado_se_cruza")
+    active, faces = list(range(n)), []
+    while len(active) > 3:
+        ears = []
+        for pos, b in enumerate(active):
+            a, c = active[pos - 1], active[(pos + 1) % len(active)]
+            pa, pb, pc = xy[[a, b, c]]
+            area = float(_closure_cross(pb - pa, pc - pa))
+            if area <= eps:
+                continue
+            other = [x for x in active if x not in (a, b, c)]
+            q = xy[other]
+            inside = (
+                (_closure_cross(pb - pa, q - pa) >= -eps)
+                & (_closure_cross(pc - pb, q - pb) >= -eps)
+                & (_closure_cross(pa - pc, q - pc) >= -eps)
+            )
+            if np.any(inside):
+                continue
+            quality = area / max(
+                np.sum((pa - pb) ** 2) + np.sum((pb - pc) ** 2) + np.sum((pc - pa) ** 2), eps
+            )
+            ears.append((quality, pos, (a, b, c)))
+        if not ears:
+            raise ValueError("triangulacion_restringida_no_resuelta")
+        _, pos, face = max(ears)
+        faces.append(face)
+        active.pop(pos)
+    if _closure_cross(xy[active[1]] - xy[active[0]], xy[active[2]] - xy[active[0]]) <= eps:
+        raise ValueError("triangulo_final_degenerado")
+    faces.append(tuple(active))
+    return np.asarray(faces, dtype=np.int64)
+
+
+
+
+def build_wall_volume_proxy(points, normals, pitch, margin, depth, threads):
+    from scipy import ndimage as ndi
+    from skimage.measure import marching_cubes
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    pcd.normals = o3d.utility.Vector3dVector(normals)
+    print('1/4: superficie implícita Poisson desde la nube del paso 12', flush=True)
+    mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd, depth=depth, scale=1.1, linear_fit=True, n_threads=threads)
+    # Sin recorte por confianza/densidad: esta salida admite extrapolación.
+    grid = o3d.geometry.VoxelGrid.create_from_triangle_mesh(mesh, voxel_size=pitch)
+    indices = np.array([v.grid_index for v in grid.get_voxels()], dtype=np.int64)
+    origin = np.asarray(grid.origin) + 0.5 * pitch
+    low = np.floor((points.min(0) - margin - origin) / pitch).astype(np.int64)
+    high = np.ceil((points.max(0) + margin - origin) / pitch).astype(np.int64)
+    shape = high - low + 1
+    if np.prod(shape.astype(float)) > 40_000_000:
+        raise ValueError('Volumen demasiado grande: aumente --voxel-mm.')
+    inside = np.all((indices >= low) & (indices <= high), axis=1)
+    indices = indices[inside] - low
+    shell = np.zeros(tuple(shape), dtype=bool)
+    shell[tuple(indices.T)] = True
+    print('2/4: volumen auxiliar para paredes; la base se abre antes de exportar', flush=True)
+    # Las tapas en el límite espacial son explícitamente una suposición.
+    cap_pixels = 0
+    for axis in range(3):
+        for end in (0, -1):
+            sl = [slice(None)] * 3
+            sl[axis] = end
+            sl = tuple(sl)
+            face = shell[sl]
+            capped = ndi.binary_fill_holes(ndi.binary_closing(np.pad(face, 2), iterations=1))[2:-2, 2:-2]
+            cap_pixels += int(np.count_nonzero(capped & ~face))
+            shell[sl] = capped
+    shell = ndi.binary_closing(np.pad(shell, 3), iterations=1)
+    solid = ndi.binary_fill_holes(shell)
+    labels, _ = ndi.label(solid)
+    counts = np.bincount(labels.ravel())
+    counts[0] = 0
+    if len(counts) < 2 or counts.max() == 0:
+        raise RuntimeError('No se obtuvo un volumen utilizable.')
+    selected = int(counts.argmax())
+    discarded = int(counts.sum() - counts[selected])
+    solid = labels == selected
+    # Mantener el componente volumétrico principal evita cuerpos flotantes.
+    field = ndi.gaussian_filter(solid.astype(np.float32), sigma=0.8)
+    vertices, triangles, _, _ = marching_cubes(
+        field, 0.5, spacing=(pitch,) * 3, allow_degenerate=False)
+    vertices = vertices.astype(np.float64)
+    vertices += origin + (low - 3) * pitch
+    result = o3d.geometry.TriangleMesh(
+        o3d.utility.Vector3dVector(vertices), o3d.utility.Vector3iVector(triangles))
+    result.orient_triangles()
+    # El campo ya está suavizado: mover la malla puede cruzar láminas delgadas.
+    v = np.asarray(result.vertices)
+    t = np.asarray(result.triangles)
+    signed_volume = float(np.einsum('ij,ij->i', v[t[:, 0]], np.cross(v[t[:, 1]], v[t[:, 2]])).sum() / 6)
+    if signed_volume < 0:
+        result.triangles = o3d.utility.Vector3iVector(t[:, [0, 2, 1]])
+    result.compute_vertex_normals()
+    return result, {'cap_pixels_estimated': cap_pixels, 'solid_voxels': int(solid.sum()),
+                    'shell_voxels': int(shell.sum()), 'discarded_component_voxels': discarded,
+                    'base_and_other_clipped_ends_are_estimated': True,
+                    'surface_is_entirely_reconstructed_not_observed': True}
+
+
+
+def clip_open_base(mesh, base_y):
+    """Recorta y>base_y compartiendo intersecciones de aristas; nunca agrega tapa."""
+    vertices=np.asarray(mesh.vertices);faces=np.asarray(mesh.triangles)
+    new=vertices.tolist();edge_cache={};out=[]
+    def intersection(a,b):
+        if abs(vertices[a,1]-base_y)<1e-10:return int(a)
+        if abs(vertices[b,1]-base_y)<1e-10:return int(b)
+        key=tuple(sorted((int(a),int(b))))
+        if key not in edge_cache:
+            alpha=(base_y-vertices[a,1])/(vertices[b,1]-vertices[a,1])
+            p=vertices[a]+alpha*(vertices[b]-vertices[a]);p[1]=base_y
+            edge_cache[key]=len(new);new.append(p.tolist())
+        return edge_cache[key]
+    for face in faces:
+        poly=[]
+        for a,b in zip(face,np.roll(face,-1)):
+            ina=vertices[a,1]<=base_y;inb=vertices[b,1]<=base_y
+            if ina:poly.append(int(a))
+            if ina!=inb:poly.append(intersection(a,b))
+        poly=list(dict.fromkeys(poly))
+        for i in range(1,len(poly)-1):out.append([poly[0],poly[i],poly[i+1]])
+    result=o3d.geometry.TriangleMesh(o3d.utility.Vector3dVector(np.asarray(new)),o3d.utility.Vector3iVector(np.asarray(out,dtype=np.int32)))
+    result.remove_degenerate_triangles();result.remove_unreferenced_vertices()
+    result.compute_triangle_normals();result.compute_vertex_normals()
+    return result
+
+
+def wall_boundary_report(mesh, base_y, tolerance):
+    v=np.asarray(mesh.vertices);tri=np.asarray(mesh.triangles)
+    edges=np.sort(np.vstack((tri[:,[0,1]],tri[:,[1,2]],tri[:,[2,0]])),axis=1)
+    edges,counts=np.unique(edges,axis=0,return_counts=True)
+    boundary=edges[counts==1]
+    lateral=np.any(np.abs(v[boundary,1]-base_y)>tolerance,axis=1)
+    return {"boundary_edges":len(boundary),"lateral_boundary_edges":int(lateral.sum()),
+        "base_boundary_edges":int((~lateral).sum()),"base_y_mm":float(base_y),
+        "base_tolerance_mm":float(tolerance)}
+
+
+def propose_continuous_walls(mesh, points, normals, colors, spacing, root, args, baseline_evaluation):
+    """Reconstruye paredes continuas y deja la base +Y abierta; conserva los gates."""
+    report={"attempted":False,"accepted":False,"base_left_open":True}
+    frame_path=root/'reconstruccion/multisesion/11_fusion_multivista/resumen_11_fusion_multivista.json'
+    if not frame_path.is_file():
+        report['reason']='missing_canonical_platform_frame';return None,report,None
+    frame=json.loads(frame_path.read_text(encoding='utf-8')).get('canonical_platform_frame',{})
+    if not frame.get('enabled') or frame.get('target_axis')!='+Y':
+        report['reason']='unverified_vertical_frame';return None,report,None
+    base_y=float(points[:,1].max())
+    before=wall_boundary_report(mesh,base_y,max(1.0,3*spacing))
+    report['before']=before
+    if before['lateral_boundary_edges']==0:
+        report['reason']='only_base_is_open';return None,report,None
+    pitch=float(args.wall_voxel_mm)
+    if not np.isfinite(pitch) or pitch<=0:
+        raise ValueError('Resolucion de paredes positiva y finita requerida')
+    if np.prod(np.ceil((np.ptp(points,axis=0)+2.8)/pitch)+8)>40_000_000:
+        raise ValueError('Volumen excesivo para la resolucion de paredes')
+    lengths=np.linalg.norm(normals,axis=1);keep=lengths>1e-9
+    q=points[keep];n=normals[keep]/lengths[keep,None]
+    if len(q)<500:raise ValueError('Normales insuficientes para paredes')
+    report['attempted']=True
+    report['input_points']=len(q)
+    report['voxel_mm']=pitch
+    proxy,construction=build_wall_volume_proxy(q,n,pitch,1.4,8,min(8,_CPU_COUNT))
+    candidate=clip_open_base(proxy,base_y)
+    candidate=colorize(candidate,points,colors)
+    ev=evaluate(candidate,points,args.coverage_gate_mm,args.evaluation_cloud_samples,
+                args.evaluation_mesh_samples,name='continuous_walls_open_base')
+    after=wall_boundary_report(candidate,base_y,1e-6);topo=ev['topology']
+    report.update(after=after,evaluation=ev,construction=construction,
+        base_cap_exported=False,construction_is_temporary_proxy=True,
+        policy='continuity_of_walls_without_unobserved_bottom_cap',
+        original_geometry_preserved=False,rgb_policy='nearest_observation_on_reconstructed_vertices')
+    failures=[]
+    if after['lateral_boundary_edges'] or after['base_boundary_edges']==0:failures.append('walls_not_closed_or_base_not_open')
+    if topo['connected_components']!=1 or not topo['edge_manifold'] or not topo['vertex_manifold'] or not topo['orientable']:failures.append('invalid_topology')
+    if ev['mesh_to_cloud_mm']['p90']>2.0:failures.append('wall_distance_exceeds_2mm_p90')
+    if ev['cloud_to_mesh_mm']['p95']>max(2.1,baseline_evaluation['cloud_to_mesh_mm']['p95']):failures.append('observation_distance_excessive')
+    if ev['coverage_within_gate']<max(.98,baseline_evaluation['coverage_within_gate']-.01):failures.append('observational_coverage_lost')
+    try:choose_surface_candidate({'continuous_walls_open_base':(candidate,ev,{})},spacing,args)
+    except RuntimeError as exc:failures.append(str(exc))
+    if not failures:
+        intersections=len(candidate.get_self_intersecting_triangles())
+        report['self_intersection_pairs']=intersections
+        if intersections:failures.append('self_intersections')
+    if failures:
+        report['failures']=failures;report['reason']='candidate_rejected_original_retained'
+        return None,report,None
+    report['accepted']=True
+    return candidate,report,ev
+
+
+def fill_supported_local_holes(mesh, cloud_points, spacing, args):
+    """Agrega triangulos dentro de huecos respaldados; no mueve vertices ni RGB."""
+    import copy
+    diameter_limit = float(args.local_hole_max_diameter_mm)
+    gate = float(args.local_hole_max_distance_mm)
+    if not np.isfinite(diameter_limit) or diameter_limit < 0 or not np.isfinite(gate) or not 0 < gate <= 2.0:
+        raise ValueError("Diametro no negativo (0 sin limite) y distancia de respaldo entre 0 y 2 mm.")
+    vertices = np.asarray(mesh.vertices)
+    original = np.asarray(mesh.triangles)
+    incidence = _local_edge_incidence(original)
+    loops, invalid = _closure_loops(original)
+    xyz = vertices[original]
+    face_normals = np.cross(xyz[:,1]-xyz[:,0], xyz[:,2]-xyz[:,0])
+    face_normals /= np.maximum(np.linalg.norm(face_normals,axis=1)[:,None],1e-30)
+    original_keys = {tuple(sorted(face)) for face in original}
+    tree = cKDTree(cloud_points)
+    accepted, records = [], []
+    for loop in loops:
+        rec = {"boundary_vertices": len(loop), "accepted": False}
+        records.append(rec)
+        try:
+            rim = vertices[loop]
+            diameter = float(np.linalg.norm(np.ptp(rim,axis=0)))
+            rec['diameter_mm'] = diameter
+            if diameter_limit > 0 and diameter > diameter_limit:
+                raise ValueError("user_diameter_limit")
+            center, _, normal, xy = _closure_chart(rim)
+            residual = np.abs((rim-center)@normal)
+            rec['planarity_max_mm'] = float(residual.max())
+            if residual.max() > min(0.6, max(0.15, spacing)):
+                raise ValueError("nonplanar_boundary_or_corner")
+            neighbors = [incidence[tuple(sorted((int(u),int(v))))][0][0] for u,v in zip(loop,np.roll(loop,-1))]
+            if np.min(face_normals[neighbors]@normal) < np.cos(np.deg2rad(35)):
+                raise ValueError("outside_boundary_or_sharp_edge")
+            patch = loop[_closure_earclip(xy)]
+            if any(tuple(sorted(face)) in original_keys for face in patch):
+                raise ValueError("duplicate_existing_face")
+            patch_incidence = _local_edge_incidence(patch)
+            for edge, entries in patch_incidence.items():
+                if edge in incidence:
+                    old_entries = incidence[edge]
+                    if len(old_entries)+len(entries) != 2 or old_entries[0][1]+entries[0][1] != 0:
+                        raise ValueError("patch_conflicts_with_existing_edge_orientation")
+            max_bound = 0.0
+            for face in patch:
+                a,b,c = vertices[face]
+                longest = max(np.linalg.norm(a-b),np.linalg.norm(b-c),np.linalg.norm(c-a))
+                # Una cota Lipschitz cubre tambien el espacio ENTRE muestras.
+                n = max(2,int(np.ceil(2*longest/min(0.4,gate/4))))
+                for i in range(n+1):
+                    for start in range(0,n+1-i,4096):
+                        vv=np.arange(start,min(start+4096,n+1-i),dtype=float)/n
+                        samples=a+(i/n)*(b-a)+vv[:,None]*(c-a)
+                        bound=float(tree.query(samples)[0].max())+2*longest/n
+                        max_bound=max(max_bound,bound)
+                        if bound > gate:
+                            raise ValueError("patch_interior_lacks_observations")
+            rec['max_distance_bound_mm']=max_bound
+            rec['accepted']=True
+            accepted.append((patch,len(records)-1))
+        except ValueError as exc:
+            rec['reason']=str(exc)
+    result = copy.deepcopy(mesh)
+    if accepted:
+        all_faces = np.vstack([original]+[p for p,_ in accepted])
+        result.triangles=o3d.utility.Vector3iVector(all_faces)
+        owner=np.full(len(all_faces),-1,dtype=int);offset=len(original)
+        for patch,record_id in accepted:
+            owner[offset:offset+len(patch)]=record_id;offset+=len(patch)
+        intersections=np.asarray(result.get_self_intersecting_triangles()).reshape(-1,2)
+        bad=set(int(owner[f]) for f in intersections.ravel() if owner[f]>=0)
+        for record_id in bad:
+            records[record_id]['accepted']=False;records[record_id]['reason']='new_triangle_intersection'
+        keep=np.array([i<0 or i not in bad for i in owner])
+        result.triangles=o3d.utility.Vector3iVector(all_faces[keep])
+        new_bad_vertices = set(result.get_non_manifold_vertices()) - set(mesh.get_non_manifold_vertices())
+        if not result.is_edge_manifold(True) or new_bad_vertices or (mesh.is_orientable() and not result.is_orientable()):
+            for rec in records:
+                if rec['accepted']: rec.update(accepted=False,reason='topology_guard_rollback')
+            result=copy.deepcopy(mesh)
+    result.compute_triangle_normals();result.compute_vertex_normals()
+    inferred=np.arange(len(result.triangles))>=len(original)
+    assert np.array_equal(np.asarray(result.vertices),vertices)
+    assert np.array_equal(np.asarray(result.triangles)[:len(original)],original)
+    assert np.array_equal(np.asarray(result.vertex_colors),np.asarray(mesh.vertex_colors))
+    return result, inferred, {"enabled":True,"method":"local_observation_bounded_patches",
+        "all_faces_are_estimated":False,"has_estimated_patches":bool(inferred.any()),
+        "observational_support_increased":False,"existing_vertices_moved":0,
+        "original_triangles_preserved":len(original),"rgb_unchanged":True,
+        "new_triangles":int(inferred.sum()),"loops_filled":sum(r['accepted'] for r in records),
+        "invalid_boundary_components":invalid,"distance_bound_mm":gate,"records":records}
+
+
+def assess_automatic_completion(mesh, args):
+    """Evalua cada frontera abierta; cantidad y tamano no bloquean el intento."""
+    vertices = np.asarray(mesh.vertices)
+    tri = np.asarray(mesh.triangles)
+    topology = edge_statistics(tri, len(vertices))
+    edges = np.sort(np.vstack((tri[:, [0,1]], tri[:, [1,2]], tri[:, [2,0]])), axis=1)
+    edges, counts = np.unique(edges, axis=0, return_counts=True)
+    boundary = edges[counts == 1]
+    perimeter = float(np.linalg.norm(vertices[boundary[:,0]]-vertices[boundary[:,1]],axis=1).sum())
+    diagonal = float(np.linalg.norm(np.ptp(vertices,axis=0))) if len(vertices) else 0.0
+    return {"triggered": bool(topology['boundary_edges'] > 0),
+        "activation_policy": "evaluate_every_open_boundary_independently",
+        "boundary_components": topology['boundary_components'],
+        "boundary_edge_ratio": topology['boundary_edge_ratio'],
+        "boundary_perimeter_mm": perimeter,
+        "perimeter_to_bbox_diagonal": perimeter/max(diagonal,1e-9),
+        "diameter_limit_mm": float(args.local_hole_max_diameter_mm),
+        "note": "0 significa sin limite de diametro; cada parche debe superar evidencia, orientacion e intersecciones."}
+
+
+def verify_ply_rgb(path, mesh):
+    """Comprueba que el PLY guardo todos los colores con precision de 8 bits."""
+    restored = o3d.io.read_triangle_mesh(str(path))
+    original = np.asarray(mesh.vertex_colors)
+    actual = np.asarray(restored.vertex_colors)
+    if not mesh.has_vertex_colors() or not restored.has_vertex_colors() or original.shape != actual.shape:
+        raise RuntimeError("La exportacion PLY perdio los colores RGB por vertice.")
+    error = float(np.max(np.abs(original-actual))) if original.size else 0.0
+    if error > 1.0/255 + 1e-9:
+        raise RuntimeError("La exportacion PLY altero los colores mas de un nivel RGB.")
+    return {"vertex_rgb_preserved": True, "vertices_with_rgb": len(actual),
+        "max_roundtrip_error_255": error*255,
+        "unobserved_region_rgb": "nearest_observation_estimate_not_measured_texture"}
+
 def main():
     """Reconstruye y evalúa una superficie a partir de la nube regularizada."""
     args = make_parser().parse_args()
@@ -2839,6 +3268,9 @@ def main():
             "duplicado del contrato de evidencia."
         )
 
+    completion_mode = args.completion_mode
+    if args.permissive_completion is not None:
+        completion_mode = "always" if args.permissive_completion else "never"
     measured_spacing = nearest_spacing(points)
     if meshing_reference is not None and np.isfinite(meshing_reference) and meshing_reference > 0:
         spacing = float(meshing_reference)
@@ -3113,6 +3545,52 @@ def main():
                 "reason": "postprocessing_failed_surface_contract", "evaluation": evaluation,
                 "candidate_comparison": candidate_comparison}, indent=2, ensure_ascii=False), encoding="utf-8")
         raise RuntimeError("Paso 13: la geometría final incumple el contrato después del posprocesamiento.") from failure
+    automatic_completion = {"mode": completion_mode, "triggered": False}
+    local_inferred = np.zeros(len(mesh.triangles), dtype=bool)
+    if completion_mode in ("auto", "always"):
+        automatic_completion.update(assess_automatic_completion(mesh, args))
+        if completion_mode == "always" or automatic_completion["triggered"]:
+            original_path = output / "malla_observacional_antes_relleno.ply"
+            if not o3d.io.write_triangle_mesh(str(original_path), mesh):
+                raise RuntimeError("No se pudo conservar la malla original.")
+            accepted = evidence_safe if evidence_contract_available else np.ones(len(points), dtype=bool)
+            mesh, local_inferred, local_report = fill_supported_local_holes(mesh, points[accepted], spacing, args)
+            local_report["activation"] = automatic_completion
+            local_report["upstream_guidance"] = completion_report
+            completion_report = local_report
+            evaluation = evaluate(mesh, points, args.coverage_gate_mm, args.evaluation_cloud_samples,
+                                  args.evaluation_mesh_samples, name=selected_method+"_local_patches")
+            topology = evaluation["topology"]
+            choose_surface_candidate({selected_method:(mesh,evaluation,component_cleanup)},spacing,args)
+            if local_inferred.any(): warning_reasons.append("locally_inferred_patches_with_observation_bounds")
+            print("Paso 13: huecos locales rellenados:",local_report['loops_filled'],
+                  "| caras originales conservadas:",local_report['original_triangles_preserved'],flush=True)
+
+    if completion_mode != "never" and args.complete_walls_open_base:
+        accepted = evidence_safe if evidence_contract_available else np.ones(len(points), dtype=bool)
+        try:
+            wall_mesh, wall_report, wall_evaluation = propose_continuous_walls(mesh,points[accepted],
+                normals[accepted],colors[accepted],spacing,root,args,evaluation)
+        except (ValueError, RuntimeError, ImportError) as exc:
+            wall_mesh=None;wall_report={"accepted":False,"failure":str(exc)}
+        if wall_mesh is not None:
+            if not (output / "malla_observacional_antes_relleno.ply").is_file():
+                o3d.io.write_triangle_mesh(str(output / "malla_observacional_antes_relleno.ply"),mesh)
+            completion_report={"enabled":True,"all_faces_are_estimated":True,
+                "has_estimated_patches":False,"base_left_open":True,"observational_support_increased":False,
+                "method":"continuous_walls_open_base","wall_completion":wall_report,
+                "local_patch_attempt":completion_report}
+            mesh=wall_mesh;evaluation=wall_evaluation;topology=evaluation['topology']
+            candidate_comparison['wall_completion']={'previous_selected_method':selected_method,'decision':wall_report}
+            selected_method='continuous_walls_open_base'
+            candidates[selected_method]=(mesh,evaluation,{'policy':'volume_proxy_largest_component','construction':wall_report['construction']})
+            local_inferred=np.ones(len(mesh.triangles),dtype=bool)
+            # Las advertencias anteriores describian la malla reemplazada.
+            warning_reasons=['estimated_continuous_walls_base_intentionally_open']
+            print('Paso 13: paredes continuas; solo queda abierta la base inferior.',flush=True)
+        else:
+            completion_report['wall_completion']=wall_report
+
     quality = "accepted" if not warning_reasons else "warning"
     selected_path = output / "malla_final_seleccionada.ply"
     if not o3d.io.write_triangle_mesh(
@@ -3122,14 +3600,26 @@ def main():
     ):
         raise RuntimeError("No se pudo guardar malla_final_seleccionada.ply")
 
+    # El resumen normal no debe convivir con procedencia estimada de una ejecucion anterior.
+    if local_inferred.any():
+        import hashlib
+        np.savez_compressed(output / "procedencia_estimada.npz", inferred_faces=local_inferred,
+            all_faces_are_estimated=np.array(bool(completion_report.get("all_faces_are_estimated",False))), observational_support_added=np.array(0),
+            mesh_sha256=np.array(hashlib.sha256(selected_path.read_bytes()).hexdigest()))
+    else:
+        (output / "procedencia_estimada.npz").unlink(missing_ok=True)
+    rgb_report = verify_ply_rgb(selected_path, mesh)
     elapsed = time.perf_counter() - started
     report = {
+        "automatic_completion": automatic_completion,
+        "rgb_export": rgb_report,
         "schema_version": "4.8",
         "step": STEP,
         "version": VERSION,
         "quality": quality,
         "warning_reasons": warning_reasons,
         "method": (
+            "continuous_walls_open_base" if selected_method == "continuous_walls_open_base" else
             "evidence_guarded_adaptive_poisson_bpa_candidate_selection_with_"
             "whole_component_support_cleanup_and_restricted_weak_region_taubin"
         ),

@@ -423,6 +423,7 @@ def main():
     )
 
     report = {
+        "estimated_completion": source_info.get("estimated_completion", {}),
         "schema_version": "1.2",
         "method": (
             "open3d_candidate_pairs_plus_" "explicit_triangle_triangle_contact_classification"

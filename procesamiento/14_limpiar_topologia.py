@@ -115,14 +115,28 @@ from clasificador_intersecciones import (
 # =============================================================================
 
 
-def save_inferred_face_provenance(source_path, final_mesh, output):
+def save_inferred_face_provenance(source_path, final_mesh, output, all_estimated=False):
     import open3d as o3d
     import hashlib
     def keys(mesh):
         points = np.rint(np.asarray(mesh.vertices) / 1e-5).astype(np.int64)
         return [tuple(sorted(tuple(points[i]) for i in face)) for face in np.asarray(mesh.triangles)]
     original = set(keys(o3d.io.read_triangle_mesh(str(source_path))))
-    inferred = np.array([key not in original for key in keys(final_mesh)], dtype=bool)
+    inherited_keys = set()
+    source_provenance = Path(source_path).parent / "procedencia_estimada.npz"
+    if source_provenance.is_file():
+        with np.load(source_provenance, allow_pickle=False) as data:
+            if "inferred_faces" in data.files:
+                expected = str(data["mesh_sha256"].item())
+                if expected != hashlib.sha256(Path(source_path).read_bytes()).hexdigest():
+                    raise RuntimeError("Procedencia de parches incompatible con la malla 13")
+                source_keys = keys(o3d.io.read_triangle_mesh(str(source_path)))
+                flags = np.asarray(data["inferred_faces"], dtype=bool)
+                if flags.shape != (len(source_keys),):
+                    raise RuntimeError("Procedencia de caras con longitud incompatible")
+                inherited_keys = {key for key,flag in zip(source_keys,flags) if flag}
+    inferred = np.array([all_estimated or key not in original or key in inherited_keys
+                         for key in keys(final_mesh)], dtype=bool)
     np.savez_compressed(output / "procedencia_caras_relleno.npz",
         inferred_or_retriangulated=inferred,
         mesh_sha256=np.array(hashlib.sha256((output / "malla_final_topologica.ply").read_bytes()).hexdigest()),
@@ -3282,8 +3296,9 @@ def main():
     ):
         raise RuntimeError("No se pudo guardar malla_final_topologica.ply")
 
-    if args.fill_existing_holes:
-        save_inferred_face_provenance(mesh_path, final_mesh, output)
+    all_estimated = bool(mesh_summary_info.get("estimated_completion", {}).get("all_faces_are_estimated", False))
+    if args.fill_existing_holes or all_estimated or mesh_summary_info.get("estimated_completion", {}).get("has_estimated_patches", False):
+        save_inferred_face_provenance(mesh_path, final_mesh, output, all_estimated=all_estimated)
 
     # CSV componentes.
     component_csv = output / "analisis_componentes_14.csv"
@@ -3390,6 +3405,7 @@ def main():
     )
 
     summary = {
+        "estimated_completion": mesh_summary_info.get("estimated_completion", {}),
         "schema_version": "1.6",
         "method": (
             "pose_diverse_evidence_aware_component_cleanup_"
