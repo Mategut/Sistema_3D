@@ -507,6 +507,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--contact-band-horizontal-margin-px",
         type=int,
         default=10,
+        help=(
+            "Margen lateral de la banda UNKNOWN en píxeles rectificados. "
+            "Amplía la zona evaluable sin aceptar automáticamente sus píxeles "
+            "como objeto."
+        ),
     )
     p.add_argument(
         "--contact-band-vertical-gap-px",
@@ -1102,12 +1107,55 @@ def _column_bounds(mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray
     return top, bottom, valid
 
 
+def visual_contact_extension(object_seed, support_mask, roi, evidence, exclusion):
+    """Zona candidata conectada al cuerpo; nunca una máscara de objeto aceptada.
+
+    La diferencia contra el fondo y los gradientes delimitan la región.
+    Las sombras y el hardware son barreras; no se rellena una envolvente convexa.
+    """
+    seed = (np.asarray(object_seed) > 0) & (roi > 0)
+    support = (support_mask > 0) & (roi > 0)
+    ys, xs = np.nonzero(seed)
+    empty = np.zeros(support.shape, np.uint8)
+    if xs.size < 100:
+        return empty, {"status": "insufficient_seed", "added_candidate_pixels": 0}
+    width = int(xs.max() - xs.min() + 1)
+    margin = int(np.clip(round(0.02 * width), 3, 20))
+    shadow = np.asarray(evidence["shadow_mask"]).astype(bool)
+    blocked = (np.asarray(exclusion) > 0) | shadow | (roi == 0)
+    # Exigir diferencia visual; un borde aislado del plato no basta.
+    visual = (np.asarray(evidence["weak"]).astype(bool)
+              | np.asarray(evidence["strong"]).astype(bool))
+    structural = ((np.asarray(evidence["chroma_z"]) >= 3.0)
+                  | (np.asarray(evidence["gradient_z"]) >= 4.0))
+    candidate = seed | (support & visual & structural & ~blocked)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    connected_domain = cv2.morphologyEx(candidate.astype(np.uint8), cv2.MORPH_CLOSE, kernel) > 0
+    connected_domain &= ~blocked
+    connected_domain |= seed
+    _, labels = cv2.connectedComponents(connected_domain.astype(np.uint8), connectivity=8)
+    touched = np.unique(labels[seed])
+    touched = touched[touched != 0]
+    connected = np.isin(labels, touched) & support & ~blocked
+    # Margen proporcional alrededor del contorno real, no de su rectángulo.
+    expanded = cv2.dilate(connected.astype(np.uint8), cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (2 * margin + 1, 2 * margin + 1))) > 0
+    expanded &= support & ~blocked
+    return expanded.astype(np.uint8) * 255, {
+        "status": "active", "seed_width_px": width, "margin_px": margin,
+        "connected_visual_pixels": int(np.count_nonzero(connected)),
+        "added_candidate_pixels": int(np.count_nonzero(expanded)),
+        "policy": "visual_contour_candidates_only_no_depth_no_automatic_acceptance",
+    }
+
+
 def build_contact_ambiguity_band(
     support_mask: np.ndarray,
     roi: np.ndarray,
     object_seed: np.ndarray,
     args,
     support_evidence: Optional[np.ndarray] = None,
+    visual_extension: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
     """Construye una banda UNKNOWN donde objeto y soporte pueden solaparse.
 
@@ -1301,6 +1349,12 @@ def build_contact_ambiguity_band(
                 support.astype(np.uint8) * 255,
             )
 
+    adaptive_added = 0
+    if visual_extension is not None:
+        extension = (np.asarray(visual_extension) > 0) & support
+        adaptive_added = int(np.count_nonzero(extension & (unknown == 0)))
+        unknown[extension] = 255
+
     locked = (support & (unknown == 0)).astype(np.uint8) * 255
 
     return (
@@ -1309,6 +1363,7 @@ def build_contact_ambiguity_band(
         {
             "status": "ok",
             "contact_columns": int(selected_columns),
+            "adaptive_visual_added_pixels": adaptive_added,
             "evidence_extension_columns": int(evidence_columns_count),
             "evidence_extension_added_pixels": int(evidence_added_pixels),
             "unknown_pixels": int(np.count_nonzero(unknown)),
@@ -3053,6 +3108,38 @@ def protect_support_rim_near_object(
     )
 
 
+def refine_contact_by_visual_edges(image, background, mask, support_mask):
+    """Refinamiento por apariencia/bordes, solo dentro del soporte.
+
+    Conserva el cuerpo superior. No añade píxeles ni usa profundidad.
+    La comparación con el fondo orienta etiquetas probables, nunca un veto.
+    """
+    support = support_mask > 0
+    body = (mask > 0) & ~support
+    sure = cv2.erode(body.astype(np.uint8), np.ones((7, 7), np.uint8)) > 0
+    if np.count_nonzero(sure) < 100:
+        return mask.copy(), {"status": "insufficient_body"}
+    labels = np.full(mask.shape, cv2.GC_BGD, np.uint8)
+    domain = cv2.dilate((mask > 0).astype(np.uint8), np.ones((15, 15), np.uint8)) > 0
+    labels[domain] = cv2.GC_PR_BGD
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
+    back = cv2.cvtColor(background, cv2.COLOR_BGR2LAB).astype(np.float32)
+    chroma_change = np.linalg.norm(lab[:, :, 1:] - back[:, :, 1:], axis=2)
+    labels[(mask > 0) & (chroma_change > 6.0)] = cv2.GC_PR_FGD
+    labels[body] = cv2.GC_PR_FGD
+    labels[sure] = cv2.GC_FGD
+    # GrabCut penaliza romper continuidad de apariencia y favorece bordes.
+    smooth = cv2.GaussianBlur(image, (5, 5), 0)
+    cv2.setRNGSeed(0)
+    cv2.grabCut(smooth, labels, None, np.zeros((1,65), np.float64),
+                np.zeros((1,65), np.float64), 5, cv2.GC_INIT_WITH_MASK)
+    accepted = (labels == cv2.GC_FGD) | (labels == cv2.GC_PR_FGD)
+    result = mask.copy()
+    result[support & ~accepted] = 0
+    return result, {"status": "active", "removed_pixels": int(np.count_nonzero((mask > 0) & (result == 0))),
+                    "depth_used": False, "outside_support_unchanged": True}
+
+
 @operacion("Crear silueta y resolver contacto con soporte")
 def create_silhouette(
     image: np.ndarray,
@@ -3211,6 +3298,10 @@ def create_silhouette(
         args,
     )
 
+    adaptive_contact_extension, adaptive_contact_diag = visual_contact_extension(
+        object_seed_for_support, support_mask, roi, evidence, support_hardware_exclusion
+    )
+
     (
         support_contact_unknown,
         support_background_locked,
@@ -3221,7 +3312,9 @@ def create_silhouette(
         object_seed_for_support,
         args,
         support_evidence=support_occlusion_strict,
+        visual_extension=adaptive_contact_extension,
     )
+    support_contact_band_diag["adaptive_visual_extension"] = adaptive_contact_diag
 
     support_search_bool = support_contact_unknown > 0
     support_strict_bool = support_occlusion_strict > 0
@@ -3418,6 +3511,8 @@ def create_silhouette(
         roi,
     )
 
+    mask, edge_cut_diag = refine_contact_by_visual_edges(image, background, mask, support_mask)
+
     area = int(np.count_nonzero(mask))
 
     ys, xs = np.nonzero(mask)
@@ -3433,6 +3528,7 @@ def create_silhouette(
 
     diagnostics = {
         **roi_diag,
+        "contact_edge_refinement": edge_cut_diag,
         "noise_scales": evidence["noise_scales"],
         "area_pixels": area,
         "area_ratio": area / float(h * w),
@@ -3496,6 +3592,7 @@ def create_silhouette(
         "support_occlusion_strict": support_occlusion_strict,
         "support_occlusion_search": support_contact_unknown,
         "support_contact_unknown": support_contact_unknown,
+        "adaptive_contact_extension": adaptive_contact_extension,
         "support_contact_recovered": support_contact_recovered,
         "support_contact_trimap": support_contact_trimap,
         "support_contact_allowed": support_contact_allowed,
@@ -4075,6 +4172,10 @@ def main() -> int:
         imwrite_checked(str(support_occlusion_strict_path), debug["support_occlusion_strict"])
         imwrite_checked(str(support_occlusion_search_path), debug["support_occlusion_search"])
         imwrite_checked(str(support_background_locked_path), debug["support_background_locked"])
+        imwrite_checked(
+            str(output_dir / f"{stem}_debug_adaptive_contact_extension.png"),
+            debug["adaptive_contact_extension"],
+        )
         imwrite_checked(str(support_seed_path), debug["object_seed_for_support"])
 
         imwrite_checked(
