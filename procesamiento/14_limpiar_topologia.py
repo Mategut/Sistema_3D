@@ -2451,6 +2451,7 @@ def close_repair_boundaries(
         info["reason"] = "intersecciones_previas_pendientes_no_se_anade_superficie"
         return p, t, c, info
     original_count = len(t)
+    observed_rim_tree = None
     # Los pequeños se procesan primero; los controles incluyen parches ya aceptados.
     loops.sort(key=lambda ids: float(np.linalg.norm(np.ptp(p[ids], axis=0))))
     for number, loop in enumerate(loops):
@@ -2485,7 +2486,10 @@ def close_repair_boundaries(
                 # cerrar si su borde sigue rodeado por evidencia observacional
                 # pose-diversa. Así no se rellena una región que 11/12 dejó
                 # deliberadamente sin identificar por conflicto entre capas.
-                rim_d, rim_i = cKDTree(cloud_points).query(rim, k=1, workers=query_threads())
+                # La nube observada no cambia al aceptar parches de malla.
+                if observed_rim_tree is None:
+                    observed_rim_tree = cKDTree(cloud_points)
+                rim_d, rim_i = observed_rim_tree.query(rim, k=1, workers=query_threads())
                 rim_ok = (
                     (rim_d <= 1.75 * spacing)
                     & (cloud_confidence[rim_i] >= 0.55)

@@ -90,7 +90,10 @@ def ejecutar_bloques(worker, context, outputs, count, block, label):
     if not tasks:
         return
     requested = max(1, int(os.environ.get("SISTEMA3D_WORKERS", cpu_threads())))
-    workers = _memory_workers(context, requested, len(tasks), 256)
+    # Contexto privado por proceso + arrays temporales + importaciones.
+    context_bytes = _serialized_size(context)
+    memory_workers = max(1, int(_worker_memory_budget() / max(256 * 1024**2, 3 * context_bytes)))
+    workers = min(requested, memory_workers, len(tasks))
     if count < 1500:
         workers = 1
     start = time.perf_counter()
@@ -154,7 +157,9 @@ def ejecutar_items(worker, context, tasks, label, reserve_mb=512):
     if not tasks:
         return []
     requested = max(1, int(os.environ.get("SISTEMA3D_WORKERS", cpu_threads())))
-    workers = _memory_workers(context, requested, len(tasks), reserve_mb)
+    context_bytes = _serialized_size(context)
+    budget = max(int(reserve_mb) * 1024**2, 3 * context_bytes)
+    workers = min(requested, len(tasks), max(1, int(_worker_memory_budget() / budget)))
     start = time.perf_counter()
     print(f"[PROGRESO] {label}: {len(tasks)} tareas | {workers} procesos", flush=True)
     results = [None] * len(tasks)
@@ -222,36 +227,6 @@ def _worker_memory_budget():
     """
     available = _available_memory()
     return max(0, min(int(0.85 * available), available - 1024**3))
-
-
-def _memory_workers(context, requested, task_count, reserve_mb):
-    """Estima páginas compartidas una vez y memoria privada por trabajador.
-
-    Mantiene margen para temporales y copy-on-write; no mide el pico real.
-    SISTEMA3D_WORKER_RESERVE_MB permite aumentar la reserva por proceso.
-    """
-    import numpy as np
-    shared = {}
-    def transport(value):
-        if isinstance(value, np.ndarray) and not value.dtype.hasobject and value.nbytes >= 1024**2:
-            shared[id(value)] = value.nbytes
-            return None
-        if isinstance(value, dict):
-            return {k: transport(v) for k, v in value.items()}
-        if isinstance(value, list):
-            return [transport(v) for v in value]
-        if isinstance(value, tuple):
-            return tuple(transport(v) for v in value)
-        return value
-    private_bytes = _serialized_size(transport(context))
-    shared_bytes = sum(shared.values())
-    reserve = max(float(reserve_mb), float(os.environ.get("SISTEMA3D_WORKER_RESERVE_MB", "0"))) * 1024**2
-    private_budget = max(reserve, 3 * private_bytes + shared_bytes // 4)
-    available = max(0, _worker_memory_budget() - shared_bytes)
-    workers = min(requested, task_count, max(1, int(available / max(1, private_budget))))
-    print(f"[MEMORIA] Contexto compartido: {shared_bytes / 1024**2:.0f} MiB | "
-          f"reserva por proceso: {private_budget / 1024**2:.0f} MiB | procesos: {workers}", flush=True)
-    return workers
 
 
 def _serialized_size(value):

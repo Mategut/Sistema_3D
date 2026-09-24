@@ -3712,6 +3712,465 @@ def session_quality(
 # ---------------------------------------------------------------------------
 
 
+def _process_mask_view(task):
+    from utilidades_rendimiento import contexto
+    ctx = contexto()
+    args = ctx["args"]
+    source_dir, output_dir = ctx["source_dir"], ctx["output_dir"]
+    background, support_mask = ctx["background"], ctx["support_mask"]
+    background_disparity = ctx["background_disparity"]
+    total_views = ctx["total_views"]
+    index, view = task
+    stem = str(view["stem"])
+    angle = float(parse_angle(stem))
+
+    image_path = source_dir / f"{stem}_rect_L.png"
+
+    image = cv2.imread(
+        str(image_path),
+        cv2.IMREAD_COLOR,
+    )
+
+    if image is None:
+        print(f"[ERROR] " f"No se pudo leer " f"{image_path}")
+        return None
+
+    if image.shape != background.shape:
+        raise ValueError(
+            f"{stem}: imagen " f"{image.shape} y fondo " f"{background.shape} " "no coinciden."
+        )
+
+    rect_valid_path = source_dir / f"{stem}_rect_valid_mask.png"
+
+    rect_valid = cv2.imread(
+        str(rect_valid_path),
+        cv2.IMREAD_GRAYSCALE,
+    )
+
+    if rect_valid is None:
+        raise FileNotFoundError("Falta rect_valid_mask: " f"{rect_valid_path}")
+
+    disparity = None
+    confidence = None
+    lr_error = None
+
+    disparity_path = source_dir / f"{stem}_disparity_lr.npy"
+    if not disparity_path.is_file():
+        disparity_path = source_dir / f"{stem}_disparity.npy"
+
+    confidence_path = source_dir / f"{stem}_confidence.npy"
+    lr_error_path = source_dir / f"{stem}_lr_error.npy"
+
+    try:
+        if disparity_path.is_file():
+            disparity = np.load(str(disparity_path)).astype(np.float32)
+        if confidence_path.is_file():
+            confidence = np.load(str(confidence_path)).astype(np.float32)
+        if lr_error_path.is_file():
+            lr_error = np.load(str(lr_error_path)).astype(np.float32)
+    except Exception as exc:
+        print(f"[WARN] {stem}: no se pudieron cargar auxiliares estéreo: {exc}")
+        disparity = None
+        confidence = None
+        lr_error = None
+
+    (
+        mask,
+        probability,
+        diagnostics,
+        debug,
+    ) = create_silhouette(
+        image,
+        background,
+        rect_valid,
+        support_mask,
+        args,
+        disparity=disparity,
+        background_disparity=background_disparity,
+        confidence=confidence,
+        lr_error=lr_error,
+    )
+
+    area_ratio = float(diagnostics["area_ratio"])
+
+    reasons = []
+
+    if area_ratio < args.minimum_area_ratio:
+        reasons.append("Máscara demasiado pequeña: " f"{area_ratio:.2%}.")
+
+    if area_ratio > args.maximum_area_ratio:
+        reasons.append("Máscara demasiado grande: " f"{area_ratio:.2%}.")
+
+    if diagnostics["centroid_px"] is None:
+        reasons.append("Máscara vacía.")
+
+    # Salidas principales, compatibles con 04.
+    mask_path = output_dir / f"{stem}_silhouette_mask.png"
+    prob_path = output_dir / f"{stem}_silhouette_probability.npy"
+    prob_vis_path = output_dir / f"{stem}_silhouette_probability_vis.png"
+    overlay_path = output_dir / f"{stem}_silhouette_overlay.png"
+    stats_path = output_dir / f"{stem}_silhouette_stats.json"
+
+    imwrite_checked(
+        str(mask_path),
+        mask,
+    )
+    np.save(
+        str(prob_path),
+        probability,
+    )
+    imwrite_checked(
+        str(prob_vis_path),
+        scalar_visualization(
+            probability,
+            np.isfinite(probability),
+            cv2.COLORMAP_VIRIDIS,
+        ),
+    )
+    imwrite_checked(
+        str(overlay_path),
+        overlay_mask(
+            image,
+            mask,
+            (f"{angle:05.1f}° " "| silueta V5.3 local"),
+            probability,
+        ),
+    )
+
+    # Diagnósticos nuevos.
+    roi_path = output_dir / f"{stem}_debug_roi.png"
+    anchor_path = output_dir / f"{stem}_debug_anchor.png"
+    shadow_path = output_dir / f"{stem}_debug_shadow_rejected.png"
+    support_path = output_dir / f"{stem}_debug_support_hardware.png"
+    support_hardware_exclusion_path = (
+        output_dir / f"{stem}_debug_support_hardware_exclusion.png"
+    )
+    support_hardware_exclusion_overlay_path = (
+        output_dir / f"{stem}_debug_support_hardware_exclusion_overlay.png"
+    )
+    support_rim_guard_path = output_dir / f"{stem}_debug_support_rim_guard.png"
+    support_rim_guard_overlay_path = (
+        output_dir / f"{stem}_debug_support_rim_guard_overlay.png"
+    )
+    capture_volume_path = output_dir / f"{stem}_debug_capture_volume.png"
+    effective_shadow_path = output_dir / f"{stem}_debug_effective_shadow.png"
+    graphcut_recovered_path = output_dir / f"{stem}_debug_graphcut_recovered.png"
+    graphcut_trimap_path = output_dir / f"{stem}_debug_graphcut_trimap.png"
+    support_shadow_path = output_dir / f"{stem}_debug_support_shadow_rejected.png"
+    support_object_path = output_dir / f"{stem}_debug_support_object_evidence.png"
+    support_occlusion_strict_path = output_dir / f"{stem}_debug_support_occlusion_strict.png"
+    support_occlusion_search_path = output_dir / f"{stem}_debug_support_occlusion_search.png"
+    support_background_locked_path = output_dir / f"{stem}_debug_support_background_locked.png"
+    support_seed_path = output_dir / f"{stem}_debug_support_object_seed.png"
+    support_occlusion_overlay_path = output_dir / f"{stem}_debug_support_occlusion_overlay.png"
+    support_contact_unknown_path = output_dir / f"{stem}_debug_support_contact_unknown.png"
+    support_contact_recovered_path = output_dir / f"{stem}_debug_support_contact_recovered.png"
+    support_contact_trimap_path = output_dir / f"{stem}_debug_support_contact_trimap.png"
+    support_contact_allowed_path = output_dir / f"{stem}_debug_support_contact_allowed.png"
+    support_contact_depth_weak_path = (
+        output_dir / f"{stem}_debug_support_contact_depth_weak.png"
+    )
+    support_contact_depth_strong_path = (
+        output_dir / f"{stem}_debug_support_contact_depth_strong.png"
+    )
+    support_contact_depth_delta_path = (
+        output_dir / f"{stem}_debug_support_contact_depth_delta.png"
+    )
+    candidate_path = output_dir / f"{stem}_debug_candidate_before_components.png"
+    adaptive_candidate_path = output_dir / f"{stem}_debug_adaptive_visual_candidate.png"
+
+    debug_roi = image.copy()
+    contours, _ = cv2.findContours(
+        debug["roi"],
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(
+        debug_roi,
+        contours,
+        -1,
+        (0, 255, 255),
+        3,
+    )
+    imwrite_checked(
+        str(roi_path),
+        debug_roi,
+    )
+
+    debug_anchor = image.copy()
+    contours, _ = cv2.findContours(
+        debug["anchor"],
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(
+        debug_anchor,
+        contours,
+        -1,
+        (255, 0, 255),
+        3,
+    )
+    imwrite_checked(
+        str(anchor_path),
+        debug_anchor,
+    )
+
+    shadow_overlay = image.copy()
+    tint = np.zeros_like(image)
+    tint[:, :, 2] = debug["shadow_mask"]
+    shadow_overlay = cv2.addWeighted(
+        shadow_overlay,
+        1.0,
+        tint,
+        0.50,
+        0.0,
+    )
+    imwrite_checked(
+        str(shadow_path),
+        shadow_overlay,
+    )
+    imwrite_checked(
+        str(candidate_path),
+        debug["candidate"],
+    )
+    imwrite_checked(
+        str(adaptive_candidate_path),
+        debug["adaptive_visual_candidate"],
+    )
+    imwrite_checked(str(support_path), debug["support_mask"])
+    imwrite_checked(
+        str(support_hardware_exclusion_path),
+        debug["support_hardware_exclusion"],
+    )
+
+    hardware_overlay = image.copy()
+    skirt_bool = debug["support_hardware_skirt"] > 0
+    if np.any(skirt_bool):
+        magenta = np.array([255, 0, 255], dtype=np.float32)
+        base = hardware_overlay[skirt_bool].astype(np.float32)
+        hardware_overlay[skirt_bool] = np.clip(
+            0.55 * base + 0.45 * magenta, 0, 255
+        ).astype(np.uint8)
+
+    rim_bool = debug["support_rim_guard"] > 0
+    if np.any(rim_bool):
+        green = np.array([0, 255, 0], dtype=np.float32)
+        base = hardware_overlay[rim_bool].astype(np.float32)
+        hardware_overlay[rim_bool] = np.clip(
+            0.55 * base + 0.45 * green, 0, 255
+        ).astype(np.uint8)
+
+    # Contorno verde exterior = superficie útil + filo fino. La máscara
+    # support_mask original sigue intacta internamente.
+    support_plus_rim = cv2.bitwise_or(
+        debug["support_mask"],
+        debug["support_rim_guard"],
+    )
+    support_contours, _ = cv2.findContours(
+        support_plus_rim,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(
+        hardware_overlay,
+        support_contours,
+        -1,
+        (0, 255, 0),
+        2,
+    )
+    imwrite_checked(
+        str(support_hardware_exclusion_overlay_path),
+        hardware_overlay,
+    )
+
+    imwrite_checked(str(support_rim_guard_path), debug["support_rim_guard"])
+    rim_overlay = image.copy()
+    rim_tint = np.zeros_like(image)
+    rim_tint[:, :, 1] = debug["support_rim_guard"]
+    rim_overlay = cv2.addWeighted(rim_overlay, 1.0, rim_tint, 0.45, 0.0)
+    rim_contours, _ = cv2.findContours(
+        support_plus_rim,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(rim_overlay, rim_contours, -1, (0, 255, 0), 2)
+    imwrite_checked(str(support_rim_guard_overlay_path), rim_overlay)
+
+    imwrite_checked(str(capture_volume_path), debug["roi"])
+    imwrite_checked(str(effective_shadow_path), debug["effective_shadow_mask"])
+    imwrite_checked(
+        str(graphcut_recovered_path),
+        debug["graphcut_recovered"],
+    )
+    imwrite_checked(
+        str(graphcut_trimap_path),
+        graphcut_trimap_visualization(debug["graphcut_trimap"]),
+    )
+    imwrite_checked(str(support_shadow_path), debug["support_shadow_reject"])
+    imwrite_checked(str(support_object_path), debug["support_object_evidence"])
+    imwrite_checked(str(support_occlusion_strict_path), debug["support_occlusion_strict"])
+    imwrite_checked(str(support_occlusion_search_path), debug["support_occlusion_search"])
+    imwrite_checked(str(support_background_locked_path), debug["support_background_locked"])
+    imwrite_checked(
+        str(output_dir / f"{stem}_debug_adaptive_contact_extension.png"),
+        debug["adaptive_contact_extension"],
+    )
+    imwrite_checked(str(support_seed_path), debug["object_seed_for_support"])
+
+    imwrite_checked(
+        str(support_contact_unknown_path),
+        debug["support_contact_unknown"],
+    )
+    imwrite_checked(
+        str(support_contact_recovered_path),
+        debug["support_contact_recovered"],
+    )
+    imwrite_checked(
+        str(support_contact_trimap_path),
+        graphcut_trimap_visualization(debug["support_contact_trimap"]),
+    )
+    imwrite_checked(
+        str(support_contact_allowed_path),
+        debug["support_contact_allowed"],
+    )
+    imwrite_checked(
+        str(support_contact_depth_weak_path),
+        debug["support_contact_depth_weak"],
+    )
+    imwrite_checked(
+        str(support_contact_depth_strong_path),
+        debug["support_contact_depth_strong"],
+    )
+    imwrite_checked(
+        str(support_contact_depth_delta_path),
+        scalar_visualization(
+            debug["support_contact_depth_delta"],
+            np.isfinite(debug["support_contact_depth_delta"]),
+            cv2.COLORMAP_TURBO,
+        ),
+    )
+
+    support_overlay = image.copy()
+    tint = np.zeros_like(image)
+    tint[:, :, 1] = debug["support_occlusion_search"]
+    tint[:, :, 2] = debug["support_background_locked"]
+    support_overlay = cv2.addWeighted(support_overlay, 0.82, tint, 0.35, 0.0)
+
+    # Mostrar también en ESTE mismo diagnóstico la falda de hardware.
+    # Antes la exclusión sí se aplicaba a la máscara final, pero este
+    # overlay no la dibujaba, por lo que visualmente parecía que nada
+    # había cambiado. Se usa magenta para distinguirla del rojo/verde
+    # ya empleados por la lógica de oclusión del soporte.
+    skirt_bool = debug["support_hardware_skirt"] > 0
+    if np.any(skirt_bool):
+        hw_color = np.array([255, 0, 255], dtype=np.float32)  # BGR: magenta
+        base = support_overlay[skirt_bool].astype(np.float32)
+        support_overlay[skirt_bool] = np.clip(
+            0.55 * base + 0.45 * hw_color,
+            0,
+            255,
+        ).astype(np.uint8)
+
+    # El filo fino se muestra en verde porque forma parte del hardware
+    # visible del plato que queremos cubrir. support_mask no se altera: la
+    # unión solo existe para diagnóstico y veto exterior.
+    rim_bool = debug["support_rim_guard"] > 0
+    if np.any(rim_bool):
+        rim_color = np.array([0, 255, 0], dtype=np.float32)
+        base = support_overlay[rim_bool].astype(np.float32)
+        support_overlay[rim_bool] = np.clip(
+            0.55 * base + 0.45 * rim_color,
+            0,
+            255,
+        ).astype(np.uint8)
+
+    support_plus_rim = cv2.bitwise_or(
+        debug["support_mask"],
+        debug["support_rim_guard"],
+    )
+    support_contours, _ = cv2.findContours(
+        support_plus_rim,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(support_overlay, support_contours, -1, (0, 255, 0), 2)
+
+    contours, _ = cv2.findContours(
+        debug["support_occlusion_strict"],
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    cv2.drawContours(support_overlay, contours, -1, (0, 255, 255), 2)
+    imwrite_checked(
+        str(support_occlusion_overlay_path),
+        support_overlay,
+    )
+
+    record = {
+        "stem": stem,
+        "angle_deg": angle,
+        "source_local_quality": (view.get("local_quality")),
+        "source_session_quality": (view.get("session_quality")),
+        **diagnostics,
+        "local_quality": ("accepted" if not reasons else "warning"),
+        "local_reasons": reasons,
+        "session_quality": ("pending"),
+        "session_reasons": [],
+        "outputs": {
+            "mask": str(mask_path),
+            "probability": str(prob_path),
+            "overlay": str(overlay_path),
+            "debug_roi": str(roi_path),
+            "debug_anchor": str(anchor_path),
+            "debug_shadow": str(shadow_path),
+            "debug_candidate": str(candidate_path),
+            "debug_support_hardware_exclusion": str(
+                support_hardware_exclusion_path
+            ),
+            "debug_support_hardware_exclusion_overlay": str(
+                support_hardware_exclusion_overlay_path
+            ),
+            "debug_support_rim_guard": str(support_rim_guard_path),
+            "debug_support_rim_guard_overlay": str(support_rim_guard_overlay_path),
+            "debug_support_occlusion_strict": str(support_occlusion_strict_path),
+            "debug_support_occlusion_search": str(support_occlusion_search_path),
+            "debug_support_background_locked": str(support_background_locked_path),
+            "debug_support_occlusion_overlay": str(support_occlusion_overlay_path),
+            "debug_support_contact_unknown": str(support_contact_unknown_path),
+            "debug_support_contact_recovered": str(support_contact_recovered_path),
+            "debug_support_contact_trimap": str(support_contact_trimap_path),
+            "debug_support_contact_allowed": str(support_contact_allowed_path),
+            "debug_support_contact_depth_weak": str(support_contact_depth_weak_path),
+            "debug_support_contact_depth_strong": str(support_contact_depth_strong_path),
+            "debug_support_contact_depth_delta": str(support_contact_depth_delta_path),
+        },
+    }
+
+    save_json(
+        stats_path,
+        record,
+    )
+
+
+
+
+    print(
+        f"[{index:02d}/"
+        f"{total_views:02d}] "
+        f"{angle:05.1f}° | "
+        f"área={area_ratio:.2%} | "
+        f"sombra_rechazada="
+        f"{diagnostics['shadow_pixels_rejected']} px | "
+        f"componentes="
+        f"{diagnostics['component_selection']['component_count']} "
+        f"-> "
+        f"{len(diagnostics['component_selection']['selected_labels'])} | "
+        f"{record['local_quality']}"
+    )
+
+    return record, overlay_path
+
+
 def main() -> int:
     """Genera las siluetas del objeto y sus diagnósticos por vista y sesión."""
     args = build_parser().parse_args()
@@ -3878,456 +4337,16 @@ def main() -> int:
     )
     print("Disparidad: SOLO verificación local dentro del contacto; nunca detector global.")
 
-    for index, view in enumerate(
-        views,
-        start=1,
-    ):
-        stem = str(view["stem"])
-        angle = float(parse_angle(stem))
-
-        image_path = source_dir / f"{stem}_rect_L.png"
-
-        image = cv2.imread(
-            str(image_path),
-            cv2.IMREAD_COLOR,
-        )
-
-        if image is None:
-            print(f"[ERROR] " f"No se pudo leer " f"{image_path}")
-            continue
-
-        if image.shape != background.shape:
-            raise ValueError(
-                f"{stem}: imagen " f"{image.shape} y fondo " f"{background.shape} " "no coinciden."
-            )
-
-        rect_valid_path = source_dir / f"{stem}_rect_valid_mask.png"
-
-        rect_valid = cv2.imread(
-            str(rect_valid_path),
-            cv2.IMREAD_GRAYSCALE,
-        )
-
-        if rect_valid is None:
-            raise FileNotFoundError("Falta rect_valid_mask: " f"{rect_valid_path}")
-
-        disparity = None
-        confidence = None
-        lr_error = None
-
-        disparity_path = source_dir / f"{stem}_disparity_lr.npy"
-        if not disparity_path.is_file():
-            disparity_path = source_dir / f"{stem}_disparity.npy"
-
-        confidence_path = source_dir / f"{stem}_confidence.npy"
-        lr_error_path = source_dir / f"{stem}_lr_error.npy"
-
-        try:
-            if disparity_path.is_file():
-                disparity = np.load(str(disparity_path)).astype(np.float32)
-            if confidence_path.is_file():
-                confidence = np.load(str(confidence_path)).astype(np.float32)
-            if lr_error_path.is_file():
-                lr_error = np.load(str(lr_error_path)).astype(np.float32)
-        except Exception as exc:
-            print(f"[WARN] {stem}: no se pudieron cargar auxiliares estéreo: {exc}")
-            disparity = None
-            confidence = None
-            lr_error = None
-
-        (
-            mask,
-            probability,
-            diagnostics,
-            debug,
-        ) = create_silhouette(
-            image,
-            background,
-            rect_valid,
-            support_mask,
-            args,
-            disparity=disparity,
-            background_disparity=background_disparity,
-            confidence=confidence,
-            lr_error=lr_error,
-        )
-
-        area_ratio = float(diagnostics["area_ratio"])
-
-        reasons = []
-
-        if area_ratio < args.minimum_area_ratio:
-            reasons.append("Máscara demasiado pequeña: " f"{area_ratio:.2%}.")
-
-        if area_ratio > args.maximum_area_ratio:
-            reasons.append("Máscara demasiado grande: " f"{area_ratio:.2%}.")
-
-        if diagnostics["centroid_px"] is None:
-            reasons.append("Máscara vacía.")
-
-        # Salidas principales, compatibles con 04.
-        mask_path = output_dir / f"{stem}_silhouette_mask.png"
-        prob_path = output_dir / f"{stem}_silhouette_probability.npy"
-        prob_vis_path = output_dir / f"{stem}_silhouette_probability_vis.png"
-        overlay_path = output_dir / f"{stem}_silhouette_overlay.png"
-        stats_path = output_dir / f"{stem}_silhouette_stats.json"
-
-        imwrite_checked(
-            str(mask_path),
-            mask,
-        )
-        np.save(
-            str(prob_path),
-            probability,
-        )
-        imwrite_checked(
-            str(prob_vis_path),
-            scalar_visualization(
-                probability,
-                np.isfinite(probability),
-                cv2.COLORMAP_VIRIDIS,
-            ),
-        )
-        imwrite_checked(
-            str(overlay_path),
-            overlay_mask(
-                image,
-                mask,
-                (f"{angle:05.1f}° " "| silueta V5.3 local"),
-                probability,
-            ),
-        )
-
-        # Diagnósticos nuevos.
-        roi_path = output_dir / f"{stem}_debug_roi.png"
-        anchor_path = output_dir / f"{stem}_debug_anchor.png"
-        shadow_path = output_dir / f"{stem}_debug_shadow_rejected.png"
-        support_path = output_dir / f"{stem}_debug_support_hardware.png"
-        support_hardware_exclusion_path = (
-            output_dir / f"{stem}_debug_support_hardware_exclusion.png"
-        )
-        support_hardware_exclusion_overlay_path = (
-            output_dir / f"{stem}_debug_support_hardware_exclusion_overlay.png"
-        )
-        support_rim_guard_path = output_dir / f"{stem}_debug_support_rim_guard.png"
-        support_rim_guard_overlay_path = (
-            output_dir / f"{stem}_debug_support_rim_guard_overlay.png"
-        )
-        capture_volume_path = output_dir / f"{stem}_debug_capture_volume.png"
-        effective_shadow_path = output_dir / f"{stem}_debug_effective_shadow.png"
-        graphcut_recovered_path = output_dir / f"{stem}_debug_graphcut_recovered.png"
-        graphcut_trimap_path = output_dir / f"{stem}_debug_graphcut_trimap.png"
-        support_shadow_path = output_dir / f"{stem}_debug_support_shadow_rejected.png"
-        support_object_path = output_dir / f"{stem}_debug_support_object_evidence.png"
-        support_occlusion_strict_path = output_dir / f"{stem}_debug_support_occlusion_strict.png"
-        support_occlusion_search_path = output_dir / f"{stem}_debug_support_occlusion_search.png"
-        support_background_locked_path = output_dir / f"{stem}_debug_support_background_locked.png"
-        support_seed_path = output_dir / f"{stem}_debug_support_object_seed.png"
-        support_occlusion_overlay_path = output_dir / f"{stem}_debug_support_occlusion_overlay.png"
-        support_contact_unknown_path = output_dir / f"{stem}_debug_support_contact_unknown.png"
-        support_contact_recovered_path = output_dir / f"{stem}_debug_support_contact_recovered.png"
-        support_contact_trimap_path = output_dir / f"{stem}_debug_support_contact_trimap.png"
-        support_contact_allowed_path = output_dir / f"{stem}_debug_support_contact_allowed.png"
-        support_contact_depth_weak_path = (
-            output_dir / f"{stem}_debug_support_contact_depth_weak.png"
-        )
-        support_contact_depth_strong_path = (
-            output_dir / f"{stem}_debug_support_contact_depth_strong.png"
-        )
-        support_contact_depth_delta_path = (
-            output_dir / f"{stem}_debug_support_contact_depth_delta.png"
-        )
-        candidate_path = output_dir / f"{stem}_debug_candidate_before_components.png"
-        adaptive_candidate_path = output_dir / f"{stem}_debug_adaptive_visual_candidate.png"
-
-        debug_roi = image.copy()
-        contours, _ = cv2.findContours(
-            debug["roi"],
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE,
-        )
-        cv2.drawContours(
-            debug_roi,
-            contours,
-            -1,
-            (0, 255, 255),
-            3,
-        )
-        imwrite_checked(
-            str(roi_path),
-            debug_roi,
-        )
-
-        debug_anchor = image.copy()
-        contours, _ = cv2.findContours(
-            debug["anchor"],
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE,
-        )
-        cv2.drawContours(
-            debug_anchor,
-            contours,
-            -1,
-            (255, 0, 255),
-            3,
-        )
-        imwrite_checked(
-            str(anchor_path),
-            debug_anchor,
-        )
-
-        shadow_overlay = image.copy()
-        tint = np.zeros_like(image)
-        tint[:, :, 2] = debug["shadow_mask"]
-        shadow_overlay = cv2.addWeighted(
-            shadow_overlay,
-            1.0,
-            tint,
-            0.50,
-            0.0,
-        )
-        imwrite_checked(
-            str(shadow_path),
-            shadow_overlay,
-        )
-        imwrite_checked(
-            str(candidate_path),
-            debug["candidate"],
-        )
-        imwrite_checked(
-            str(adaptive_candidate_path),
-            debug["adaptive_visual_candidate"],
-        )
-        imwrite_checked(str(support_path), debug["support_mask"])
-        imwrite_checked(
-            str(support_hardware_exclusion_path),
-            debug["support_hardware_exclusion"],
-        )
-
-        hardware_overlay = image.copy()
-        skirt_bool = debug["support_hardware_skirt"] > 0
-        if np.any(skirt_bool):
-            magenta = np.array([255, 0, 255], dtype=np.float32)
-            base = hardware_overlay[skirt_bool].astype(np.float32)
-            hardware_overlay[skirt_bool] = np.clip(
-                0.55 * base + 0.45 * magenta, 0, 255
-            ).astype(np.uint8)
-
-        rim_bool = debug["support_rim_guard"] > 0
-        if np.any(rim_bool):
-            green = np.array([0, 255, 0], dtype=np.float32)
-            base = hardware_overlay[rim_bool].astype(np.float32)
-            hardware_overlay[rim_bool] = np.clip(
-                0.55 * base + 0.45 * green, 0, 255
-            ).astype(np.uint8)
-
-        # Contorno verde exterior = superficie útil + filo fino. La máscara
-        # support_mask original sigue intacta internamente.
-        support_plus_rim = cv2.bitwise_or(
-            debug["support_mask"],
-            debug["support_rim_guard"],
-        )
-        support_contours, _ = cv2.findContours(
-            support_plus_rim,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE,
-        )
-        cv2.drawContours(
-            hardware_overlay,
-            support_contours,
-            -1,
-            (0, 255, 0),
-            2,
-        )
-        imwrite_checked(
-            str(support_hardware_exclusion_overlay_path),
-            hardware_overlay,
-        )
-
-        imwrite_checked(str(support_rim_guard_path), debug["support_rim_guard"])
-        rim_overlay = image.copy()
-        rim_tint = np.zeros_like(image)
-        rim_tint[:, :, 1] = debug["support_rim_guard"]
-        rim_overlay = cv2.addWeighted(rim_overlay, 1.0, rim_tint, 0.45, 0.0)
-        rim_contours, _ = cv2.findContours(
-            support_plus_rim,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE,
-        )
-        cv2.drawContours(rim_overlay, rim_contours, -1, (0, 255, 0), 2)
-        imwrite_checked(str(support_rim_guard_overlay_path), rim_overlay)
-
-        imwrite_checked(str(capture_volume_path), debug["roi"])
-        imwrite_checked(str(effective_shadow_path), debug["effective_shadow_mask"])
-        imwrite_checked(
-            str(graphcut_recovered_path),
-            debug["graphcut_recovered"],
-        )
-        imwrite_checked(
-            str(graphcut_trimap_path),
-            graphcut_trimap_visualization(debug["graphcut_trimap"]),
-        )
-        imwrite_checked(str(support_shadow_path), debug["support_shadow_reject"])
-        imwrite_checked(str(support_object_path), debug["support_object_evidence"])
-        imwrite_checked(str(support_occlusion_strict_path), debug["support_occlusion_strict"])
-        imwrite_checked(str(support_occlusion_search_path), debug["support_occlusion_search"])
-        imwrite_checked(str(support_background_locked_path), debug["support_background_locked"])
-        imwrite_checked(
-            str(output_dir / f"{stem}_debug_adaptive_contact_extension.png"),
-            debug["adaptive_contact_extension"],
-        )
-        imwrite_checked(str(support_seed_path), debug["object_seed_for_support"])
-
-        imwrite_checked(
-            str(support_contact_unknown_path),
-            debug["support_contact_unknown"],
-        )
-        imwrite_checked(
-            str(support_contact_recovered_path),
-            debug["support_contact_recovered"],
-        )
-        imwrite_checked(
-            str(support_contact_trimap_path),
-            graphcut_trimap_visualization(debug["support_contact_trimap"]),
-        )
-        imwrite_checked(
-            str(support_contact_allowed_path),
-            debug["support_contact_allowed"],
-        )
-        imwrite_checked(
-            str(support_contact_depth_weak_path),
-            debug["support_contact_depth_weak"],
-        )
-        imwrite_checked(
-            str(support_contact_depth_strong_path),
-            debug["support_contact_depth_strong"],
-        )
-        imwrite_checked(
-            str(support_contact_depth_delta_path),
-            scalar_visualization(
-                debug["support_contact_depth_delta"],
-                np.isfinite(debug["support_contact_depth_delta"]),
-                cv2.COLORMAP_TURBO,
-            ),
-        )
-
-        support_overlay = image.copy()
-        tint = np.zeros_like(image)
-        tint[:, :, 1] = debug["support_occlusion_search"]
-        tint[:, :, 2] = debug["support_background_locked"]
-        support_overlay = cv2.addWeighted(support_overlay, 0.82, tint, 0.35, 0.0)
-
-        # Mostrar también en ESTE mismo diagnóstico la falda de hardware.
-        # Antes la exclusión sí se aplicaba a la máscara final, pero este
-        # overlay no la dibujaba, por lo que visualmente parecía que nada
-        # había cambiado. Se usa magenta para distinguirla del rojo/verde
-        # ya empleados por la lógica de oclusión del soporte.
-        skirt_bool = debug["support_hardware_skirt"] > 0
-        if np.any(skirt_bool):
-            hw_color = np.array([255, 0, 255], dtype=np.float32)  # BGR: magenta
-            base = support_overlay[skirt_bool].astype(np.float32)
-            support_overlay[skirt_bool] = np.clip(
-                0.55 * base + 0.45 * hw_color,
-                0,
-                255,
-            ).astype(np.uint8)
-
-        # El filo fino se muestra en verde porque forma parte del hardware
-        # visible del plato que queremos cubrir. support_mask no se altera: la
-        # unión solo existe para diagnóstico y veto exterior.
-        rim_bool = debug["support_rim_guard"] > 0
-        if np.any(rim_bool):
-            rim_color = np.array([0, 255, 0], dtype=np.float32)
-            base = support_overlay[rim_bool].astype(np.float32)
-            support_overlay[rim_bool] = np.clip(
-                0.55 * base + 0.45 * rim_color,
-                0,
-                255,
-            ).astype(np.uint8)
-
-        support_plus_rim = cv2.bitwise_or(
-            debug["support_mask"],
-            debug["support_rim_guard"],
-        )
-        support_contours, _ = cv2.findContours(
-            support_plus_rim,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE,
-        )
-        cv2.drawContours(support_overlay, support_contours, -1, (0, 255, 0), 2)
-
-        contours, _ = cv2.findContours(
-            debug["support_occlusion_strict"],
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE,
-        )
-        cv2.drawContours(support_overlay, contours, -1, (0, 255, 255), 2)
-        imwrite_checked(
-            str(support_occlusion_overlay_path),
-            support_overlay,
-        )
-
-        record = {
-            "stem": stem,
-            "angle_deg": angle,
-            "source_local_quality": (view.get("local_quality")),
-            "source_session_quality": (view.get("session_quality")),
-            **diagnostics,
-            "local_quality": ("accepted" if not reasons else "warning"),
-            "local_reasons": reasons,
-            "session_quality": ("pending"),
-            "session_reasons": [],
-            "outputs": {
-                "mask": str(mask_path),
-                "probability": str(prob_path),
-                "overlay": str(overlay_path),
-                "debug_roi": str(roi_path),
-                "debug_anchor": str(anchor_path),
-                "debug_shadow": str(shadow_path),
-                "debug_candidate": str(candidate_path),
-                "debug_support_hardware_exclusion": str(
-                    support_hardware_exclusion_path
-                ),
-                "debug_support_hardware_exclusion_overlay": str(
-                    support_hardware_exclusion_overlay_path
-                ),
-                "debug_support_rim_guard": str(support_rim_guard_path),
-                "debug_support_rim_guard_overlay": str(support_rim_guard_overlay_path),
-                "debug_support_occlusion_strict": str(support_occlusion_strict_path),
-                "debug_support_occlusion_search": str(support_occlusion_search_path),
-                "debug_support_background_locked": str(support_background_locked_path),
-                "debug_support_occlusion_overlay": str(support_occlusion_overlay_path),
-                "debug_support_contact_unknown": str(support_contact_unknown_path),
-                "debug_support_contact_recovered": str(support_contact_recovered_path),
-                "debug_support_contact_trimap": str(support_contact_trimap_path),
-                "debug_support_contact_allowed": str(support_contact_allowed_path),
-                "debug_support_contact_depth_weak": str(support_contact_depth_weak_path),
-                "debug_support_contact_depth_strong": str(support_contact_depth_strong_path),
-                "debug_support_contact_depth_delta": str(support_contact_depth_delta_path),
-            },
-        }
-
-        save_json(
-            stats_path,
-            record,
-        )
-
-        records.append(record)
-        preview_paths.append(overlay_path)
-
-        print(
-            f"[{index:02d}/"
-            f"{len(views):02d}] "
-            f"{angle:05.1f}° | "
-            f"área={area_ratio:.2%} | "
-            f"sombra_rechazada="
-            f"{diagnostics['shadow_pixels_rejected']} px | "
-            f"componentes="
-            f"{diagnostics['component_selection']['component_count']} "
-            f"-> "
-            f"{len(diagnostics['component_selection']['selected_labels'])} | "
-            f"{record['local_quality']}"
-        )
+    from utilidades_rendimiento import ejecutar_items
+    results = ejecutar_items(
+        _process_mask_view,
+        {"args": args, "source_dir": source_dir, "output_dir": output_dir,
+         "background": background, "support_mask": support_mask,
+         "background_disparity": background_disparity, "total_views": len(views)},
+        list(enumerate(views, start=1)), "Paso 03: mascaras por vista", reserve_mb=768,
+    )
+    records = [item[0] for item in results if item is not None]
+    preview_paths = [item[1] for item in results if item is not None]
 
     stats = session_quality(
         records,

@@ -3642,33 +3642,28 @@ def main() -> None:
         "solo cuando es fiable."
     )
 
-    for index, (stem, left_path, right_path) in enumerate(
-        pairs,
-        start=1,
-    ):
-        image_l = cv2.imread(
-            str(left_path),
-            cv2.IMREAD_COLOR,
-        )
-        image_r = cv2.imread(
-            str(right_path),
-            cv2.IMREAD_COLOR,
-        )
-
+    from utilidades_rendimiento import prefetch_items
+    def prepare_pair(pair):
+        # Solo operaciones deterministas de preparación. La inferencia y las
+        # decisiones de calidad permanecen en el hilo principal y en su orden.
+        stem, left_path, right_path = pair
+        image_l = cv2.imread(str(left_path), cv2.IMREAD_COLOR)
+        image_r = cv2.imread(str(right_path), cv2.IMREAD_COLOR)
         if image_l is None or image_r is None:
+            return stem, left_path, right_path, None, None
+        rect_l, rect_r = rectify_pair(image_l, image_r, calibration)
+        rect_r = apply_vertical_epipolar_correction(
+            rect_r, epipolar_model, interpolation=cv2.INTER_LINEAR,
+        )
+        return stem, left_path, right_path, rect_l, rect_r
+
+    for index, (stem, left_path, right_path, rect_l, rect_r) in enumerate(
+        prefetch_items(prepare_pair, pairs), start=1
+    ):
+        if rect_l is None or rect_r is None:
             print(f"[WARN] No se pudo leer: {stem}")
             continue
 
-        rect_l, rect_r = rectify_pair(
-            image_l,
-            image_r,
-            calibration,
-        )
-        rect_r = apply_vertical_epipolar_correction(
-            rect_r,
-            epipolar_model,
-            interpolation=cv2.INTER_LINEAR,
-        )
         rect_valid_mask = rect_valid_mask_static.copy()
 
         if args.roi_mode == "adaptive":

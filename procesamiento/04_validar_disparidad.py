@@ -112,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help=(
             "Procesos paralelos por sesión. 0=automático: usa CPU lógica - 2 "
-            "(por ejemplo, 14 workers en una CPU de 16 hilos). "
+            "(por ejemplo, 16 workers en una CPU de 16 hilos). "
             "Usa 1 para ejecución secuencial."
         ),
     )
@@ -1173,28 +1173,31 @@ def build_adjacency(
     silhouette: np.ndarray,
 ) -> Dict[Tuple[int, int], np.ndarray]:
     """Identifica las regiones que comparten frontera en el mapa de etiquetas."""
-    pairs: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
     active = silhouette > 0
+    horizontal = (labels[:, :-1] != labels[:, 1:]) & active[:, :-1] & active[:, 1:]
+    vertical = (labels[:-1, :] != labels[1:, :]) & active[:-1, :] & active[1:, :]
+    hy, hx = np.nonzero(horizontal)
+    vy, vx = np.nonzero(vertical)
+    # Mismo orden que antes: horizontal por filas, después vertical por filas.
+    a = np.concatenate((labels[hy, hx], labels[vy, vx]))
+    b = np.concatenate((labels[hy, hx + 1], labels[vy + 1, vx]))
+    if len(a) == 0:
+        return {}
+    keys = np.column_stack((np.minimum(a, b), np.maximum(a, b)))
+    pixels = np.column_stack((np.concatenate((hx, vx)), np.concatenate((hy, vy)))).astype(np.int32)
+    unique, first, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    order = np.argsort(inverse, kind="stable")
+    counts = np.bincount(inverse, minlength=len(unique))
+    ends = np.cumsum(counts)
+    starts = ends - counts
+    grouped = pixels[order]
+    # Mantener el orden de primera aparición: puede influir en decisiones posteriores.
+    return {
+        (int(unique[i, 0]), int(unique[i, 1])): grouped[starts[i]:ends[i]]
+        for i in np.argsort(first, kind="stable")
+    }
 
-    # Bordes horizontales.
-    difference = (labels[:, :-1] != labels[:, 1:]) & active[:, :-1] & active[:, 1:]
-    ys, xs = np.nonzero(difference)
-    for y, x in zip(ys, xs):
-        a = int(labels[y, x])
-        b = int(labels[y, x + 1])
-        key = (min(a, b), max(a, b))
-        pairs.setdefault(key, []).append((x, y))
-
-    # Bordes verticales.
-    difference = (labels[:-1, :] != labels[1:, :]) & active[:-1, :] & active[1:, :]
-    ys, xs = np.nonzero(difference)
-    for y, x in zip(ys, xs):
-        a = int(labels[y, x])
-        b = int(labels[y + 1, x])
-        key = (min(a, b), max(a, b))
-        pairs.setdefault(key, []).append((x, y))
-
-    return {key: np.asarray(value, dtype=np.int32) for key, value in pairs.items()}
 
 
 def reject_inconsistent_adjacencies(
@@ -1288,8 +1291,8 @@ def resolve_worker_count(requested: int, job_count: int) -> int:
     logical = os.cpu_count() or 2
 
     if requested <= 0:
-        # Reserva dos procesadores lógicos para Windows/UI/IO.
-        workers = max(1, logical - 2)
+        # Equipo dedicado: utilizar todos los procesadores lógicos.
+        workers = max(1, logical)
     else:
         workers = max(1, requested)
 

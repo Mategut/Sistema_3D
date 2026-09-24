@@ -2852,8 +2852,7 @@ def propose_continuous_walls(mesh, points, normals, colors, spacing, root, args,
     report['attempted']=True
     report['input_points']=len(q)
     report['voxel_mm']=pitch
-    wall_threads = _CPU_COUNT if int(args.threads) <= 0 else max(1, int(args.threads))
-    proxy,construction=build_wall_volume_proxy(q,n,pitch,1.4,8,wall_threads)
+    proxy,construction=build_wall_volume_proxy(q,n,pitch,1.4,8,min(8,_CPU_COUNT))
     candidate=clip_open_base(proxy,base_y)
     candidate=colorize(candidate,points,colors)
     ev=evaluate(candidate,points,args.coverage_gate_mm,args.evaluation_cloud_samples,

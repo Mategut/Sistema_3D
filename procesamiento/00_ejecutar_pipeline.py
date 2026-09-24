@@ -573,7 +573,13 @@ class CheckpointManager:
         import time as _perf_time
 
         _started = _perf_time.perf_counter()
-        r = subprocess.run(stage.cmd, env=child_env, check=False)
+        from utilidades_telemetria import run_measured
+        r = run_measured(
+            stage.cmd, child_env,
+            stage.script.parent.parent / "registros" / "rendimiento" /
+            (time.strftime("%Y%m%d_%H%M%S") + "_" + stage.stage_id.replace(":", "_") + ".json"),
+            stage.stage_id,
+        )
         print(f"[TIEMPO] {stage.label}: {_perf_time.perf_counter()-_started:.1f} s", flush=True)
 
         # Un código 2 puede significar "resultado calculado, pero no apto para

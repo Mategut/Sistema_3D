@@ -2488,12 +2488,18 @@ def _geometry_region(context, region):
         return cache[region]
     base = context["geometry_baseline"]
     h = context["local_args"]["voxel"]
-    # Índice estable preparado una vez en el padre y compartido con los hijos.
-    labels, order, cuts = context["geometry_patch_index"]
-    slot = int(np.searchsorted(labels, region))
-    selected = (order[cuts[slot]:cuts[slot + 1]]
-                if slot < len(labels) and labels[slot] == region
-                else np.empty(0, dtype=np.intp))
+    # Índice local por trabajador: la nube de referencia no cambia durante
+    # esta evaluación. Orden estable equivale a flatnonzero por región.
+    if "_geometry_patch_indices" not in context:
+        patch_labels = np.asarray(base["geometry_patch_id"])
+        patch_order = np.argsort(patch_labels, kind="stable")
+        sorted_labels = patch_labels[patch_order]
+        cuts = np.r_[0, np.flatnonzero(sorted_labels[1:] != sorted_labels[:-1]) + 1, len(patch_order)]
+        context["_geometry_patch_indices"] = {
+            int(sorted_labels[lo]): patch_order[lo:hi]
+            for lo, hi in zip(cuts[:-1], cuts[1:]) if hi > lo
+        }
+    selected = context["_geometry_patch_indices"].get(region, np.empty(0, dtype=np.intp))
     original_count = len(selected)
     selected = _expand_surface_patch(context, selected, h)
     context.setdefault("_geometry_added", {})[region] = len(selected) - original_count
@@ -2861,11 +2867,6 @@ def neighboring_surface_fusion(points, colors, normals, poses, weights, args):
         geometry_context = {k: v for k, v in context.items() if not k.startswith("_")}
         result["geometry_cv_score"].fill(np.nan)
         geometry_context["geometry_baseline"] = {k: v.copy() for k, v in result.items()}
-        patch_labels = result["geometry_patch_id"]
-        patch_order = np.argsort(patch_labels, kind="stable")
-        sorted_labels = patch_labels[patch_order]
-        cuts = np.r_[0, np.flatnonzero(sorted_labels[1:] != sorted_labels[:-1]) + 1, len(patch_order)]
-        geometry_context["geometry_patch_index"] = (sorted_labels[cuts[:-1]], patch_order, cuts)
         ejecutar_bloques(
             _geometry_worker,
             geometry_context,

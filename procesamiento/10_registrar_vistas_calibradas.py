@@ -1698,6 +1698,9 @@ def compact_alignment_score(
     cap = min(float(args.metric_cap_mm), max(gate + 1.0, 1.75 * gate))
     edge_scores = []
     overlaps = []
+    # Las coordenadas son inmutables durante esta evaluación. Reutilizar el
+    # árbol si una vista participa como origen y destino; descartar al salir.
+    metric_trees = {}
     for source in edge_sources:
         target = (int(source) + 1) % int(args.expected_views)
         sample_a = placed[int(source)]
@@ -1706,8 +1709,13 @@ def compact_alignment_score(
         b = sample_b["points"]
         if len(a) == 0 or len(b) == 0:
             continue
-        dab, iab = cKDTree(b).query(a, k=1, workers=query_threads())
-        dba, iba = cKDTree(a).query(b, k=1, workers=query_threads())
+        source_id = int(source)
+        if target not in metric_trees:
+            metric_trees[target] = cKDTree(b)
+        if source_id not in metric_trees:
+            metric_trees[source_id] = cKDTree(a)
+        dab, iab = metric_trees[target].query(a, k=1, workers=query_threads())
+        dba, iba = metric_trees[source_id].query(b, k=1, workers=query_threads())
         dab = np.asarray(dab, dtype=np.float64)
         dba = np.asarray(dba, dtype=np.float64)
         iab = np.asarray(iab, dtype=np.int64)

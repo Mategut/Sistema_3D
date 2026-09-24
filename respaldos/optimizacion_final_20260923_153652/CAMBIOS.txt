@@ -1,0 +1,2 @@
+Respaldo anterior a optimizacion final. Archivos modificados: 11_fusionar_nubes.py, 15_pulir_modelo.py, 13_reconstruir_superficie.py, utilidades_rendimiento.py
+No se ejecutaron pruebas, compilacion ni reconstrucciones. Paso 02 intacto en esta entrega.

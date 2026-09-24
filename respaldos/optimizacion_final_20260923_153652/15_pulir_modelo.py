@@ -3172,22 +3172,6 @@ def classify_cloud_supported_features(vertices, triangles, structure, cloud_data
     for start in range(0, len(candidates), 128):
         block = candidates[start : start + 128]
         mid = vertices[edges[block]].mean(axis=1)
-        # Consultas por bloque: mismo k, radio y orden de evaluación de modelos.
-        pending_zones = list(dict.fromkeys(
-            int(zone_ids[start + row]) for row, ei in enumerate(block)
-            if len(pair[tuple(edges[ei])]) == 2 and int(zone_ids[start + row]) not in zone_cache
-        ))
-        block_neighbors = {}
-        if pending_zones:
-            distances, indices = tree.query(
-                zone_centers[pending_zones], k=min(512, len(cloud)), workers=query_threads()
-            )
-            distances = np.asarray(distances).reshape(len(pending_zones), -1)
-            indices = np.asarray(indices).reshape(len(pending_zones), -1)
-            block_neighbors = {
-                zone: indices[row][distances[row] <= 8 * h]
-                for row, zone in enumerate(pending_zones)
-            }
         for row, ei in enumerate(block):
             faces = pair[tuple(edges[ei])]
             if len(faces) != 2:
@@ -3196,7 +3180,10 @@ def classify_cloud_supported_features(vertices, triangles, structure, cloud_data
             zone = int(zone_ids[start + row])
             if zone not in zone_cache:
                 center = zone_centers[zone]
-                ids = block_neighbors[zone]
+                distances, indices = tree.query(
+                    center, k=min(512, len(cloud)), workers=query_threads()
+                )
+                ids = indices[distances <= 8 * h]
                 model, reason = contextual_surface_model(cloud[ids], cn[ids], cf[ids], center, h)
                 zone_cache[zone] = (center, ids, model, reason)
             center, ids, model, reason = zone_cache[zone]
