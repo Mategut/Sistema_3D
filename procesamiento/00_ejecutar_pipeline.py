@@ -1,25 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Sistema 3D V3.2.1 — ejecución aislada, reanudación verificable y detención controlada.
-
-Reglas
-------
-1. Un trabajo nunca reutiliza resultados de OTRO trabajo.
-2. ``--resume`` solo reutiliza salidas del MISMO trabajo.
-3. Cada paso se considera reutilizable únicamente si su contrato final existe,
-   puede leerse y, cuando aplica, no declara ``quality=rejected``.
-4. Los checkpoints guardan firma del script, dependencias Python locales, comando, entradas y archivos de
-   contrato. Si cambia un paso o una entrada, ese paso y TODOS los siguientes
-   se recalculan.
-5. Sin ``--resume`` se mantiene el comportamiento histórico: se elimina
-   ``reconstruccion/`` y se ejecuta desde el paso 01.
-
-Estado persistente por trabajo
-------------------------------
-``reconstruccion/estado_pipeline/checkpoints.json``
-
-El estado pertenece al trabajo; no se comparte entre campañas.
-"""
+"""Ejecuta el pipeline y gestiona reanudaciones mediante checkpoints."""
 
 from __future__ import annotations
 from utilidades_rendimiento import configurar as _configurar_recursos
@@ -43,6 +24,7 @@ from typing import Callable, Iterable, Optional, Sequence
 
 from utilidades_multisesion import discover_sessions
 from utilidades_referencias import resolve_campaign_references
+from utilidades_estereo import validate_stereo_calibration
 from utilidades_almacenamiento import compact_reconstruction, print_compaction_report
 
 DEPTH = "02_estimacion_profundidad"
@@ -161,13 +143,8 @@ def is_session_roi_diagnostic(path: Path) -> bool:
 
 
 def fingerprint_path(path: Path) -> dict:
-    """Firma estable de una entrada.
-
-    Archivos: SHA-256 real. Directorios: manifiesto recursivo de nombres,
-    tamaños y mtime_ns, más SHA-256 real de archivos pequeños de metadatos.
-    Esto evita volver a hashear centenares de imágenes grandes en cada resume,
-    pero detecta cambios normales de captura/salidas intermedias.
-    """
+    """Firma archivos con SHA-256 y directorios con nombres, tamaños y mtime_ns.
+    Incluye SHA-256 de metadatos pequeños para detectar cambios al reanudar."""
     path = Path(path)
     if not path.exists():
         return {"path": str(path), "exists": False}
@@ -184,9 +161,8 @@ def fingerprint_path(path: Path) -> dict:
     records = []
     metadata_exts = {".json", ".csv", ".yaml", ".yml", ".xml", ".txt"}
     for f in sorted((x for x in path.rglob("*") if x.is_file()), key=lambda x: str(x).lower()):
-        # Paso 02 actualiza estos diagnósticos al incorporar otras sesiones.
-        # Ningún consumidor científico los lee: no invalidan 03/04 ya terminados.
-        # La evidencia ROI original y todas las demás entradas sí se firman.
+        # Excluir diagnósticos entre sesiones de la firma de 03/04.
+        # La evidencia ROI original y las demás entradas sí se firman.
         if is_session_roi_diagnostic(f):
             continue
         st = f.stat()
@@ -210,14 +186,7 @@ def fingerprint_path(path: Path) -> dict:
 
 
 def local_python_dependencies(script: Path) -> list[Path]:
-    """Resuelve imports locales transitivos para la firma de checkpoint.
-
-    Problema que evita:
-    un paso puede no cambiar de archivo principal, pero sí cambiar una utilidad
-    compartida (por ejemplo ``utilidades_mascaras.py``). Un checkpoint basado solo
-    en el script principal reutilizaría entonces una salida generada con código
-    diferente. V3.2.0 incorpora las dependencias locales reales a la firma.
-    """
+    """Resuelve imports locales transitivos para incluirlos en la firma del checkpoint."""
     script = Path(script).resolve()
     base = script.parent
     visited: set[Path] = set()
@@ -310,9 +279,7 @@ class Stage:
     extra_validator: Optional[Callable[[], ContractResult]] = None
     allow_code2: bool = False
     allow_bootstrap: bool = True
-    # Cuando un paso termina correctamente pero declara que su salida no debe
-    # ser consumida (por ejemplo, registro rechazado por calidad), se guarda
-    # un checkpoint "blocked" y el pipeline termina limpiamente, sin traceback.
+    # Guardar blocked si el cálculo termina pero su calidad impide continuar.
     controlled_stop_on_reject: bool = False
 
     def signature_payload(self) -> dict:
@@ -548,9 +515,7 @@ class CheckpointManager:
                 flush=True,
             )
 
-        # Antes de escribir salidas, deja constancia durable del paso en curso.
-        # Los checkpoints posteriores quedan invalidados incluso si se cierra
-        # la aplicación antes de que este paso termine.
+        # Persistir el estado en curso e invalidar checkpoints posteriores antes de escribir.
         records = self.state.setdefault("stages", {})
         for stage_id, record in records.items():
             if stage_id not in self._visited_stage_ids:
@@ -582,10 +547,7 @@ class CheckpointManager:
         )
         print(f"[TIEMPO] {stage.label}: {_perf_time.perf_counter()-_started:.1f} s", flush=True)
 
-        # Un código 2 puede significar "resultado calculado, pero no apto para
-        # continuar". Solo se trata como detención controlada en pasos que lo
-        # declaran explícitamente y únicamente si el resumen de calidad existe
-        # y confirma el rechazo. De lo contrario sigue siendo un error real.
+        # Tratar código 2 como rechazo controlado solo si el paso y su resumen lo confirman.
         if r.returncode == 2 and stage.controlled_stop_on_reject:
             artifacts = stage.validate_artifacts()
             rejection = stage.quality_rejection_reason()
@@ -611,9 +573,7 @@ class CheckpointManager:
 
         contract = stage.validate_contract()
         if not contract.ok:
-            # Compatibilidad con scripts que históricamente devolvían 0 aunque
-            # su resumen declarara rejected: en pasos de detención controlada
-            # eso también debe parar limpiamente, nunca crear un checkpoint completo.
+            # Un resumen rejected también bloquea la etapa aunque el script devuelva 0.
             if stage.controlled_stop_on_reject and stage.quality_rejection_reason() is not None:
                 self._record_blocked_stage(stage, int(r.returncode), contract.reason)
                 print(
@@ -1301,9 +1261,7 @@ def main():
     workspace = require_dir(a.workspace, "Workspace")
     obj = a.object.strip().lower()
 
-    # Campañas nuevas llevan dentro una copia inmutable de sus referencias.
-    # Los argumentos CLI se conservan como fallback únicamente para trabajos
-    # creados antes de esta arquitectura.
+    # Preferir referencias de la campaña; usar argumentos CLI para trabajos anteriores.
     refs = resolve_campaign_references(
         workspace,
         a.mode,
@@ -1316,6 +1274,7 @@ def main():
 
     model = require_file(refs["model"], "Modelo ONNX")
     stereo = require_dir(refs["stereo"], "Calibración estéreo")
+    validate_stereo_calibration(stereo)
     require_file(stereo / "stereo_initial.yaml", "stereo_initial.yaml")
     require_file(stereo / "rectification_maps.npz", "rectification_maps.npz")
     background = require_dir(refs["background"], "Fondo vacío")

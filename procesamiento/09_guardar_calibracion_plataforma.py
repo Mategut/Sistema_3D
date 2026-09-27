@@ -1,28 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-Paso 09 — Congelar calibración candidata de la plataforma.
-
-Objetivo
---------
-Convertir el resultado geométrico V3.2 obtenido durante el desarrollo en una
-CALIBRACIÓN DEL SISTEMA, almacenada fuera de cualquier objeto particular.
-
-Principios:
-- El eje y la línea de rotación son propiedades del montaje.
-- 2055 pasos/vuelta es propiedad mecánica del montaje.
-- Las correcciones angulares V3.2 se conservan SOLO como evidencia diagnóstica.
-- Para objetos futuros se utilizan los ángulos MECÁNICOS, sin correcciones
-  aprendidas del objeto de referencia.
-- La línea del eje se representa mediante el punto de esa línea más próximo
-  al punto medio estéreo. Esto elimina la ambigüedad de elegir cualquier punto
-  a lo largo de la misma línea.
-- La salida inicial es "candidate". No se promueve a definitiva hasta superar
-  validación independiente con otros barridos.
-
-No requiere que los objetos futuros sean cubos, cilindros, pirámides ni
-poliedros.
-"""
+"""Valida y guarda la calibración de la plataforma para otras campañas."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion

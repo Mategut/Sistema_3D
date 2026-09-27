@@ -1,0 +1,45 @@
+{
+  "filename": "crestereo_init_iter10_480x640.onnx",
+  "size_bytes": 25947759,
+  "sha256": "ea67a517e61ff381b0b26beec72222f5ba4ef416a251d6e3e1d7224c6f7ba730",
+  "producer": "pytorch",
+  "graph_name": "torch-jit-export",
+  "version": 9223372036854775807,
+  "custom_metadata": {},
+  "inputs": [
+    {
+      "name": "left",
+      "shape": [
+        1,
+        3,
+        480,
+        640
+      ],
+      "type": "tensor(float)"
+    },
+    {
+      "name": "right",
+      "shape": [
+        1,
+        3,
+        480,
+        640
+      ],
+      "type": "tensor(float)"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "output",
+      "shape": [
+        1,
+        2,
+        480,
+        640
+      ],
+      "type": "tensor(float)"
+    }
+  ],
+  "exact_download_source_verified": false,
+  "conversion_command_verified": false
+}

@@ -1,0 +1,1289 @@
+{
+  "schema_version": 1,
+  "physical_reference_sha256": "f9d761543f788f12b87a89621ebbfb3d77a77f54733fd1e9aaad35d22ec6242e",
+  "script_sha256": "072f0891bd536f1063304a0314ee054533f9452f2be0085faf846006bcb51bc8",
+  "reference_precision": "Aproximada; resolución de la regla e incertidumbre no especificadas",
+  "runs": [
+    {
+      "campaign": "cilindro1",
+      "variant": "final",
+      "source": "cilindro1/modelo_final_original_mm.ply",
+      "sha256": "c340bdeed05760e836b529904b18731e9a29822222c0b5723a831e05f7a98aec",
+      "dimensions_mm": {
+        "altura": 99.17761674575766,
+        "diametro": 44.6949500358547
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 97.27797828645913,
+        "aabb_extents_mm": [
+          45.387495994707805,
+          99.17761674575766,
+          44.9996725880155
+        ],
+        "diameter_method": "robust_circle_fit_xz_middle_20_to_80_percent_height",
+        "radial_residual_p95_mm": 0.2749977459007622,
+        "circle_points": 15728
+      }
+    },
+    {
+      "campaign": "cilindro1",
+      "variant": "pre_pulido",
+      "source": "cilindro1/modelo_pre_pulido_mm.ply",
+      "sha256": "61668a213aa477743bf61eee4bdd3f810bb6607899e46d027cfd25c49b8818b0",
+      "dimensions_mm": {
+        "altura": 99.42260136062438,
+        "diametro": 44.70183698234814
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 97.36026608052022,
+        "aabb_extents_mm": [
+          45.41891757421661,
+          99.42260136062438,
+          45.037433534105645
+        ],
+        "diameter_method": "robust_circle_fit_xz_middle_20_to_80_percent_height",
+        "radial_residual_p95_mm": 0.27741245411706,
+        "circle_points": 15942
+      }
+    },
+    {
+      "campaign": "cilindro2",
+      "variant": "final",
+      "source": "cilindro2/modelo_final_original_mm.ply",
+      "sha256": "3eb4b88dbf754485bfa4da113920402f8a0d8b749957db54b778d28ce29ce496",
+      "dimensions_mm": {
+        "altura": 97.95546343252956,
+        "diametro": 45.6184190806098
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 97.06976689261393,
+        "aabb_extents_mm": [
+          46.26801979076298,
+          97.95546343252956,
+          45.594928140545406
+        ],
+        "diameter_method": "robust_circle_fit_xz_middle_20_to_80_percent_height",
+        "radial_residual_p95_mm": 0.26935269625457947,
+        "circle_points": 22052
+      }
+    },
+    {
+      "campaign": "cilindro2",
+      "variant": "pre_pulido",
+      "source": "cilindro2/modelo_pre_pulido_mm.ply",
+      "sha256": "82f937f606539dfc3e886da8f3e2062cd6700140866c7cc5b7949496c3341521",
+      "dimensions_mm": {
+        "altura": 97.95100693702697,
+        "diametro": 45.621591227209755
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 97.23679834365845,
+        "aabb_extents_mm": [
+          46.19999980926514,
+          97.95100693702697,
+          45.499998569488525
+        ],
+        "diameter_method": "robust_circle_fit_xz_middle_20_to_80_percent_height",
+        "radial_residual_p95_mm": 0.3278987206028954,
+        "circle_points": 22052
+      }
+    },
+    {
+      "campaign": "cilindro3",
+      "variant": "final",
+      "source": "cilindro3/modelo_final_original_mm.ply",
+      "sha256": "2fe9c393a52661acea77d6030b070d9d69a6c729ca633283656eeaa76c3eb0bb",
+      "dimensions_mm": {
+        "altura": 99.02210059259903,
+        "diametro": 44.66495626555611
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 97.19316991950528,
+        "aabb_extents_mm": [
+          45.26809620532343,
+          99.02210059259903,
+          44.94395762401267
+        ],
+        "diameter_method": "robust_circle_fit_xz_middle_20_to_80_percent_height",
+        "radial_residual_p95_mm": 0.23130535522958162,
+        "circle_points": 15726
+      }
+    },
+    {
+      "campaign": "cilindro3",
+      "variant": "pre_pulido",
+      "source": "cilindro3/modelo_pre_pulido_mm.ply",
+      "sha256": "d936444c4f5785af48cc155ecd2777c8174eb400609f8b09bc0c2ed9f47dca60",
+      "dimensions_mm": {
+        "altura": 99.02713319437738,
+        "diametro": 44.67514818592211
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 97.2039944691391,
+        "aabb_extents_mm": [
+          45.299232394067545,
+          99.02713319437738,
+          45.014673835850246
+        ],
+        "diameter_method": "robust_circle_fit_xz_middle_20_to_80_percent_height",
+        "radial_residual_p95_mm": 0.23397042323840012,
+        "circle_points": 15726
+      }
+    },
+    {
+      "campaign": "cubo1",
+      "variant": "final",
+      "source": "cubo1/modelo_final_original_mm.ply",
+      "sha256": "f04aa69c64ad98288b0c271f3704745a70d627d5b3bc53196b387f645a9fef86",
+      "dimensions_mm": {
+        "alto": 95.46454472590014,
+        "fondo": 98.420654296875,
+        "ancho": 98.90719604492188
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 95.4228605922795,
+        "aabb_extents_mm": [
+          107.88570647717822,
+          95.46454472590014,
+          106.51957025876209
+        ],
+        "base_method": "minimum_area_enclosing_rectangle_xz",
+        "angle_degrees": -6.887433052062988,
+        "assignment": "Lado menor=fondo (94 mm), mayor=ancho (95 mm); los ejes físicos frente/fondo no están etiquetados en las capturas."
+      }
+    },
+    {
+      "campaign": "cubo1",
+      "variant": "pre_pulido",
+      "source": "cubo1/modelo_pre_pulido_mm.ply",
+      "sha256": "97363fd9d39b618bd5fc06bee70dc9ba471a16c5a095ba1fb3e80b39768e419b",
+      "dimensions_mm": {
+        "alto": 95.42286052703858,
+        "fondo": 98.80707550048828,
+        "ancho": 99.0505599975586
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 95.42286052703858,
+        "aabb_extents_mm": [
+          107.88570647717822,
+          95.42286052703858,
+          106.51943553810224
+        ],
+        "base_method": "minimum_area_enclosing_rectangle_xz",
+        "angle_degrees": -7.694405555725098,
+        "assignment": "Lado menor=fondo (94 mm), mayor=ancho (95 mm); los ejes físicos frente/fondo no están etiquetados en las capturas."
+      }
+    },
+    {
+      "campaign": "cubo2",
+      "variant": "final",
+      "source": "cubo2/modelo_final_original_mm.ply",
+      "sha256": "3eacd90189cf896b6af9431b303bd03196d4ded4f8316761fff7c63011ae2bc6",
+      "dimensions_mm": {
+        "alto": 95.84807406592023,
+        "fondo": 97.46668243408203,
+        "ancho": 97.68273162841797
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 95.81566315051089,
+        "aabb_extents_mm": [
+          104.68904646052135,
+          95.84807406592023,
+          105.6035477051696
+        ],
+        "base_method": "minimum_area_enclosing_rectangle_xz",
+        "angle_degrees": -6.343173027038574,
+        "assignment": "Lado menor=fondo (94 mm), mayor=ancho (95 mm); los ejes físicos frente/fondo no están etiquetados en las capturas."
+      }
+    },
+    {
+      "campaign": "cubo2",
+      "variant": "pre_pulido",
+      "source": "cubo2/modelo_pre_pulido_mm.ply",
+      "sha256": "5770b3bd4c7bee2c5f5576b1d571792f877364c121a836184860ff77f4944a97",
+      "dimensions_mm": {
+        "alto": 95.81567544937134,
+        "fondo": 97.8000717163086,
+        "ancho": 98.07588195800781
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 95.81567544937134,
+        "aabb_extents_mm": [
+          104.9701669216156,
+          95.81567544937134,
+          105.69993448257446
+        ],
+        "base_method": "minimum_area_enclosing_rectangle_xz",
+        "angle_degrees": -6.438263416290283,
+        "assignment": "Lado menor=fondo (94 mm), mayor=ancho (95 mm); los ejes físicos frente/fondo no están etiquetados en las capturas."
+      }
+    },
+    {
+      "campaign": "cubo3",
+      "variant": "final",
+      "source": "cubo3/modelo_final_original_mm.ply",
+      "sha256": "6b017c25f20b6fbdc0b3b6c970898677f4b5d9c153451d6217decd5efaea7339",
+      "dimensions_mm": {
+        "alto": 95.9765354260427,
+        "fondo": 97.65945434570312,
+        "ancho": 98.03799438476562
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 95.46957784806054,
+        "aabb_extents_mm": [
+          109.00411798725918,
+          95.9765354260427,
+          110.49137016467185
+        ],
+        "base_method": "minimum_area_enclosing_rectangle_xz",
+        "angle_degrees": -9.759146690368652,
+        "assignment": "Lado menor=fondo (94 mm), mayor=ancho (95 mm); los ejes físicos frente/fondo no están etiquetados en las capturas."
+      }
+    },
+    {
+      "campaign": "cubo3",
+      "variant": "pre_pulido",
+      "source": "cubo3/modelo_pre_pulido_mm.ply",
+      "sha256": "3d7f61c77fa87a45b0b465731749cf476d16fdec61cf1332d9e1b6edf5548002",
+      "dimensions_mm": {
+        "alto": 95.98279733657837,
+        "fondo": 97.83314514160156,
+        "ancho": 98.37519836425781
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 95.3931598186493,
+        "aabb_extents_mm": [
+          109.1878342628479,
+          95.98279733657837,
+          110.59992599487305
+        ],
+        "base_method": "minimum_area_enclosing_rectangle_xz",
+        "angle_degrees": -9.774975776672363,
+        "assignment": "Lado menor=fondo (94 mm), mayor=ancho (95 mm); los ejes físicos frente/fondo no están etiquetados en las capturas."
+      }
+    },
+    {
+      "campaign": "piramide1",
+      "variant": "final",
+      "source": "piramide1/modelo_final_original_mm.ply",
+      "sha256": "d382894fad15fde407e0bf66b857827fe55539a86b3a6b4f8a69da711fff7727",
+      "dimensions_mm": {
+        "lado_base": 98.8178745599655,
+        "altura_cara": 83.05266992899506,
+        "arista_lateral_hasta_punta": 96.65318307051058
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 77.06231584139042,
+        "aabb_extents_mm": [
+          101.39576596040166,
+          79.56705677859699,
+          96.11849643618876
+        ],
+        "base_band_mm": 2,
+        "polygon_epsilon_fraction": 0.04,
+        "base_plane_residual_p95_mm": 0.9961591860202373,
+        "vertical_extent_y_mm": 79.56705677859699,
+        "method": "triangular_base_plane_and_rounded_tip_band",
+        "base_vertices_mm": [
+          [
+            -9.72644600141074,
+            139.6504256925113,
+            51.15569346048721
+          ],
+          [
+            50.03567088776102,
+            139.66450649513592,
+            -25.261470063637944
+          ],
+          [
+            -45.54729896784157,
+            139.65793505504612,
+            -44.32361933373182
+          ]
+        ],
+        "tip_mm": [
+          -4.510356833728388,
+          61.71300577596081,
+          -4.561180163933321
+        ],
+        "base_sides_mm": [
+          97.01079163895591,
+          97.46522305107703,
+          101.97760898986355
+        ],
+        "lateral_edges_mm": [
+          95.94695938868298,
+          97.36635767295017,
+          96.64623214989858
+        ],
+        "face_altitudes_mm": [
+          83.5956929413113,
+          83.87472660392875,
+          81.68759024174511
+        ],
+        "foot_fractions": [
+          0.48542206679304123,
+          0.5073537482655539,
+          0.506475121108361
+        ],
+        "perpendicular_height_mm": 77.94418494679445,
+        "interpretation": "Descriptores aproximados: media de tres lados/aristas/alturas; sin correspondencia de caras físicas. Punta promediada en banda de 2 mm y esquinas redondeadas pueden subestimar longitudes."
+      }
+    },
+    {
+      "campaign": "piramide1",
+      "variant": "pre_pulido",
+      "source": "piramide1/modelo_pre_pulido_mm.ply",
+      "sha256": "a648101b4a890457e8a4138de08c685aac81907c36eea65aa82084f72f787b4a",
+      "dimensions_mm": {
+        "lado_base": 98.82079112517727,
+        "altura_cara": 83.11364115566795,
+        "arista_lateral_hasta_punta": 96.70635958374777
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 77.12085199356079,
+        "aabb_extents_mm": [
+          101.39576596040166,
+          79.57003402709961,
+          96.11850960808053
+        ],
+        "base_band_mm": 2,
+        "polygon_epsilon_fraction": 0.04,
+        "base_plane_residual_p95_mm": 0.9685551544504355,
+        "vertical_extent_y_mm": 79.57003402709961,
+        "method": "triangular_base_plane_and_rounded_tip_band",
+        "base_vertices_mm": [
+          [
+            -9.726464099259957,
+            139.6451165455139,
+            51.155639254018745
+          ],
+          [
+            50.041143638803604,
+            139.66432347753286,
+            -25.26149781619753
+          ],
+          [
+            -45.547317230088574,
+            139.66266726248205,
+            -44.32366979753237
+          ]
+        ],
+        "tip_mm": [
+          -4.517419162604344,
+          61.648231374761444,
+          -4.565998786134147
+        ],
+        "base_sides_mm": [
+          97.01415433659923,
+          97.4706122617108,
+          101.97760677722178
+        ],
+        "lateral_edges_mm": [
+          95.99765200966873,
+          97.42407855374687,
+          96.69734818782771
+        ],
+        "face_altitudes_mm": [
+          83.65728665562054,
+          83.93604914624319,
+          81.7475876651401
+        ],
+        "foot_fractions": [
+          0.4853426831469474,
+          0.5074245373783223,
+          0.5064824670956244
+        ],
+        "perpendicular_height_mm": 78.00864968734648,
+        "interpretation": "Descriptores aproximados: media de tres lados/aristas/alturas; sin correspondencia de caras físicas. Punta promediada en banda de 2 mm y esquinas redondeadas pueden subestimar longitudes."
+      }
+    },
+    {
+      "campaign": "piramide3",
+      "variant": "final",
+      "source": "piramide3/modelo_final_original_mm.ply",
+      "sha256": "77fe3632d9e6adf4be5a976d548623440152b5b5216fb687f3c3dd0388fee068",
+      "dimensions_mm": {
+        "lado_base": 100.50969027824101,
+        "altura_cara": 82.04400777391031,
+        "arista_lateral_hasta_punta": 96.21790639864177
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 75.80951726320215,
+        "aabb_extents_mm": [
+          99.21723772821068,
+          78.4638518541316,
+          98.40743603150167
+        ],
+        "base_band_mm": 2,
+        "polygon_epsilon_fraction": 0.04,
+        "base_plane_residual_p95_mm": 1.1516794076388328,
+        "vertical_extent_y_mm": 78.4638518541316,
+        "method": "triangular_base_plane_and_rounded_tip_band",
+        "base_vertices_mm": [
+          [
+            44.039409649663455,
+            139.86834389661183,
+            -41.80672660208708
+          ],
+          [
+            -54.736809127327305,
+            139.86889779077694,
+            -15.906724344621644
+          ],
+          [
+            15.877601470822592,
+            139.83947326305162,
+            54.11362361695737
+          ]
+        ],
+        "tip_mm": [
+          1.2704767388229232,
+          63.139211201494746,
+          -3.2347730323828348
+        ],
+        "base_sides_mm": [
+          102.11538333240225,
+          99.4446830081304,
+          99.96900449419036
+        ],
+        "lateral_edges_mm": [
+          95.93923612714605,
+          95.83756687354857,
+          96.87691619523069
+        ],
+        "face_altitudes_mm": [
+          81.16459285765711,
+          82.53279712593263,
+          82.43463333814117
+        ],
+        "foot_fractions": [
+          0.5009349176742907,
+          0.48987295452334595,
+          0.5090455997316239
+        ],
+        "perpendicular_height_mm": 76.72039828516506,
+        "interpretation": "Descriptores aproximados: media de tres lados/aristas/alturas; sin correspondencia de caras físicas. Punta promediada en banda de 2 mm y esquinas redondeadas pueden subestimar longitudes."
+      }
+    },
+    {
+      "campaign": "piramide3",
+      "variant": "pre_pulido",
+      "source": "piramide3/modelo_pre_pulido_mm.ply",
+      "sha256": "0b8cba911d1e35ef9abcaff54494c28d9bc4e8b2c6989cfc7c697282f41cbd09",
+      "dimensions_mm": {
+        "lado_base": 100.52345330204874,
+        "altura_cara": 82.09455264581901,
+        "arista_lateral_hasta_punta": 96.26465533646217
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 75.83681452512741,
+        "aabb_extents_mm": [
+          99.21723772821068,
+          78.48927474021912,
+          98.58380535581225
+        ],
+        "base_band_mm": 2,
+        "polygon_epsilon_fraction": 0.04,
+        "base_plane_residual_p95_mm": 1.1473227046941477,
+        "vertical_extent_y_mm": 78.48927474021912,
+        "method": "triangular_base_plane_and_rounded_tip_band",
+        "base_vertices_mm": [
+          [
+            44.039386631681936,
+            139.86533788628853,
+            -41.80672258035624
+          ],
+          [
+            -54.736833923603655,
+            139.869490085773,
+            -15.906718630183947
+          ],
+          [
+            15.885600313976724,
+            139.83825850062158,
+            54.1363785520725
+          ]
+        ],
+        "tip_mm": [
+          1.2666196460965313,
+          63.08559192434142,
+          -3.2371574546717294
+        ],
+        "base_sides_mm": [
+          102.11538556479196,
+          99.46639963292276,
+          99.98857470843147
+        ],
+        "lateral_edges_mm": [
+          95.98046853172126,
+          95.87842097666558,
+          96.93507650099968
+        ],
+        "face_altitudes_mm": [
+          81.21307648264096,
+          82.58389843714241,
+          82.48668301767363
+        ],
+        "foot_fractions": [
+          0.5009387980346753,
+          0.4897035368766853,
+          0.509210040261978
+        ],
+        "perpendicular_height_mm": 76.77280979522855,
+        "interpretation": "Descriptores aproximados: media de tres lados/aristas/alturas; sin correspondencia de caras físicas. Punta promediada en banda de 2 mm y esquinas redondeadas pueden subestimar longitudes."
+      }
+    },
+    {
+      "campaign": "piramide4",
+      "variant": "final",
+      "source": "piramide4/modelo_final_original_mm.ply",
+      "sha256": "d0af2ef67c44ddac984d5b7448b50dc91a5cd8aadc7819f47f45417308791d18",
+      "dimensions_mm": {
+        "lado_base": 99.3947600179767,
+        "altura_cara": 81.13618830561332,
+        "arista_lateral_hasta_punta": 95.15865879062859
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 75.14547155949585,
+        "aabb_extents_mm": [
+          99.98025071634942,
+          77.59083617314101,
+          93.62335889475975
+        ],
+        "base_band_mm": 2,
+        "polygon_epsilon_fraction": 0.04,
+        "base_plane_residual_p95_mm": 1.1073126507235045,
+        "vertical_extent_y_mm": 77.59083617314101,
+        "method": "triangular_base_plane_and_rounded_tip_band",
+        "base_vertices_mm": [
+          [
+            -5.921500626167485,
+            139.80157326184238,
+            53.39185069545539
+          ],
+          [
+            -49.32149815921996,
+            139.8094440415945,
+            -39.755583695928095
+          ],
+          [
+            47.25860570588349,
+            139.75504207772022,
+            -29.24791058638745
+          ]
+        ],
+        "tip_mm": [
+          -3.8149160477124413,
+          63.90004150207707,
+          -5.191901481099521
+        ],
+        "base_sides_mm": [
+          102.76188194809994,
+          97.1500417722237,
+          98.27235633360642
+        ],
+        "lateral_edges_mm": [
+          95.90378637545469,
+          95.01439121325532,
+          94.55779878317576
+        ],
+        "face_altitudes_mm": [
+          80.44844127695107,
+          81.39241251925114,
+          81.56771112063772
+        ],
+        "foot_fractions": [
+          0.5080398500506565,
+          0.5045855069411772,
+          0.4867274088582233
+        ],
+        "perpendicular_height_mm": 75.88930618783472,
+        "interpretation": "Descriptores aproximados: media de tres lados/aristas/alturas; sin correspondencia de caras físicas. Punta promediada en banda de 2 mm y esquinas redondeadas pueden subestimar longitudes."
+      }
+    },
+    {
+      "campaign": "piramide4",
+      "variant": "pre_pulido",
+      "source": "piramide4/modelo_pre_pulido_mm.ply",
+      "sha256": "b59d74cdf0f1d83e247b90013a7047d52928156f2bb98716e41326a0c217f0d2",
+      "dimensions_mm": {
+        "lado_base": 99.40997672461373,
+        "altura_cara": 81.2182454814348,
+        "arista_lateral_hasta_punta": 95.2323968108113
+      },
+      "diagnostics": {
+        "height_method": "extent_y_calibrated_axis",
+        "height_robust_005_995_mm": 75.23082180023194,
+        "aabb_extents_mm": [
+          100.00909491134345,
+          77.66546411514283,
+          93.62335889475975
+        ],
+        "base_band_mm": 2,
+        "polygon_epsilon_fraction": 0.04,
+        "base_plane_residual_p95_mm": 1.1065924258043498,
+        "vertical_extent_y_mm": 77.66546411514283,
+        "method": "triangular_base_plane_and_rounded_tip_band",
+        "base_vertices_mm": [
+          [
+            -5.921500124381419,
+            139.79820225785284,
+            53.3918124722324
+          ],
+          [
+            -49.32149240410498,
+            139.81172007742822,
+            -39.75562267133582
+          ],
+          [
+            47.34040554115127,
+            139.7570528526937,
+            -29.138690028627167
+          ]
+        ],
+        "tip_mm": [
+          -3.8126888109290182,
+          63.8147806487468,
+          -5.18604586583487
+        ],
+        "base_sides_mm": [
+          102.76188099892275,
+          97.24322475948854,
+          98.22482441542992
+        ],
+        "lateral_edges_mm": [
+          95.96506099647718,
+          95.0875472789175,
+          94.64458215703921
+        ],
+        "face_altitudes_mm": [
+          80.52826108031611,
+          81.45778880586472,
+          81.66868655812357
+        ],
+        "foot_fractions": [
+          0.5079380311587635,
+          0.5044438737553039,
+          0.4869562100544791
+        ],
+        "perpendicular_height_mm": 75.97487807709727,
+        "interpretation": "Descriptores aproximados: media de tres lados/aristas/alturas; sin correspondencia de caras físicas. Punta promediada en banda de 2 mm y esquinas redondeadas pueden subestimar longitudes."
+      }
+    }
+  ],
+  "rows": [
+    {
+      "campaign": "cilindro1",
+      "object": "cilindro",
+      "variant": "final",
+      "dimension": "altura",
+      "reference_mm": 97.0,
+      "reconstructed_mm": 99.17761674575766,
+      "difference_mm": 2.1776167457576605,
+      "absolute_difference_mm": 2.1776167457576605,
+      "difference_percent": 2.2449657172759387
+    },
+    {
+      "campaign": "cilindro1",
+      "object": "cilindro",
+      "variant": "final",
+      "dimension": "diametro",
+      "reference_mm": 43.0,
+      "reconstructed_mm": 44.6949500358547,
+      "difference_mm": 1.6949500358547027,
+      "absolute_difference_mm": 1.6949500358547027,
+      "difference_percent": 3.9417442694295413
+    },
+    {
+      "campaign": "cilindro1",
+      "object": "cilindro",
+      "variant": "pre_pulido",
+      "dimension": "altura",
+      "reference_mm": 97.0,
+      "reconstructed_mm": 99.42260136062438,
+      "difference_mm": 2.422601360624384,
+      "absolute_difference_mm": 2.422601360624384,
+      "difference_percent": 2.4975271759014266
+    },
+    {
+      "campaign": "cilindro1",
+      "object": "cilindro",
+      "variant": "pre_pulido",
+      "dimension": "diametro",
+      "reference_mm": 43.0,
+      "reconstructed_mm": 44.70183698234814,
+      "difference_mm": 1.7018369823481407,
+      "absolute_difference_mm": 1.7018369823481407,
+      "difference_percent": 3.9577604240654436
+    },
+    {
+      "campaign": "cilindro2",
+      "object": "cilindro",
+      "variant": "final",
+      "dimension": "altura",
+      "reference_mm": 97.0,
+      "reconstructed_mm": 97.95546343252956,
+      "difference_mm": 0.9554634325295552,
+      "absolute_difference_mm": 0.9554634325295552,
+      "difference_percent": 0.9850138479686137
+    },
+    {
+      "campaign": "cilindro2",
+      "object": "cilindro",
+      "variant": "final",
+      "dimension": "diametro",
+      "reference_mm": 43.0,
+      "reconstructed_mm": 45.6184190806098,
+      "difference_mm": 2.6184190806097973,
+      "absolute_difference_mm": 2.6184190806097973,
+      "difference_percent": 6.089346699092552
+    },
+    {
+      "campaign": "cilindro2",
+      "object": "cilindro",
+      "variant": "pre_pulido",
+      "dimension": "altura",
+      "reference_mm": 97.0,
+      "reconstructed_mm": 97.95100693702697,
+      "difference_mm": 0.9510069370269747,
+      "absolute_difference_mm": 0.9510069370269747,
+      "difference_percent": 0.9804195227082213
+    },
+    {
+      "campaign": "cilindro2",
+      "object": "cilindro",
+      "variant": "pre_pulido",
+      "dimension": "diametro",
+      "reference_mm": 43.0,
+      "reconstructed_mm": 45.621591227209755,
+      "difference_mm": 2.6215912272097555,
+      "absolute_difference_mm": 2.6215912272097555,
+      "difference_percent": 6.096723784208734
+    },
+    {
+      "campaign": "cilindro3",
+      "object": "cilindro",
+      "variant": "final",
+      "dimension": "altura",
+      "reference_mm": 97.0,
+      "reconstructed_mm": 99.02210059259903,
+      "difference_mm": 2.022100592599031,
+      "absolute_difference_mm": 2.022100592599031,
+      "difference_percent": 2.0846397861845682
+    },
+    {
+      "campaign": "cilindro3",
+      "object": "cilindro",
+      "variant": "final",
+      "dimension": "diametro",
+      "reference_mm": 43.0,
+      "reconstructed_mm": 44.66495626555611,
+      "difference_mm": 1.664956265556107,
+      "absolute_difference_mm": 1.664956265556107,
+      "difference_percent": 3.87199131524676
+    },
+    {
+      "campaign": "cilindro3",
+      "object": "cilindro",
+      "variant": "pre_pulido",
+      "dimension": "altura",
+      "reference_mm": 97.0,
+      "reconstructed_mm": 99.02713319437738,
+      "difference_mm": 2.0271331943773845,
+      "absolute_difference_mm": 2.0271331943773845,
+      "difference_percent": 2.0898280354406027
+    },
+    {
+      "campaign": "cilindro3",
+      "object": "cilindro",
+      "variant": "pre_pulido",
+      "dimension": "diametro",
+      "reference_mm": 43.0,
+      "reconstructed_mm": 44.67514818592211,
+      "difference_mm": 1.6751481859221116,
+      "absolute_difference_mm": 1.6751481859221116,
+      "difference_percent": 3.8956934556328178
+    },
+    {
+      "campaign": "cubo1",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "alto",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 95.46454472590014,
+      "difference_mm": 0.46454472590014007,
+      "absolute_difference_mm": 0.46454472590014007,
+      "difference_percent": 0.4889944483159369
+    },
+    {
+      "campaign": "cubo1",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "fondo",
+      "reference_mm": 94.0,
+      "reconstructed_mm": 98.420654296875,
+      "difference_mm": 4.420654296875,
+      "absolute_difference_mm": 4.420654296875,
+      "difference_percent": 4.702823720079787
+    },
+    {
+      "campaign": "cubo1",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "ancho",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 98.90719604492188,
+      "difference_mm": 3.907196044921875,
+      "absolute_difference_mm": 3.907196044921875,
+      "difference_percent": 4.1128379420230265
+    },
+    {
+      "campaign": "cubo1",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "alto",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 95.42286052703858,
+      "difference_mm": 0.4228605270385799,
+      "absolute_difference_mm": 0.4228605270385799,
+      "difference_percent": 0.4451163442511367
+    },
+    {
+      "campaign": "cubo1",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "fondo",
+      "reference_mm": 94.0,
+      "reconstructed_mm": 98.80707550048828,
+      "difference_mm": 4.807075500488281,
+      "absolute_difference_mm": 4.807075500488281,
+      "difference_percent": 5.113910106902427
+    },
+    {
+      "campaign": "cubo1",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "ancho",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 99.0505599975586,
+      "difference_mm": 4.050559997558594,
+      "absolute_difference_mm": 4.050559997558594,
+      "difference_percent": 4.2637473658511515
+    },
+    {
+      "campaign": "cubo2",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "alto",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 95.84807406592023,
+      "difference_mm": 0.8480740659202297,
+      "absolute_difference_mm": 0.8480740659202297,
+      "difference_percent": 0.892709543073926
+    },
+    {
+      "campaign": "cubo2",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "fondo",
+      "reference_mm": 94.0,
+      "reconstructed_mm": 97.46668243408203,
+      "difference_mm": 3.4666824340820312,
+      "absolute_difference_mm": 3.4666824340820312,
+      "difference_percent": 3.68796003625748
+    },
+    {
+      "campaign": "cubo2",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "ancho",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 97.68273162841797,
+      "difference_mm": 2.6827316284179688,
+      "absolute_difference_mm": 2.6827316284179688,
+      "difference_percent": 2.823928029913651
+    },
+    {
+      "campaign": "cubo2",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "alto",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 95.81567544937134,
+      "difference_mm": 0.8156754493713407,
+      "absolute_difference_mm": 0.8156754493713407,
+      "difference_percent": 0.8586057361803586
+    },
+    {
+      "campaign": "cubo2",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "fondo",
+      "reference_mm": 94.0,
+      "reconstructed_mm": 97.8000717163086,
+      "difference_mm": 3.8000717163085938,
+      "absolute_difference_mm": 3.8000717163085938,
+      "difference_percent": 4.0426294854346745
+    },
+    {
+      "campaign": "cubo2",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "ancho",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 98.07588195800781,
+      "difference_mm": 3.0758819580078125,
+      "absolute_difference_mm": 3.0758819580078125,
+      "difference_percent": 3.2377704821134867
+    },
+    {
+      "campaign": "cubo3",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "alto",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 95.9765354260427,
+      "difference_mm": 0.9765354260427017,
+      "absolute_difference_mm": 0.9765354260427017,
+      "difference_percent": 1.0279320274133703
+    },
+    {
+      "campaign": "cubo3",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "fondo",
+      "reference_mm": 94.0,
+      "reconstructed_mm": 97.65945434570312,
+      "difference_mm": 3.659454345703125,
+      "absolute_difference_mm": 3.659454345703125,
+      "difference_percent": 3.8930365379820477
+    },
+    {
+      "campaign": "cubo3",
+      "object": "cubo",
+      "variant": "final",
+      "dimension": "ancho",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 98.03799438476562,
+      "difference_mm": 3.037994384765625,
+      "absolute_difference_mm": 3.037994384765625,
+      "difference_percent": 3.1978888260690788
+    },
+    {
+      "campaign": "cubo3",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "alto",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 95.98279733657837,
+      "difference_mm": 0.982797336578372,
+      "absolute_difference_mm": 0.982797336578372,
+      "difference_percent": 1.03452351218776
+    },
+    {
+      "campaign": "cubo3",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "fondo",
+      "reference_mm": 94.0,
+      "reconstructed_mm": 97.83314514160156,
+      "difference_mm": 3.8331451416015625,
+      "absolute_difference_mm": 3.8331451416015625,
+      "difference_percent": 4.0778139804271945
+    },
+    {
+      "campaign": "cubo3",
+      "object": "cubo",
+      "variant": "pre_pulido",
+      "dimension": "ancho",
+      "reference_mm": 95.0,
+      "reconstructed_mm": 98.37519836425781,
+      "difference_mm": 3.3751983642578125,
+      "absolute_difference_mm": 3.3751983642578125,
+      "difference_percent": 3.552840383429276
+    },
+    {
+      "campaign": "piramide1",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "lado_base",
+      "reference_mm": 103.0,
+      "reconstructed_mm": 98.8178745599655,
+      "difference_mm": -4.182125440034497,
+      "absolute_difference_mm": 4.182125440034497,
+      "difference_percent": -4.06031596119854
+    },
+    {
+      "campaign": "piramide1",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "altura_cara",
+      "reference_mm": 85.0,
+      "reconstructed_mm": 83.05266992899506,
+      "difference_mm": -1.9473300710049415,
+      "absolute_difference_mm": 1.9473300710049415,
+      "difference_percent": -2.2909765541234606
+    },
+    {
+      "campaign": "piramide1",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "arista_lateral_hasta_punta",
+      "reference_mm": 100.0,
+      "reconstructed_mm": 96.65318307051058,
+      "difference_mm": -3.346816929489421,
+      "absolute_difference_mm": 3.346816929489421,
+      "difference_percent": -3.346816929489421
+    },
+    {
+      "campaign": "piramide1",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "lado_base",
+      "reference_mm": 103.0,
+      "reconstructed_mm": 98.82079112517727,
+      "difference_mm": -4.179208874822734,
+      "absolute_difference_mm": 4.179208874822734,
+      "difference_percent": -4.057484344488092
+    },
+    {
+      "campaign": "piramide1",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "altura_cara",
+      "reference_mm": 85.0,
+      "reconstructed_mm": 83.11364115566795,
+      "difference_mm": -1.886358844332051,
+      "absolute_difference_mm": 1.886358844332051,
+      "difference_percent": -2.2192456992141776
+    },
+    {
+      "campaign": "piramide1",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "arista_lateral_hasta_punta",
+      "reference_mm": 100.0,
+      "reconstructed_mm": 96.70635958374777,
+      "difference_mm": -3.293640416252231,
+      "absolute_difference_mm": 3.293640416252231,
+      "difference_percent": -3.293640416252231
+    },
+    {
+      "campaign": "piramide3",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "lado_base",
+      "reference_mm": 103.0,
+      "reconstructed_mm": 100.50969027824101,
+      "difference_mm": -2.4903097217589902,
+      "absolute_difference_mm": 2.4903097217589902,
+      "difference_percent": -2.4177764288922234
+    },
+    {
+      "campaign": "piramide3",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "altura_cara",
+      "reference_mm": 85.0,
+      "reconstructed_mm": 82.04400777391031,
+      "difference_mm": -2.955992226089691,
+      "absolute_difference_mm": 2.955992226089691,
+      "difference_percent": -3.4776379130466957
+    },
+    {
+      "campaign": "piramide3",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "arista_lateral_hasta_punta",
+      "reference_mm": 100.0,
+      "reconstructed_mm": 96.21790639864177,
+      "difference_mm": -3.782093601358227,
+      "absolute_difference_mm": 3.782093601358227,
+      "difference_percent": -3.782093601358227
+    },
+    {
+      "campaign": "piramide3",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "lado_base",
+      "reference_mm": 103.0,
+      "reconstructed_mm": 100.52345330204874,
+      "difference_mm": -2.476546697951264,
+      "absolute_difference_mm": 2.476546697951264,
+      "difference_percent": -2.404414269855596
+    },
+    {
+      "campaign": "piramide3",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "altura_cara",
+      "reference_mm": 85.0,
+      "reconstructed_mm": 82.09455264581901,
+      "difference_mm": -2.9054473541809926,
+      "absolute_difference_mm": 2.9054473541809926,
+      "difference_percent": -3.4181733578599913
+    },
+    {
+      "campaign": "piramide3",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "arista_lateral_hasta_punta",
+      "reference_mm": 100.0,
+      "reconstructed_mm": 96.26465533646217,
+      "difference_mm": -3.7353446635378305,
+      "absolute_difference_mm": 3.7353446635378305,
+      "difference_percent": -3.7353446635378305
+    },
+    {
+      "campaign": "piramide4",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "lado_base",
+      "reference_mm": 103.0,
+      "reconstructed_mm": 99.3947600179767,
+      "difference_mm": -3.6052399820233063,
+      "absolute_difference_mm": 3.6052399820233063,
+      "difference_percent": -3.500232992255637
+    },
+    {
+      "campaign": "piramide4",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "altura_cara",
+      "reference_mm": 85.0,
+      "reconstructed_mm": 81.13618830561332,
+      "difference_mm": -3.8638116943866834,
+      "absolute_difference_mm": 3.8638116943866834,
+      "difference_percent": -4.54566081692551
+    },
+    {
+      "campaign": "piramide4",
+      "object": "piramide",
+      "variant": "final",
+      "dimension": "arista_lateral_hasta_punta",
+      "reference_mm": 100.0,
+      "reconstructed_mm": 95.15865879062859,
+      "difference_mm": -4.841341209371407,
+      "absolute_difference_mm": 4.841341209371407,
+      "difference_percent": -4.841341209371407
+    },
+    {
+      "campaign": "piramide4",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "lado_base",
+      "reference_mm": 103.0,
+      "reconstructed_mm": 99.40997672461373,
+      "difference_mm": -3.5900232753862724,
+      "absolute_difference_mm": 3.5900232753862724,
+      "difference_percent": -3.4854594906662837
+    },
+    {
+      "campaign": "piramide4",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "altura_cara",
+      "reference_mm": 85.0,
+      "reconstructed_mm": 81.2182454814348,
+      "difference_mm": -3.7817545185651937,
+      "absolute_difference_mm": 3.7817545185651937,
+      "difference_percent": -4.449122963017875
+    },
+    {
+      "campaign": "piramide4",
+      "object": "piramide",
+      "variant": "pre_pulido",
+      "dimension": "arista_lateral_hasta_punta",
+      "reference_mm": 100.0,
+      "reconstructed_mm": 95.2323968108113,
+      "difference_mm": -4.767603189188705,
+      "absolute_difference_mm": 4.767603189188705,
+      "difference_percent": -4.767603189188705
+    }
+  ],
+  "aggregate_final": [
+    {
+      "object": "cilindro",
+      "dimension": "altura",
+      "campaigns": 3,
+      "mean_mm": 98.71839359029542,
+      "sample_std_mm": 0.6652767376774834,
+      "mean_absolute_difference_mm": 1.7183935902954157
+    },
+    {
+      "object": "cilindro",
+      "dimension": "diametro",
+      "campaigns": 3,
+      "mean_mm": 44.9927751273402,
+      "sample_std_mm": 0.5420310634652654,
+      "mean_absolute_difference_mm": 1.9927751273402023
+    },
+    {
+      "object": "cubo",
+      "dimension": "alto",
+      "campaigns": 3,
+      "mean_mm": 95.76305140595436,
+      "sample_std_mm": 0.2663742832723758,
+      "mean_absolute_difference_mm": 0.7630514059543572
+    },
+    {
+      "object": "cubo",
+      "dimension": "ancho",
+      "campaigns": 3,
+      "mean_mm": 98.20930735270183,
+      "sample_std_mm": 0.6299518843200602,
+      "mean_absolute_difference_mm": 3.2093073527018228
+    },
+    {
+      "object": "cubo",
+      "dimension": "fondo",
+      "campaigns": 3,
+      "mean_mm": 97.84893035888672,
+      "sample_std_mm": 0.5044218952713431,
+      "mean_absolute_difference_mm": 3.8489303588867188
+    },
+    {
+      "object": "piramide",
+      "dimension": "altura_cara",
+      "campaigns": 3,
+      "mean_mm": 82.07762200283956,
+      "sample_std_mm": 0.9586828935992654,
+      "mean_absolute_difference_mm": 2.9223779971604387
+    },
+    {
+      "object": "piramide",
+      "dimension": "arista_lateral_hasta_punta",
+      "campaigns": 3,
+      "mean_mm": 96.00991608659365,
+      "sample_std_mm": 0.7686648705506188,
+      "mean_absolute_difference_mm": 3.9900839134063517
+    },
+    {
+      "object": "piramide",
+      "dimension": "lado_base",
+      "campaigns": 3,
+      "mean_mm": 99.5741082853944,
+      "sample_std_mm": 0.8600491014589328,
+      "mean_absolute_difference_mm": 3.425891714605598
+    }
+  ],
+  "scope": "Comparación exploratoria con regla; no modifica calidad ni constituye validación metrológica. Las desviaciones entre campañas no son incertidumbre del instrumento."
+}

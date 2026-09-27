@@ -1,23 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Paso 06 V3.3 — Nubes con procedencia ROI verificada.
-
-Los píxeles ROI promovidos por 05 usan exclusivamente su evidencia ROI.
-Se verifica su consenso y se conserva la incertidumbre de las observaciones.
-
-Consume Paso 05 y genera UNA nube robusta por pose física. Las nubes se
-mantienen en coordenadas de cámara; todavía no hay registro multivista.
-
-La profundidad métrica no se recentra ni se escala. La diferencia con el fondo
-vacío solo genera candidatos de primer plano: la aceptación definitiva combina
-procedencia observada, confianza, consistencia izquierda-derecha, residuo
-regional, incertidumbre de disparidad propagada con el Jacobiano estéreo y
-continuidad local. Solo las componentes que contienen semillas observadas y
-fiables entran a la regularización y a la retroproyección. Esto evita convertir
-errores de disparidad cercanos a la cámara en geometría, conserva objetos de
-varias piezas y no presupone cubos, cilindros, planos ni tamaños.
-"""
+"""Genera nubes métricas por pose a partir del consenso y la calibración estéreo."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -293,18 +277,8 @@ def _replay_roi_consensus(
     uncertainty_sigma_factor=2.5,
     maximum_agreement_mm=12.0,
 ):
-    """Confirma evidencia ROI/multiescala exclusivamente entre sesiones.
-
-    La segunda inferencia del Paso 02 se guarda como evidencia diagnóstica y
-    nunca sustituye por sí sola la profundidad base. Esta función exige que al
-    menos ``minimum_support`` sesiones independientes describan una misma capa
-    dentro de una tolerancia métrica derivada de sus incertidumbres. El estado
-    LR=4 (contradicción fuerte) queda vetado incondicionalmente.
-
-    La confianza directa, el error fotométrico y la incertidumbre solo
-    ponderan la elección/fusión dentro de una capa ya confirmada; ninguno de
-    ellos puede convertir una única observación en profundidad científica.
-    """
+    """Confirma una capa ROI con minimum_support sesiones y tolerancia por incertidumbre.
+    Veta LR=4; confianza y fotometría ponderan únicamente evidencia ya respaldada."""
     h, w = observations[0]["depth"].shape
     empty_depth = np.full((h, w), np.nan, np.float32)
     empty_mask = np.zeros((h, w), np.uint8)
@@ -1621,10 +1595,7 @@ def clean_cloud(samples: dict, args, minimum_observed_override=None):
             observed_evidence_points = int(
                 np.count_nonzero(observed >= evidence_minimum_observed)
             )
-            # Una componente 3D separada no hereda las semillas fuertes
-            # de otra región por compartir la etiqueta 2D. Exigir evidencia
-            # conjunta en al menos un punto de ESTA componente, sin planos
-            # impuestos ni descarte por tamaño relativo.
+            # Exigir evidencia propia a cada componente 3D, aunque comparta una etiqueta 2D.
             background_ok = (
                 (~samples["background_valid"][member].astype(bool))
                 | (samples["background_residual_sigma"][member]

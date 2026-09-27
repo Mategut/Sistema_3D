@@ -1,42 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-Paso 07 — Validación geométrica métrica de nubes parciales.
-
-Objetivo
---------
-Evaluar cada nube producida por el paso 06 ANTES de cualquier registro.
-Este paso NO transforma, alinea ni fusiona las nubes.
-
-Para cada vista:
-1. Carga la nube final (.npz) en coordenadas de cámara.
-2. Extrae hasta N planos dominantes mediante RANSAC + refinamiento SVD.
-3. Calcula métricas por plano:
-   - proporción de puntos explicados;
-   - RMSE, MAD y P95 punto-plano;
-   - espesor robusto en la dirección normal;
-   - estabilidad angular de normales;
-   - extensión física y densidad aproximada.
-4. Evalúa la relación angular entre planos.
-5. Detecta posibles capas paralelas separadas.
-6. Clasifica cada vista como accepted / warning / rejected.
-7. Exporta JSON, CSV, NPZ, PLY coloreado y hojas de contacto.
-
-Principio de diseño
--------------------
-Una nube incompleta NO se rechaza por tener huecos. Se penaliza geometría
-inconsistente (planos gruesos, residuos altos, capas dobles, etc.).
-
-Compatibilidad
---------------
-Está diseñado para consumir directamente:
-    06_nubes_puntos/
-        resumen_06_nubes_puntos.json
-        *_cloud_final.npz
-
-No usa ArUco, marcadores fiduciales ni información externa de pose.
-"""
+"""Evalúa planos, residuos y capas en las nubes parciales antes del registro."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -66,9 +31,7 @@ from utilidades_mascaras import (
     validate_summary_context,
 )
 
-# ---------------------------------------------------------------------------
 # Argumentos
-# ---------------------------------------------------------------------------
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -139,9 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-# ---------------------------------------------------------------------------
 # Utilidades geométricas
-# ---------------------------------------------------------------------------
 
 
 def finite_points(points: np.ndarray) -> np.ndarray:
@@ -254,9 +215,7 @@ def plane_basis(points: np.ndarray, normal: np.ndarray) -> Tuple[np.ndarray, np.
     return u, v
 
 
-# ---------------------------------------------------------------------------
 # RANSAC de planos
-# ---------------------------------------------------------------------------
 
 
 def ransac_plane(
@@ -431,9 +390,7 @@ def extract_dominant_planes(
     return planes, labels
 
 
-# ---------------------------------------------------------------------------
 # Relaciones entre planos / diagnóstico de capas
-# ---------------------------------------------------------------------------
 
 
 def analyze_plane_relations(planes: Sequence[dict], args, geometry_mode: str) -> dict:
@@ -508,9 +465,7 @@ def analyze_plane_relations(planes: Sequence[dict], args, geometry_mode: str) ->
     }
 
 
-# ---------------------------------------------------------------------------
 # Clasificación de calidad
-# ---------------------------------------------------------------------------
 
 
 def classify_view(
@@ -603,9 +558,7 @@ def classify_view(
     return quality, reasons, metrics
 
 
-# ---------------------------------------------------------------------------
 # Visualización
-# ---------------------------------------------------------------------------
 
 
 PLANE_COLORS_RGB = np.asarray(
@@ -726,9 +679,7 @@ def make_validation_preview(
         raise OSError(f"No se pudo guardar: {path}")
 
 
-# ---------------------------------------------------------------------------
 # Estadísticas generales
-# ---------------------------------------------------------------------------
 
 
 def cloud_extent(points: np.ndarray) -> dict:
@@ -764,9 +715,7 @@ def robust_session_stats(values: Sequence[float]) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Principal
-# ---------------------------------------------------------------------------
 
 
 def main() -> int:

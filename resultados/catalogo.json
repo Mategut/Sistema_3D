@@ -1,0 +1,400 @@
+[
+  {
+    "campaign": "cilindro1_20260919_132249",
+    "quality": "accepted",
+    "warnings": [],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "4bce0a9e9f70e874b33ffb5fb95197749effbb8ae1a1337abf679bcb3a8c7701",
+    "source_export_report_sha256": "e32d6afb53457ab582cc9c91dee9e257174df35644f62e266b247eaad8ff7e2d",
+    "export_quality": "accepted",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/cilindro1_20260919_132249/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "c340bdeed05760e836b529904b18731e9a29822222c0b5723a831e05f7a98aec"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/cilindro1_20260919_132249/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "61668a213aa477743bf61eee4bdd3f810bb6607899e46d027cfd25c49b8818b0"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/cilindro1_20260919_132249/resultado_final/preview_validacion.png",
+        "sha256": "20e0e1ee54a2e217a32d061e580ff53b12b88b82cf5c4be5e0f53e5e7ea54906"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/cilindro1_20260919_132249/capturas/S01/izquierda/OBJ01_CILINDRO1_S01_V001_A0000_L.png",
+        "sha256": "cf779a504c531b578110602fac079d42132719e91ad9358c1a7ca917311e9509"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/cilindro1_20260919_132249/capturas/S01/derecha/OBJ01_CILINDRO1_S01_V001_A0000_R.png",
+        "sha256": "c386139f1ce43af627a63f51196e6cf6c70fd8fece9555017a631b9515527fdd"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "cilindro1",
+    "physical_reference_mm": {
+      "diametro": 43,
+      "altura": 97
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "cilindro2_20260919_132519",
+    "quality": "warning",
+    "warnings": [
+      "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+    ],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "55c49f99ad18f6b6caaf3e2c68cc9264fd30019ad9479dbe2502b9f015e11417",
+    "source_export_report_sha256": "ea083c6e5eba5f4a7727ef00a86d0c112086498757eb390e79ca7d8c8f8ef98c",
+    "export_quality": "warning",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/cilindro2_20260919_132519/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "3eb4b88dbf754485bfa4da113920402f8a0d8b749957db54b778d28ce29ce496"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/cilindro2_20260919_132519/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "82f937f606539dfc3e886da8f3e2062cd6700140866c7cc5b7949496c3341521"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/cilindro2_20260919_132519/resultado_final/preview_validacion.png",
+        "sha256": "3734b8b57a018112d6d16ba495ae4be5acdbab5d4012b0868534a969e8b2623b"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/cilindro2_20260919_132519/capturas/S01/izquierda/OBJ01_CILINDRO2_S01_V001_A0000_L.png",
+        "sha256": "07cdc80eeef5b646540df82fc05835be326b388a02f7ebab34780386e599f77f"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/cilindro2_20260919_132519/capturas/S01/derecha/OBJ01_CILINDRO2_S01_V001_A0000_R.png",
+        "sha256": "cd559906836e7555d1bcbb22845fd3e449bdc81f6bd4ced379a76692173bdc49"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "cilindro2",
+    "physical_reference_mm": {
+      "diametro": 43,
+      "altura": 97
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "cilindro3_20260919_132734",
+    "quality": "accepted",
+    "warnings": [],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "e58146e375bb4e3becb10c7a4efd8f1ce213b6b540c1e335a8b4c5cb3aa03dd8",
+    "source_export_report_sha256": "de17ee46d0bec7e667a5e6252c33c44c912c9341734436e69cab7c43d8805a8c",
+    "export_quality": "accepted",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/cilindro3_20260919_132734/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "2fe9c393a52661acea77d6030b070d9d69a6c729ca633283656eeaa76c3eb0bb"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/cilindro3_20260919_132734/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "d936444c4f5785af48cc155ecd2777c8174eb400609f8b09bc0c2ed9f47dca60"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/cilindro3_20260919_132734/resultado_final/preview_validacion.png",
+        "sha256": "f172e21abde9c0111a350535e89672485b9a846479133eb9e7700356e82c3e35"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/cilindro3_20260919_132734/capturas/S01/izquierda/OBJ01_CILINDRO3_S01_V001_A0000_L.png",
+        "sha256": "44d6aa97a5a48b867c9a5c8e42dadf085a5ab8bd451547ba9495ea8f506b5ae4"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/cilindro3_20260919_132734/capturas/S01/derecha/OBJ01_CILINDRO3_S01_V001_A0000_R.png",
+        "sha256": "73518444b846e010faa153b0b31ee699c7201551e21f17beb1d8f8e170fb5907"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "cilindro3",
+    "physical_reference_mm": {
+      "diametro": 43,
+      "altura": 97
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "cubo1_20260919_130526",
+    "quality": "warning",
+    "warnings": [
+      "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+    ],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "33cb5f8489b4430a0ee998e6b6b8b6988b4be3cf566f4b2ae3d182146b7d6a80",
+    "source_export_report_sha256": "9873ba0662cb8dd89e14dc9b9f2f522a42cdcc30d25c5bc2504243e83b2c27d6",
+    "export_quality": "warning",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/cubo1_20260919_130526/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "f04aa69c64ad98288b0c271f3704745a70d627d5b3bc53196b387f645a9fef86"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/cubo1_20260919_130526/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "97363fd9d39b618bd5fc06bee70dc9ba471a16c5a095ba1fb3e80b39768e419b"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/cubo1_20260919_130526/resultado_final/preview_validacion.png",
+        "sha256": "f8c6946c07d905afb2af147bfa9da8800a73e88f3730040f6a9268dc95488cd3"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/cubo1_20260919_130526/capturas/S01/izquierda/OBJ01_CUBO1_S01_V001_A0000_L.png",
+        "sha256": "63042892eab406aba8aa500bb99b1050f322a02f7827a67bd40ce4aba853eef1"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/cubo1_20260919_130526/capturas/S01/derecha/OBJ01_CUBO1_S01_V001_A0000_R.png",
+        "sha256": "307d57ea8cd91da1396662855ce7e06d40611ecc53b4f08ea29301274b80d927"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "cubo1",
+    "physical_reference_mm": {
+      "fondo": 94,
+      "ancho": 95,
+      "alto": 95
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "cubo2_20260919_131206",
+    "quality": "warning",
+    "warnings": [
+      "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+    ],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "4825001a4c9a43b7e24c6d72adf30d3085e6b65549261a06fbb258d36f17dbd7",
+    "source_export_report_sha256": "9b1794a0c0f3788cf58012eaa41b79fdcb4fd4b5b819d7422e72fabcdc338a84",
+    "export_quality": "warning",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/cubo2_20260919_131206/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "3eacd90189cf896b6af9431b303bd03196d4ded4f8316761fff7c63011ae2bc6"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/cubo2_20260919_131206/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "5770b3bd4c7bee2c5f5576b1d571792f877364c121a836184860ff77f4944a97"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/cubo2_20260919_131206/resultado_final/preview_validacion.png",
+        "sha256": "7e83fc0b244455e0768a6b395a3a0cba76b69a6ce9dc74bcb27de74174f103f5"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/cubo2_20260919_131206/capturas/S01/izquierda/OBJ01_CUBO2_S01_V001_A0000_L.png",
+        "sha256": "4f7f30b844dc6ce3ed00078d65a089867c6fd8d8b35ac6709dd5441f71a6dfd9"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/cubo2_20260919_131206/capturas/S01/derecha/OBJ01_CUBO2_S01_V001_A0000_R.png",
+        "sha256": "c74d3763e74aa94def25d3d0ca9f84a77ae53c96ec809c79ffc78284d4f2cba5"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "cubo2",
+    "physical_reference_mm": {
+      "fondo": 94,
+      "ancho": 95,
+      "alto": 95
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "ubo3_20260919_131506",
+    "quality": "warning",
+    "warnings": [
+      "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+    ],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "125d0d5c2c6b2c1ff82b89a0d1d4a3b8b3772506eb55497f8887863b706886dd",
+    "source_export_report_sha256": "5abd4cb70f0c2282caf526ba137a5dc712df5288afd3dffb4c3538cb5e752545",
+    "export_quality": "warning",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/ubo3_20260919_131506/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "6b017c25f20b6fbdc0b3b6c970898677f4b5d9c153451d6217decd5efaea7339"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/ubo3_20260919_131506/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "3d7f61c77fa87a45b0b465731749cf476d16fdec61cf1332d9e1b6edf5548002"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/ubo3_20260919_131506/resultado_final/preview_validacion.png",
+        "sha256": "50e23cf5b355e3605e31fed99736d59349d62ba0e47a6858473e1a739cfa5737"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/ubo3_20260919_131506/capturas/S01/izquierda/OBJ01_UBO3_S01_V001_A0000_L.png",
+        "sha256": "0fd8918d285b5c8d6a78574271e1914d7725ebf36de252f199b60250aa6bfc25"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/ubo3_20260919_131506/capturas/S01/derecha/OBJ01_UBO3_S01_V001_A0000_R.png",
+        "sha256": "c901fc41bf721b1074774d2bf6ac47be9230f03f77c12dc30c819741f8bdd8ff"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "cubo3",
+    "physical_reference_mm": {
+      "fondo": 94,
+      "ancho": 95,
+      "alto": 95
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "piramide1_20260920_183454",
+    "quality": "warning",
+    "warnings": [
+      "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+    ],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "5431ef897ca66fbe6cd8c9d17b398336d8370a8e72c5c3773d3877a2018b9f32",
+    "source_export_report_sha256": "ec72a779abccb268274a7a4a7d678e4e49804bdcfcbc5ec6a82afc9652323b9b",
+    "export_quality": "warning",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/piramide1_20260920_183454/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "d382894fad15fde407e0bf66b857827fe55539a86b3a6b4f8a69da711fff7727"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/piramide1_20260920_183454/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "a648101b4a890457e8a4138de08c685aac81907c36eea65aa82084f72f787b4a"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/piramide1_20260920_183454/resultado_final/preview_validacion.png",
+        "sha256": "97a39eccada3613b88cbd5f617774aadbbae062f838c6d83075bf6f8b6f3e99f"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/piramide1_20260920_183454/capturas/S01/izquierda/OBJ01_PIRAMIDE1_S01_V001_A0000_L.png",
+        "sha256": "7a546fad96eba3ac0c281864b35bb2c8e0236e472fdd0538b515b091df294823"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/piramide1_20260920_183454/capturas/S01/derecha/OBJ01_PIRAMIDE1_S01_V001_A0000_R.png",
+        "sha256": "932f19d571ad595e341755bcc4306c5afdb86506815b0c5f45b59d9257976d58"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "piramide1",
+    "physical_reference_mm": {
+      "lado_base": 103,
+      "arista_lateral_hasta_punta": 100,
+      "altura_cara": 85
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "Piramide3_20260922_211146",
+    "quality": "warning",
+    "warnings": [
+      "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+    ],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "ca2dd9891b2c4ad6421d8e12664e1426273928865af159958e71b04d696240ee",
+    "source_export_report_sha256": "e056fef528fab8b9a92f5f045d809d3630ae78a99c9d91f221fdb22ba8b29dcd",
+    "export_quality": "warning",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/Piramide3_20260922_211146/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "77fe3632d9e6adf4be5a976d548623440152b5b5216fb687f3c3dd0388fee068"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/Piramide3_20260922_211146/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "0b8cba911d1e35ef9abcaff54494c28d9bc4e8b2c6989cfc7c697282f41cbd09"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/Piramide3_20260922_211146/resultado_final/preview_validacion.png",
+        "sha256": "c6902b51be81d0b2bcd2b51ab3db290d9e3432906de62a3f4d79395fec8d2bf3"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/Piramide3_20260922_211146/capturas/S01/izquierda/OBJ01_PIRAMIDE3_S01_V001_A0000_L.png",
+        "sha256": "7f9d44fbfc8a0e2e53444e6513089477836f56342db0cc52cf9a0e1127f91f40"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/Piramide3_20260922_211146/capturas/S01/derecha/OBJ01_PIRAMIDE3_S01_V001_A0000_R.png",
+        "sha256": "2f5373b52f4f3e1e1edcf3836e4bac44f3f147d4b0e63b89e0dc9395cb402273"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "piramide3",
+    "physical_reference_mm": {
+      "lado_base": 103,
+      "arista_lateral_hasta_punta": 100,
+      "altura_cara": 85
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  },
+  {
+    "campaign": "piramide4_20260922_175555",
+    "quality": "warning",
+    "warnings": [
+      "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+    ],
+    "reject_reasons": [],
+    "units": "mm",
+    "source_validation_sha256": "05d9eae46a99c828f3986e8293ba78e0e70d61599c223c9f58f3b576066f9301",
+    "source_export_report_sha256": "a48b764322e00877659b1641e68b07a02e68b01d418f6ea53ecb0dd820782978",
+    "export_quality": "warning",
+    "origins": {
+      "modelo_final_original_mm.ply": {
+        "source": "trabajos/piramide4_20260922_175555/resultado_final/modelo_final_original_mm.ply",
+        "sha256": "d0af2ef67c44ddac984d5b7448b50dc91a5cd8aadc7819f47f45417308791d18"
+      },
+      "modelo_pre_pulido_mm.ply": {
+        "source": "trabajos/piramide4_20260922_175555/resultado_final/modelo_pre_pulido_mm.ply",
+        "sha256": "b59d74cdf0f1d83e247b90013a7047d52928156f2bb98716e41326a0c217f0d2"
+      },
+      "preview_validacion.png": {
+        "source": "trabajos/piramide4_20260922_175555/resultado_final/preview_validacion.png",
+        "sha256": "73c679f6be3d38c139d779e7901d55fb860af435431c0d60b004ff503deef34a"
+      },
+      "captura_izquierda.png": {
+        "source": "trabajos/piramide4_20260922_175555/capturas/S01/izquierda/OBJ01_PIRAMIDE4_S01_V001_A0000_L.png",
+        "sha256": "200bc863ceb4203e3144d40d3e798922ddf2ce8e42e591b50ec027005aed08b2"
+      },
+      "captura_derecha.png": {
+        "source": "trabajos/piramide4_20260922_175555/capturas/S01/derecha/OBJ01_PIRAMIDE4_S01_V001_A0000_R.png",
+        "sha256": "b66abdadbc64b3491dd91c90dcbea2e3786a43d87e8ca2889354a8bb8e5a409a"
+      }
+    },
+    "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+    "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+    "public_name": "piramide4",
+    "physical_reference_mm": {
+      "lado_base": 103,
+      "arista_lateral_hasta_punta": 100,
+      "altura_cara": 85
+    },
+    "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+    "dimensional_comparison_performed": true,
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  }
+]

@@ -1,0 +1,45 @@
+{
+  "campaign": "piramide4_20260922_175555",
+  "quality": "warning",
+  "warnings": [
+    "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+  ],
+  "reject_reasons": [],
+  "units": "mm",
+  "source_validation_sha256": "05d9eae46a99c828f3986e8293ba78e0e70d61599c223c9f58f3b576066f9301",
+  "source_export_report_sha256": "a48b764322e00877659b1641e68b07a02e68b01d418f6ea53ecb0dd820782978",
+  "export_quality": "warning",
+  "origins": {
+    "modelo_final_original_mm.ply": {
+      "source": "trabajos/piramide4_20260922_175555/resultado_final/modelo_final_original_mm.ply",
+      "sha256": "d0af2ef67c44ddac984d5b7448b50dc91a5cd8aadc7819f47f45417308791d18"
+    },
+    "modelo_pre_pulido_mm.ply": {
+      "source": "trabajos/piramide4_20260922_175555/resultado_final/modelo_pre_pulido_mm.ply",
+      "sha256": "b59d74cdf0f1d83e247b90013a7047d52928156f2bb98716e41326a0c217f0d2"
+    },
+    "preview_validacion.png": {
+      "source": "trabajos/piramide4_20260922_175555/resultado_final/preview_validacion.png",
+      "sha256": "73c679f6be3d38c139d779e7901d55fb860af435431c0d60b004ff503deef34a"
+    },
+    "captura_izquierda.png": {
+      "source": "trabajos/piramide4_20260922_175555/capturas/S01/izquierda/OBJ01_PIRAMIDE4_S01_V001_A0000_L.png",
+      "sha256": "200bc863ceb4203e3144d40d3e798922ddf2ce8e42e591b50ec027005aed08b2"
+    },
+    "captura_derecha.png": {
+      "source": "trabajos/piramide4_20260922_175555/capturas/S01/derecha/OBJ01_PIRAMIDE4_S01_V001_A0000_R.png",
+      "sha256": "b66abdadbc64b3491dd91c90dcbea2e3786a43d87e8ca2889354a8bb8e5a409a"
+    }
+  },
+  "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+  "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+  "public_name": "piramide4",
+  "physical_reference_mm": {
+    "lado_base": 103,
+    "arista_lateral_hasta_punta": 100,
+    "altura_cara": 85
+  },
+  "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+  "dimensional_comparison_performed": true,
+  "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+}

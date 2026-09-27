@@ -5,7 +5,32 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Entornos locales, cachés de herramientas y metadatos del editor
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+
+# Copias manuales antiguas de la calibración
+sistema/calibracion_plataforma/*_PRE_CORRECCION_*.json
+
 # Datos y resultados generados por la aplicación
 trabajos/
 registros/
+respaldos/
+backups/
 sistema/estructura_sistema.json
+

@@ -1,14 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Manifiestos angulares y correspondencia de capturas entre sesiones.
-
-Cada sesión contiene 25 pares y comienza en la pose cero. Los 2055 pasos de
-una vuelta se distribuyen mediante STEP_SEQUENCE; los ángulos físicos se
-calculan a partir de los pasos acumulados. Las etiquetas de archivo conservan
-el ángulo nominal y sirven para comprobar la captura, no para sustituir el
-ángulo físico en la reconstrucción.
-"""
+"""Utilidades de rutas y datos compartidos entre sesiones de una campaña."""
 
 from __future__ import annotations
 import csv, json, re

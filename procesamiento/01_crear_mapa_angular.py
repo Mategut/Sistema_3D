@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Paso 01 — manifiesto de poses V7.2 / 2055 pasos."""
+"""Genera el mapa de poses a partir de la secuencia angular de captura."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion

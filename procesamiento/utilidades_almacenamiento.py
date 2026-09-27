@@ -1,29 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Política de almacenamiento reducido para las campañas del Sistema 3D.
-
-La reconstrucción completa genera numerosos artefactos intermedios necesarios
-mientras el pipeline está trabajando (mapas por vista, nubes por pose,
-diagnósticos, máscaras auxiliares, etc.). Una vez que una ejecución termina con
-éxito, esos artefactos dejan de ser necesarios para el resultado científico
-final y son la principal causa del crecimiento del tamaño de cada trabajo.
-
-Este módulo NO cambia ningún algoritmo ni ninguna entrada de los pasos 01--18.
-La compactación ocurre únicamente después de que el flujo haya terminado y
-haya creado sus resultados finales. Se conservan:
-
-- resúmenes JSON y tablas CSV de calidad;
-- hojas de contacto y previsualizaciones globales;
-- auditorías relevantes;
-- estado del pipeline;
-- ``resultado_final`` completo;
-- capturas originales y ``documentacion`` completa.
-
-Los archivos por vista/pose y las representaciones intermedias pesadas se
-eliminan. Una campaña compactada puede volver a procesarse desde cero usando sus
-capturas y referencias congeladas. No se pretende reutilizar checkpoints de una
-campaña compactada porque sus dependencias intermedias ya no existen.
-"""
+"""Compacta resultados intermedios conservando los productos y registros necesarios."""
 
 from __future__ import annotations
 
@@ -33,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Iterable
 
-STORAGE_SCHEMA_VERSION = 1
+STORAGE_SCHEMA_VERSION = 2
 
 # Patrones conservados por carpeta de paso. Solo se aplican a archivos que
 # están directamente dentro de la carpeta del paso; las subcarpetas se recorren
@@ -98,15 +75,20 @@ KEEP_BY_STEP: dict[str, tuple[str, ...]] = {
         "preview_completado_estimado.png",
     ),
     "12_regularizacion_nube": (
+        "nube_regularizada_general.npz",
         "resumen_12_regularizacion_nube.json",
         "preview_comparacion_regularizacion.png",
         "preview_nube_regularizada_general.png",
     ),
     "13_reconstruccion_superficie": (
+        "malla_observacional_antes_relleno.ply",
+        "malla_final_seleccionada.ply",
+        "procedencia_estimada.npz",
         "resumen_13_reconstruccion_superficie.json",
         "comparacion_metodos_superficie_13.json",
     ),
     "14_limpieza_topologica": (
+        "malla_final_topologica.ply",
         "resumen_14_limpieza_topologica.json",
         "analisis_componentes_14.csv",
         "analisis_componentes_post_reparacion_14.csv",
@@ -115,6 +97,7 @@ KEEP_BY_STEP: dict[str, tuple[str, ...]] = {
         "preview_topologia_14.png",
     ),
     "15_pulido_final": (
+        "malla_final_topologica.ply",
         "resumen_15_pulido_final.json",
         "preview_regularizacion_malla.png",
     ),
@@ -207,27 +190,6 @@ def _compact_step_dir(step_dir: Path, patterns: tuple[str, ...]) -> dict:
     }
 
 
-def _annotate_compacted_summary(path: Path, report_path: Path) -> None:
-    """Marca un resumen conservado para que no prometa artefactos ya retirados."""
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return
-    if not isinstance(data, dict):
-        return
-    data["storage_compacted"] = True
-    data["storage_compaction_note"] = (
-        "Los artefactos intermedios por vista/pose fueron retirados después de "
-        "completar el pipeline. Las métricas de este resumen se conservan; algunas "
-        "rutas históricas dentro de 'outputs' pueden apuntar a archivos ya eliminados."
-    )
-    data["storage_report"] = str(report_path)
-    try:
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    except OSError:
-        pass
-
-
 def compact_reconstruction(workspace: Path, *, reason: str = "pipeline_complete") -> dict:
     """Reduce ``reconstruccion`` conservando únicamente productos científicos finales.
 
@@ -287,8 +249,8 @@ def compact_reconstruction(workspace: Path, *, reason: str = "pipeline_complete"
         encoding="utf-8",
     )
 
-    for summary in reconstruction.rglob("resumen_*.json") if reconstruction.is_dir() else []:
-        _annotate_compacted_summary(summary, report_path)
+    # El reporte de almacenamiento documenta la compactación por separado.
+    # No reescribir informes científicos ya referenciados por SHA-256.
 
     # Marca el estado para impedir que --resume reutilice un resumen aislado
     # como si todavía existieran todas sus dependencias intermedias.
@@ -324,5 +286,5 @@ def print_compaction_report(report: dict) -> None:
     print(f"Reconstrucción antes: {before:.1f} MB", flush=True)
     print(f"Reconstrucción después: {after:.1f} MB", flush=True)
     print(f"Liberado: {removed:.1f} MB ({ratio:.1f}%)", flush=True)
-    print("Se conservaron resúmenes, CSV, hojas de contacto, previews y resultado_final.", flush=True)
+    print("Se conservaron informes, nube de validación, mallas de comparación, procedencia y resultado_final.", flush=True)
     print("=============================================", flush=True)

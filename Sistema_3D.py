@@ -1,26 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Sistema integrado de captura estéreo y reconstrucción tridimensional.
-
-La interfaz administra recursos del montaje, trabajos independientes,
-adquisición de imágenes y ejecución o reanudación del pipeline. Las cámaras,
-Arduino y los procesos de cálculo conservan sus controles de estado y sus
-diagnósticos. La bitácora registra capturas y cierres de vuelta.
-
-Modelo angular del montaje
---------------------------
-2055 pasos calibrados completan una vuelta. Se capturan 25 pares por sesión,
-con etiquetas nominales de 0.0° a 345.6° cada 14.4°. La secuencia de movimiento
-es [82, 82, 83, 82, 82] repetida cinco veces; el ángulo físico se deriva de
-los pasos acumulados. La última transición se ejecuta con CLOSE, sin captura,
-y completa la vuelta antes de iniciar otra sesión.
-
-RESET define la posición actual como origen lógico; no mueve el motor ni
-busca una referencia física. El protocolo serie debe corresponder al firmware
-ROT2055_V7_2. El flujo no aplica calibración visual ni corrección automática
-del movimiento.
-"""
+"""Interfaz de captura y reconstrucción 3D. Coordina cámaras, plataforma y trabajos."""
 
 from __future__ import annotations
 
@@ -44,6 +25,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from PIL import Image, ImageTk
 from openpyxl import Workbook, load_workbook
+from interfaz_herramientas import CalibrationToolsMixin, install_stereo
+from procesamiento.utilidades_estereo import validate_stereo_calibration
 
 from procesamiento.utilidades_referencias import (
     compare_current_sources_to_snapshot,
@@ -64,9 +47,7 @@ PLATFORM_CALIBRATION_FILENAME = "calibracion_plataforma.json"
 JOB_METADATA_FILENAME = "trabajo_sistema_3d.json"
 VALID_JOB_MODES = {"calibrar-plataforma", "reconstruir"}
 
-# ---------------------------------------------------------------------
 # Modelo angular de la plataforma
-# ---------------------------------------------------------------------
 
 STEPS_PER_REVOLUTION = 2055
 MOVES_PER_REVOLUTION = 25
@@ -104,9 +85,7 @@ STEP_SEQUENCE = (
 assert len(STEP_SEQUENCE) == MOVES_PER_REVOLUTION
 assert sum(STEP_SEQUENCE) == STEPS_PER_REVOLUTION
 
-# ---------------------------------------------------------------------
 # Adquisición
-# ---------------------------------------------------------------------
 
 RESOLUTION_W = 1920
 RESOLUTION_H = 1080
@@ -120,9 +99,7 @@ SERIAL_BAUD_DEFAULT = 115200
 SERIAL_COMMAND_TIMEOUT_S = 20.0
 FRESH_FRAME_TIMEOUT_S = 3.0
 
-# Después del movimiento final que completa la vuelta se exige un tiempo
-# adicional y, posteriormente, un par nuevo antes de iniciar la sesión
-# siguiente. Así S02/S03 nunca reutilizan un frame anterior al retorno.
+# Esperar asentamiento y un par nuevo antes de iniciar S02/S03.
 SESSION_RETURN_SETTLE_S = 1.0
 SESSION_START_GUARD_S = 0.35
 
@@ -416,7 +393,7 @@ class PipelineProgress:
         return status, detail
 
 
-class CaptureApp:
+class CaptureApp(CalibrationToolsMixin):
     """Interfaz de captura estéreo, gestión de trabajos y ejecución del pipeline.
 
     La vista previa actualiza el par de imágenes bajo frame_lock. Los trabajadores
@@ -500,9 +477,7 @@ class CaptureApp:
 
         self._status_job = self.root.after(100, self._process_status_queue)
 
-    # ------------------------------------------------------------------
     # UI
-    # ------------------------------------------------------------------
 
     def _configure_window(self):
         """Abre maximizada en Windows y conserva una geometría restaurable centrada."""
@@ -561,6 +536,10 @@ class CaptureApp:
         idle = not self._busy() and not self._closing
         for widget in self._idle_widgets + self._hardware_entries:
             widget.configure(state="normal" if idle else "disabled")
+        for widget in self._option_widgets:
+            widget.configure(state="readonly" if idle else "disabled")
+        for widget in self._stereo_result_buttons:
+            widget.configure(state="normal" if idle and self._last_stereo_result else "disabled")
         connected = (
             self.cap_left is not None and self.cap_right is not None and self.ser is not None
         )
@@ -633,6 +612,7 @@ class CaptureApp:
                 "pipeline": "Iniciando procesamiento…",
                 "capture": "Iniciando captura…",
                 "background": "Capturando fondo vacío…",
+                "tool": "Ejecutando herramienta…",
             }[kind]
         )
         self.progress_var.set("Preparando recursos…")
@@ -643,7 +623,7 @@ class CaptureApp:
             self.pipeline_thread = self._worker_thread
         elif kind == "capture":
             self.capture_thread = self._worker_thread
-        else:
+        elif kind == "background":
             self.background_capture_thread = self._worker_thread
         try:
             self._worker_thread.start()
@@ -725,6 +705,7 @@ class CaptureApp:
                 else (
                     "La captura interrumpida debe reiniciarse con el objeto en su posición inicial."
                     if operation == "capture"
+                    else "Puedes volver a ejecutar la herramienta." if operation == "tool"
                     else "Puedes volver a capturar el fondo vacío."
                 )
             )
@@ -733,13 +714,15 @@ class CaptureApp:
                 self._pipeline_progress.stopped - self._pipeline_progress.started
             )
             if self.job_mode == "calibrar-plataforma":
-                self.status_var.set("Calibración de plataforma terminada y guardada.")
+                self.status_var.set("Calibración candidata generada; validación independiente pendiente.")
                 self.progress_var.set(
-                    f"Tiempo total: {elapsed} · Ya puedes crear un trabajo de objeto."
+                    f"Tiempo total: {elapsed} · La referencia del sistema se conserva."
                 )
                 messagebox.showinfo(
-                    "Calibración terminada",
-                    f"Calibración guardada:\n{message.get('platform_calibration')}",
+                    "Calibración candidata",
+                    f"Candidata guardada:\n{message.get('platform_calibration_candidate')}\n\n"
+                    "Abre la pestaña Calibración para evaluar la candidata, preparar "
+                    "el informe independiente y activarla con evidencia revisada.",
                     parent=self.root,
                 )
             else:
@@ -753,6 +736,12 @@ class CaptureApp:
                     f"Calidad de validación: {quality}\n\nOBJ para Blender:\n{message.get('obj')}\n\nOBJ científico en mm:\n{message.get('obj_mm')}\n\nPLY original:\n{message.get('mesh')}\n\nResumen:\n{message.get('summary')}",
                     parent=self.root,
                 )
+        elif kind == "tool_complete":
+            self.status_var.set("Herramienta terminada. Revisa el registro del resultado.")
+            self.progress_var.set(f"Registro: {message['log']}")
+            if message.get("output"):
+                self._last_stereo_result = message["output"]
+                messagebox.showinfo("Calibración estéreo candidata", f"Resultado guardado en:\n{message['output']}\n\nRevisa calibration_report.json. Para instalar una calibración aceptada, usa Importar calibración estéreo en la pestaña Calibración.", parent=self.root)
         elif kind == "capture_complete":
             self.status_var.set("Captura completada y verificada.")
             self.progress_var.set("75 pares guardados. Ya puedes procesar el trabajo.")
@@ -835,12 +824,9 @@ class CaptureApp:
         sidebar.columnconfigure(0, weight=1)
         sidebar.rowconfigure(0, weight=1)
 
-        # El panel lateral cabe completo en la interfaz maximizada, por lo que
-        # no necesita Canvas ni barra de desplazamiento. Mantenerlo como un
-        # Frame normal evita una interacción innecesaria y deja los controles
-        # siempre visibles.
-        controls = ttk.Frame(sidebar)
-        controls.grid(row=0, column=0, sticky="nsew")
+        self.control_tabs = ttk.Notebook(sidebar)
+        self.control_tabs.grid(row=0, column=0, sticky="nsew")
+        controls = self._scroll_tab("Captura")
         self._idle_widgets = []
         self._hardware_entries = []
 
@@ -864,7 +850,6 @@ class CaptureApp:
         for row, (label, command) in enumerate(
             (
                 ("Actualizar estado", self._refresh_system_status),
-                ("Importar calibración estéreo", self.import_stereo_calibration),
             ),
             start=4,
         ):
@@ -954,6 +939,7 @@ class CaptureApp:
         self.btn_continue = ttk.Button(
             workflow, text="Continuar", command=self.continue_after_object_change
         )
+        self._build_tool_tabs()
 
         view = ttk.Frame(main)
         view.grid(row=1, column=1, sticky="nsew")
@@ -1004,9 +990,7 @@ class CaptureApp:
         self._activity_bar.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(8, 0))
         self._update_controls()
 
-    # ------------------------------------------------------------------
     # Estructura del producto / trabajos
-    # ------------------------------------------------------------------
 
     def _initialize_product_structure(self):
         """Prepara los directorios del sistema y guarda su manifiesto de estructura."""
@@ -1073,47 +1057,15 @@ class CaptureApp:
 
     def _firmware_path(self):
         """Devuelve el firmware de referencia del montaje si está disponible."""
-        return self.install_root / "firmware" / "control_plataforma_2055_pasos.ino"
+        return self.install_root / "firmware" / "control_plataforma_2055_pasos" / "control_plataforma_2055_pasos.ino"
 
-    def _promote_platform_calibration_from_job(self, local_output: Path) -> Path:
-        """Publica la calibración generada por una campaña sin perder la anterior."""
-        local_output = Path(local_output).resolve()
-        candidate = local_output / "calibracion_plataforma_candidata.json"
-        if not candidate.is_file():
-            raise FileNotFoundError(
-                "La campaña terminó sin calibracion_plataforma_candidata.json."
-            )
+    def _promote_platform_calibration_from_job(self, local_output: Path, evidence_path: Path) -> Path:
+        """Activa únicamente una candidata con informe independiente verificado."""
+        from procesamiento.utilidades_calibracion import promote_platform_calibration
 
-        staged = self.system_dir / f"calibracion_plataforma.__tmp__{time.time_ns()}"
-        if staged.exists():
-            shutil.rmtree(staged)
-        shutil.copytree(local_output, staged, copy_function=shutil.copy2)
-
-        canonical_staged = staged / PLATFORM_CALIBRATION_FILENAME
-        temporary = canonical_staged.with_suffix(canonical_staged.suffix + ".tmp")
-        shutil.copy2(staged / candidate.name, temporary)
-        temporary.replace(canonical_staged)
-
-        backup = None
-        try:
-            if self.platform_dir.exists() and any(self.platform_dir.rglob("*")):
-                stamp = time.strftime("%Y%m%d_%H%M%S")
-                backup = self.records_dir / f"calibracion_plataforma_reemplazada_{stamp}"
-                if backup.exists():
-                    shutil.rmtree(backup)
-                self.platform_dir.replace(backup)
-            elif self.platform_dir.exists():
-                shutil.rmtree(self.platform_dir)
-
-            staged.replace(self.platform_dir)
-        except Exception:
-            if staged.exists():
-                shutil.rmtree(staged, ignore_errors=True)
-            if backup is not None and backup.exists() and not self.platform_dir.exists():
-                backup.replace(self.platform_dir)
-            raise
-
-        return self._platform_calibration_path()
+        return promote_platform_calibration(
+            local_output, evidence_path, self.system_dir, self.records_dir
+        )
 
     def _capture_reference_config(self):
         """Parámetros de adquisición que se congelan junto con cada campaña."""
@@ -1191,20 +1143,18 @@ class CaptureApp:
         return data if isinstance(data, dict) else None
 
     def _stereo_ready(self):
-        """Comprueba los archivos estéreo y el informe, con compatibilidad para datos heredados."""
-        required_ok = (self.stereo_dir / "stereo_initial.yaml").is_file() and (
-            self.stereo_dir / "rectification_maps.npz"
-        ).is_file()
-        if not required_ok:
+        """Valida referencias y reutiliza el resultado mientras no cambien los archivos."""
+        try:
+            paths = [self.stereo_dir / name for name in ("stereo_initial.yaml", "rectification_maps.npz", "calibration_report.json")]
+            signature = tuple((str(p), p.stat().st_size, p.stat().st_mtime_ns) for p in paths)
+            if getattr(self, "_stereo_validation_signature", None) != signature:
+                self._stereo_validation_signature = signature
+                self._stereo_validation_ok = False
+                validate_stereo_calibration(self.stereo_dir)
+                self._stereo_validation_ok = True
+            return self._stereo_validation_ok
+        except (OSError, ValueError):
             return False
-        report = self._read_stereo_report()
-        if report is None:
-            # Compatibilidad con calibraciones heredadas: los dos archivos
-            # científicos siguen siendo suficientes, aunque no habrá métricas
-            # visibles en la GUI.
-            return True
-        quality = str(report.get("quality", "")).strip().lower()
-        return quality == "accepted"
 
     def _background_ready(self):
         """Comprueba que existan las dos imágenes del fondo vacío."""
@@ -1238,7 +1188,21 @@ class CaptureApp:
             self.stereo_status_var.set("✓ lista | calibración heredada sin reporte")
         else:
             self.stereo_status_var.set("✗ no instalada / no aceptada")
-        self.platform_status_var.set("✓ lista" if platform_ok else "✗ aún no calibrada")
+        platform_label = "✗ aún no calibrada"
+        if platform_ok:
+            platform_label = "Candidata operativa · validación pendiente"
+            try:
+                from procesamiento.utilidades_referencias import sha256_file
+                activation = json.loads(
+                    (self.platform_dir / "estado_activacion_plataforma.json").read_text(encoding="utf-8")
+                )
+                if (isinstance(activation, dict)
+                        and activation.get("status") == "active_independently_validated"
+                        and activation.get("calibration_sha256") == sha256_file(self._platform_calibration_path())):
+                    platform_label = "✓ activa · revisión independiente registrada"
+            except (OSError, ValueError, TypeError):
+                pass
+        self.platform_status_var.set(platform_label)
         self.background_status_var.set("✓ listo" if background_ok else "✗ falta capturarlo")
 
         self.background_captured = background_ok
@@ -1253,7 +1217,7 @@ class CaptureApp:
             "background": background_ok,
         }
 
-    def import_stereo_calibration(self):
+    def import_stereo_calibration(self, source=None):
         """Importa una calibración seleccionada y actualiza los recursos activos.
 
         Valida el contenido antes de copiarlo. Una nueva geometría estéreo invalida la
@@ -1261,50 +1225,16 @@ class CaptureApp:
         """
         if self._busy() or self._closing:
             return
-        source = filedialog.askdirectory(title="Selecciona la carpeta de calibración estéreo")
+        source = source or filedialog.askdirectory(title="Selecciona la carpeta de calibración estéreo")
         if not source:
             return
 
         source = Path(source).expanduser().resolve()
-        required = (
-            source / "stereo_initial.yaml",
-            source / "rectification_maps.npz",
-        )
-        missing = [str(p.name) for p in required if not p.is_file()]
-        if missing:
-            messagebox.showerror(
-                "Calibración estéreo",
-                "La carpeta seleccionada no contiene:\n" + "\n".join(missing),
-            )
+        try:
+            candidate_report = validate_stereo_calibration(source)
+        except ValueError as exc:
+            messagebox.showerror("Calibración estéreo", str(exc), parent=self.root)
             return
-
-        candidate_report = None
-        report_path = source / "calibration_report.json"
-        if report_path.is_file():
-            try:
-                candidate_report = json.loads(report_path.read_text(encoding="utf-8"))
-            except Exception as exc:
-                messagebox.showerror(
-                    "Calibración estéreo",
-                    f"calibration_report.json no es legible:\n{exc}",
-                )
-                return
-            quality = str(candidate_report.get("quality", "")).strip().lower()
-            if quality and quality != "accepted":
-                messagebox.showerror(
-                    "Calibración estéreo",
-                    f"La calibración declara quality={quality}.\n"
-                    "No se instalará una calibración científicamente no aceptada.",
-                )
-                return
-            size = candidate_report.get("image_size")
-            if size and list(size) != [RESOLUTION_W, RESOLUTION_H]:
-                messagebox.showerror(
-                    "Calibración estéreo",
-                    f"Resolución incompatible en el reporte: {size}.\n"
-                    f"El sistema captura a {RESOLUTION_W}x{RESOLUTION_H}.",
-                )
-                return
 
         proceed = messagebox.askyesno(
             "Importar calibración estéreo",
@@ -1319,31 +1249,13 @@ class CaptureApp:
         if not proceed:
             return
 
-        if self.stereo_dir.exists():
-            shutil.rmtree(self.stereo_dir)
-        self.stereo_dir.mkdir(parents=True, exist_ok=True)
-
-        allowed = {".yaml", ".yml", ".xml", ".npz", ".npy", ".json", ".csv", ".txt", ".png", ".md"}
-        copied = 0
-        for p in source.iterdir():
-            if p.is_file() and p.suffix.lower() in allowed:
-                shutil.copy2(p, self.stereo_dir / p.name)
-                copied += 1
-
-        # Una nueva geometría estéreo invalida cualquier calibración de
-        # plataforma 3D previa. Se archiva en registros en lugar de borrarla.
-        platform_files = [p for p in self.platform_dir.rglob("*") if p.is_file()]
-        archived_platform = False
-        if platform_files:
-            stamp = time.strftime("%Y%m%d_%H%M%S")
-            archive_dir = self.records_dir / f"calibracion_plataforma_invalidada_{stamp}"
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            for p in platform_files:
-                rel = p.relative_to(self.platform_dir)
-                target = archive_dir / rel
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(p), str(target))
-            archived_platform = True
+        try:
+            copied, archived_platform = install_stereo(
+                source, self.stereo_dir, self.platform_dir, self.records_dir
+            )
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Calibración estéreo", str(exc), parent=self.root)
+            return
 
         self._refresh_system_status()
         detail = f"Calibración importada correctamente.\nArchivos copiados: {copied}"
@@ -1486,9 +1398,7 @@ class CaptureApp:
                 return False
             shutil.rmtree(workspace)
 
-        # Un trabajo representa exactamente un objeto. Antes de capturar se
-        # congelan las referencias científicas del montaje para que cambios
-        # posteriores del fondo/calibraciones/modelo globales no alteren esta campaña.
+        # Congelar las referencias del montaje antes de capturar el objeto.
         captures = workspace / "capturas"
         for s in range(1, 4):
             (captures / f"S{s:02d}" / "izquierda").mkdir(parents=True, exist_ok=True)
@@ -1770,11 +1680,10 @@ class CaptureApp:
             )
             return
 
-        # Las campañas nuevas se procesan exclusivamente con sus referencias
-        # congeladas. Así actualizar los recursos globales no altera trabajos
-        # históricos. Las campañas heredadas conservan el comportamiento antiguo.
+        # Usar referencias congeladas; mantener compatibilidad con campañas anteriores.
         try:
             references = self._resolve_job_references(verify_hashes=True)
+            validate_stereo_calibration(references["stereo"])
         except Exception as exc:
             messagebox.showerror(
                 "Referencias de campaña",
@@ -1836,13 +1745,13 @@ class CaptureApp:
             self._update_controls()
             messagebox.showwarning("Capturas incompletas", reason)
             return
-        self._begin_operation("pipeline", self._pipeline_worker, bool(resume))
+        self._begin_operation("pipeline", self._pipeline_worker, bool(resume), self.provider_var.get(), self.storage_var.get())
 
-    def _pipeline_worker(self, resume=False):
+    def _pipeline_worker(self, resume=False, provider="auto", storage_mode="reducido"):
         """Ejecuta el coordinador en un subproceso y registra su salida.
 
-        Envía estados a la cola de la interfaz. En modo de calibración, gestiona la
-        promoción de la candidata una vez superadas las comprobaciones del flujo.
+        Envía estados a la cola de la interfaz. En modo de calibración conserva la
+        candidata sin activarla; la promoción requiere revisión independiente.
         """
         log_path = self.records_dir / (
             f"{self.current_job_name}_{time.strftime('%Y%m%d_%H%M%S')}.log"
@@ -1870,7 +1779,9 @@ class CaptureApp:
                 "--background-dir",
                 str(references["background"]),
                 "--storage-mode",
-                "reducido",
+                storage_mode,
+                "--provider",
+                provider,
             ]
 
             if self.job_mode == "calibrar-plataforma":
@@ -1954,8 +1865,11 @@ class CaptureApp:
 
             if self.job_mode == "calibrar-plataforma":
                 local_calibration = self.root_dir / "resultado_calibracion_plataforma"
-                canonical = self._promote_platform_calibration_from_job(local_calibration)
-                result["platform_calibration"] = str(canonical)
+                # El éxito del paso 09 acredita una candidata, no su generalización.
+                result["platform_calibration_candidate"] = str(
+                    local_calibration / "calibracion_plataforma_candidata.json"
+                )
+                result["platform_calibration_status"] = "pending_independent_validation"
                 result["platform_calibration_campaign_copy"] = str(local_calibration)
 
             else:
@@ -2031,9 +1945,7 @@ class CaptureApp:
                 )
             )
 
-    # ------------------------------------------------------------------
     # Cámara
-    # ------------------------------------------------------------------
 
     def _validate_frame_resolution(self, frame, label):
         """Rechaza imágenes vacías o incompatibles con la resolución configurada."""
@@ -2184,22 +2096,13 @@ class CaptureApp:
         )
 
     def _show_frame(self, canvas, frame):
-        """
-        Dibuja un frame sin permitir que el tamaño de la imagen modifique la
-        geometría de la interfaz.
-
-        La relación de aspecto original se conserva siempre. El Canvas actúa
-        como viewport: la imagen se centra y las zonas sobrantes permanecen
-        oscuras.
-        """
+        """Dibuja el frame centrado, conservando su proporción y el tamaño del Canvas."""
         rgb = cv2.cvtColor(
             frame,
             cv2.COLOR_BGR2RGB,
         )
 
-        # El Canvas puede reportar 1x1 durante sus primeros ciclos antes de
-        # que Tk resuelva la geometría. Se usan tamaños razonables únicamente
-        # como fallback; no alteran el tamaño solicitado del Canvas.
+        # Usar un tamaño provisional mientras Tk calcula la geometría del Canvas.
         target_w = int(canvas.winfo_width())
         target_h = int(canvas.winfo_height())
 
@@ -2300,9 +2203,7 @@ class CaptureApp:
 
         raise RuntimeError("No llegó un par estéreo fresco dentro del tiempo esperado.")
 
-    # ------------------------------------------------------------------
     # Serial
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _parse_key_values(line: str) -> Dict[str, str]:
@@ -2446,16 +2347,8 @@ class CaptureApp:
             raise RuntimeError(f"Respuesta STATUS inválida: {line}") from exc
 
     def _close_revolution(self) -> Dict[str, int]:
-        """
-        Ejecuta EXCLUSIVAMENTE el movimiento final de cierre.
-
-        El firmware solo acepta CLOSE cuando:
-            phase == 24
-            cumulative == 1973
-
-        La respuesta debe ser:
-            CLOSE_DONE delta=82 total=2055 phase=0 cumulative=0
-        """
+        """Cierra la vuelta desde phase=24 y cumulative=1973.
+        Espera CLOSE_DONE delta=82 total=2055 phase=0 cumulative=0."""
         line = self.serial_command(
             "CLOSE",
             expected_prefix="CLOSE_DONE",
@@ -2506,9 +2399,7 @@ class CaptureApp:
             except Exception:
                 pass
 
-    # ------------------------------------------------------------------
     # Reinicio y fondo
-    # ------------------------------------------------------------------
 
     def accept_setup(self):
         """Confirma la disponibilidad de cámaras y Arduino para comenzar la adquisición."""
@@ -2664,18 +2555,11 @@ class CaptureApp:
             kind = "background_stopped" if self.stop_event.is_set() else "background_error"
             self.status_queue.put((kind, str(exc)))
 
-    # ------------------------------------------------------------------
     # Campaña
-    # ------------------------------------------------------------------
 
     def _ensure_capture_references_current(self) -> bool:
-        """Asegura que la captura completa use referencias del montaje actual.
-
-        Si los recursos globales cambiaron después de crear el trabajo, solo se
-        permite actualizar la copia congelada porque iniciar/reiniciar captura
-        reemplaza las tres sesiones. Una campaña ya capturada nunca se migra de
-        forma silenciosa durante procesamiento.
-        """
+        """Actualiza las referencias antes de reemplazar la captura completa.
+        Las referencias de una campaña capturada se conservan durante el procesamiento."""
         if self.root_dir is None:
             return False
 
@@ -2962,9 +2846,7 @@ class CaptureApp:
             exist_ok=True,
         )
 
-        # S01 puede comenzar con el frame actual. S02/S03 deben esperar un
-        # frame adquirido DESPUÉS del movimiento final de retorno de la sesión
-        # anterior.
+        # S02/S03 requieren un frame posterior al retorno de la plataforma.
         if self.last_session_return_time is None:
             origin_left, origin_right = self._current_pair()
         else:
@@ -3079,26 +2961,8 @@ class CaptureApp:
                 )
             )
 
-        # ==============================================================
-        # MOVIMIENTO FINAL OBLIGATORIO ENTRE SESIONES — CLOSE
-        # ==============================================================
-        #
-        # Después de V025, la sesión NO puede terminar con un NEXT normal.
-        # Antes del cierre se consulta STATUS y debe existir exactamente:
-        #
-        #     phase=24
-        #     cumulative=1973
-        #
-        # Solo entonces Python envía CLOSE.
-        #
-        # CLOSE ejecuta físicamente los últimos 82 pasos, reporta
-        # explícitamente total=2055 y reinicia la secuencia lógica a:
-        #
-        #     phase=0
-        #     cumulative=0
-        #
-        # Después se consulta STATUS nuevamente. La siguiente sesión solo
-        # comienza si ambas verificaciones son correctas.
+        # CLOSE requiere phase=24 y cumulative=1973; completa 82 pasos.
+        # Verificar total=2055 y reinicio a phase=0, cumulative=0 antes de otra sesión.
         accumulated_before_closure = sum(STEP_SEQUENCE[:24])
         closure_expected = STEP_SEQUENCE[24]
 
@@ -3318,9 +3182,7 @@ class CaptureApp:
 
         workbook.save(self.workbook_path)
 
-    # ------------------------------------------------------------------
     # Controles
-    # ------------------------------------------------------------------
 
     def continue_after_object_change(self):
         """Define la posición actual como origen lógico y continúa el plan pendiente."""
@@ -3361,9 +3223,7 @@ class CaptureApp:
         self._stop_thread.start()
         self._update_controls()
 
-    # ------------------------------------------------------------------
     # Cola UI
-    # ------------------------------------------------------------------
 
     def _process_status_queue(self):
         """Aplica eventos en Tk y libera los controles solo al finalizar los trabajadores."""
@@ -3392,6 +3252,8 @@ class CaptureApp:
                 elif kind == "pipeline_progress":
                     if self._operation == "pipeline" and not self.stop_event.is_set():
                         self._pipeline_progress.feed(str(message))
+                elif kind == "tool_output":
+                    self.append_tool_log(str(message))
                 elif kind == "progress":
                     if not self.stop_event.is_set() and not self._closing:
                         self.progress_var.set(str(message))
@@ -3414,9 +3276,7 @@ class CaptureApp:
                 return
         self._status_job = self.root.after(100, self._process_status_queue)
 
-    # ------------------------------------------------------------------
     # Cierre
-    # ------------------------------------------------------------------
 
     def close_hardware(self):
         """Cancela la vista previa, libera cámaras y cierra el puerto serie."""

@@ -1,0 +1,42 @@
+{
+  "campaign": "cilindro1_20260919_132249",
+  "quality": "accepted",
+  "warnings": [],
+  "reject_reasons": [],
+  "units": "mm",
+  "source_validation_sha256": "4bce0a9e9f70e874b33ffb5fb95197749effbb8ae1a1337abf679bcb3a8c7701",
+  "source_export_report_sha256": "e32d6afb53457ab582cc9c91dee9e257174df35644f62e266b247eaad8ff7e2d",
+  "export_quality": "accepted",
+  "origins": {
+    "modelo_final_original_mm.ply": {
+      "source": "trabajos/cilindro1_20260919_132249/resultado_final/modelo_final_original_mm.ply",
+      "sha256": "c340bdeed05760e836b529904b18731e9a29822222c0b5723a831e05f7a98aec"
+    },
+    "modelo_pre_pulido_mm.ply": {
+      "source": "trabajos/cilindro1_20260919_132249/resultado_final/modelo_pre_pulido_mm.ply",
+      "sha256": "61668a213aa477743bf61eee4bdd3f810bb6607899e46d027cfd25c49b8818b0"
+    },
+    "preview_validacion.png": {
+      "source": "trabajos/cilindro1_20260919_132249/resultado_final/preview_validacion.png",
+      "sha256": "20e0e1ee54a2e217a32d061e580ff53b12b88b82cf5c4be5e0f53e5e7ea54906"
+    },
+    "captura_izquierda.png": {
+      "source": "trabajos/cilindro1_20260919_132249/capturas/S01/izquierda/OBJ01_CILINDRO1_S01_V001_A0000_L.png",
+      "sha256": "cf779a504c531b578110602fac079d42132719e91ad9358c1a7ca917311e9509"
+    },
+    "captura_derecha.png": {
+      "source": "trabajos/cilindro1_20260919_132249/capturas/S01/derecha/OBJ01_CILINDRO1_S01_V001_A0000_R.png",
+      "sha256": "c386139f1ce43af627a63f51196e6cf6c70fd8fece9555017a631b9515527fdd"
+    }
+  },
+  "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+  "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+  "public_name": "cilindro1",
+  "physical_reference_mm": {
+    "diametro": 43,
+    "altura": 97
+  },
+  "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+  "dimensional_comparison_performed": true,
+  "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+}

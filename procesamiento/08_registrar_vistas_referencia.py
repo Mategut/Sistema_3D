@@ -1,38 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Paso 08 — Calibración del registro con un objeto de referencia cuboide.
-
-Este paso pertenece a la calibración de la plataforma. Utiliza planos del
-patrón y coherencia Manhattan; la reconstrucción de objetos arbitrarios usa
-después el registro calibrado del paso 10.
-
-Modelo cinemático: un eje 3D, una línea de rotación, un sentido de giro y
-25 ángulos físicos derivados de 2055 pasos/vuelta. Las sesiones se fusionan
-antes del registro. No se estima un movimiento ICP libre de seis grados.
-
-Las poses se estiman con planos dominantes ponderados por confianza. La
-transformación resultante se aplica a la nube completa del paso 06, incluidos
-los puntos que no participaron en la estimación de pose.
-
-Procedimiento
--------------
-1. Verificar las poses y sus ángulos contra el manifiesto angular.
-2. Seleccionar planos útiles y estimar el eje por consenso entre normales.
-3. Si falta consenso, evaluar semillas adicionales con las dos direcciones
-   de giro y un prior físico suave de perpendicularidad eje/baseline.
-4. Estimar centro y sentido mediante solape simétrico recortado.
-5. Ajustar eje, centro y pequeñas correcciones angulares con bundle adjustment
-   restringido y correspondencias entre vistas vecinas.
-6. Evaluar cierre, grafo, error punto-plano, solape, montaje y compactación.
-7. Exportar nubes registradas, poses y evidencia de calibración.
-
-La observabilidad de cada pose determina sus límites y su prior angular:
-una cara dominante ofrece menos libertad que varias caras informativas.
-Las correcciones tienen regularización mecánica y continuidad circular.
-La saturación de un límite se audita junto con las métricas globales.
-Estas correcciones residuales son evidencia de calibración; el paso 09
-conserva los ángulos mecánicos para reconstruir otros objetos.
-"""
+"""Estima el eje y centro de la plataforma usando las vistas de referencia."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -69,9 +37,7 @@ except Exception as exc:
     )
 
 
-# ---------------------------------------------------------------------------
 # Datos
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -169,9 +135,7 @@ class CorrespondenceBatch:
     direction: str
 
 
-# ---------------------------------------------------------------------------
 # CLI
-# ---------------------------------------------------------------------------
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -270,7 +234,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--axis-fallback-seed-prior-sigma-deg", type=float, default=6.0)
     p.add_argument("--axis-fallback-baseline-weight", type=float, default=0.18)
 
-    # V3.2.2 — validación geométrica del fallback directamente con las nubes.
+    # validación geométrica del fallback directamente con las nubes.
     # Se activa únicamente cuando el consenso estricto de eje no fue suficiente.
     # No usa resultados históricos ni geometría conocida del objeto.
     p.add_argument(
@@ -307,11 +271,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=90.0,
     )
 
-    # V3.2.3 — la degeneración tangencial no depende únicamente de haber
-    # entrado por fallback. Si la mayoría de poses tiene baja observabilidad
-    # angular, un BA point-to-plane puede deslizar caras y mover el centro
-    # aunque el eje inicial haya pasado el consenso estricto. En ese caso se
-    # activa automáticamente una estabilización moderada.
+    # Activar estabilización si predomina baja observabilidad angular,
+    # aunque el eje inicial haya pasado el consenso estricto.
     p.add_argument(
         "--auto-stabilize-low-observability",
         action=argparse.BooleanOptionalAction,
@@ -514,9 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-# ---------------------------------------------------------------------------
 # I/O / utilidades
-# ---------------------------------------------------------------------------
 
 
 def load_json(path: Path) -> dict:
@@ -788,9 +747,7 @@ def hue_color_rgb(angle_deg: float) -> np.ndarray:
     return bgr[::-1].astype(np.uint8)
 
 
-# ---------------------------------------------------------------------------
 # Campaña / planos
-# ---------------------------------------------------------------------------
 
 
 def default_manifest_path(root: Path, object_name: str) -> Path:
@@ -1148,22 +1105,12 @@ def load_views(
     return views
 
 
-# ---------------------------------------------------------------------------
 # Eje inicial
-# ---------------------------------------------------------------------------
 
 
 def estimate_axis_from_planes(views: Sequence[ViewData], args) -> Tuple[np.ndarray, dict]:
-    """
-    Método primario: consenso estricto de productos cruz entre pares de planos
-    aproximadamente ortogonales.
-
-    V3.2.1:
-    si el consenso estricto no alcanza axis_minimum_support_views, NO se
-    modifican sus umbrales. Se deriva la inicialización a
-    estimate_axis_multiview_fallback(), que usa todas las normales disponibles
-    y los ángulos físicos conocidos.
-    """
+    """Estima el eje con productos cruz de planos aproximadamente ortogonales.
+    Si falta soporte estricto, deriva la inicialización al método multivista."""
     vertical = np.array([0.0, 1.0, 0.0], dtype=np.float64)
     candidates = []
     for view in views:
@@ -1338,9 +1285,7 @@ def estimate_axis_from_planes(views: Sequence[ViewData], args) -> Tuple[np.ndarr
     return axis, diag
 
 
-# ---------------------------------------------------------------------------
-# V3.1: referencia física del montaje + eje multivista
-# ---------------------------------------------------------------------------
+# referencia física del montaje + eje multivista
 
 
 def point_to_axis_line_distance(
@@ -1415,17 +1360,8 @@ def mounting_geometry_diagnostics(
     center: np.ndarray,
     args,
 ) -> dict:
-    """
-    Compara la línea estimada con el montaje físico sin asumir pitch de cámara.
-
-    En el sistema rectificado se toma:
-      cámara izquierda = [0,0,0]
-      cámara derecha   = [baseline,0,0]
-      punto medio      = [baseline/2,0,0]
-
-    La distancia punto-medio -> línea de eje es invariante ante la inclinación
-    global de las cámaras, por lo que es un prior más seguro que imponer Z=400.
-    """
+    """Contrasta el eje con el punto medio estéreo [baseline/2, 0, 0].
+    La distancia a la línea de eje es independiente de la inclinación de las cámaras."""
     baseline = float(args.stereo_baseline_mm)
     left = np.array([0.0, 0.0, 0.0], dtype=np.float64)
     right = np.array([baseline, 0.0, 0.0], dtype=np.float64)
@@ -1647,15 +1583,8 @@ def _axis_seed_pool_relaxed(
     args,
     strict_candidates: Optional[Sequence[tuple]] = None,
 ) -> List[dict]:
-    """
-    Construye semillas de eje SIN alterar el criterio estricto del método
-    primario. Las semillas relajadas solo existen para arrancar el fallback.
-
-    Fuentes:
-      - candidatos estrictos que sí pudieron calcularse;
-      - productos cruz de pares de planos útiles con ángulo 45..135°;
-      - Y de cámara como semilla de último recurso, nunca como eje impuesto.
-    """
+    """Genera semillas para el fallback: candidatos estrictos, pares a 45–135° y eje Y.
+    Las semillas no alteran los criterios del método primario."""
     raw = []
 
     if strict_candidates:
@@ -1769,16 +1698,8 @@ def _multiview_axis_data_score(
     sign: int,
     args,
 ) -> Tuple[float, dict]:
-    """
-    Score común para comparar ejes provenientes de semillas distintas.
-
-    No contiene prior hacia la semilla. Por ello puede comparar de forma justa
-    resultados de múltiples inicializaciones.
-
-    La función desrota todas las normales con los ángulos físicos y encuentra
-    el mejor marco Manhattan global. Se añade únicamente un prior físico suave
-    de perpendicularidad eje/baseline.
-    """
+    """Compara ejes desrotando normales hacia un marco Manhattan común.
+    Incluye perpendicularidad suave a la baseline, sin prior hacia la semilla."""
     records = collect_multiview_plane_normals(views, args)
     axis = normalize(axis)
     if axis is None or len(records) < 8:
@@ -1869,17 +1790,8 @@ def estimate_axis_multiview_fallback(
     args,
     strict_candidates: Optional[Sequence[tuple]] = None,
 ) -> Tuple[Optional[np.ndarray], dict]:
-    """
-    Fallback V3.2.1.
-
-    No disminuye axis-minimum-support-views ni aumenta la tolerancia del
-    consenso estricto. En su lugar hace multi-start sobre semillas geométricas,
-    prueba ambos sentidos de giro y usa toda la evidencia angular de las 25
-    poses para escoger la inicialización más coherente.
-
-    Esta rutina es deliberadamente más costosa; solo se ejecuta cuando el
-    método primario no pudo producir una semilla fiable.
-    """
+    """Inicializa con varias semillas y ambos sentidos de giro usando las 25 poses.
+    Se ejecuta si falla el método primario, sin relajar su consenso estricto."""
     seeds = _axis_seed_pool_relaxed(
         views,
         args,
@@ -2037,9 +1949,7 @@ def estimate_axis_multiview_fallback(
     }
 
 
-# ---------------------------------------------------------------------------
-# V3.2: observabilidad angular por pose
-# ---------------------------------------------------------------------------
+# observabilidad angular por pose
 
 
 def wrap_periodic_deg(value: float, period_deg: float) -> float:
@@ -2087,21 +1997,8 @@ def build_angular_constraints(
     frame_axes_xyz: Sequence[Sequence[float]],
     args,
 ) -> Tuple[List[AngularConstraint], dict]:
-    """
-    Construye un modelo angular distinto para cada pose.
-
-    Principio:
-    - una sola cara lateral aporta cierta orientación, pero es frágil;
-    - dos caras laterales de familias distintas hacen mucho más observable
-      la rotación alrededor del eje;
-    - una cara superior/inferior (normal casi paralela al eje) prácticamente
-      no informa el yaw;
-    - el prior de normales nunca puede reemplazar al ángulo mecánico.
-
-    El prior angular derivado de normales se obtiene únicamente cuando existen
-    >=2 evidencias laterales y su dispersión es razonable. Incluso entonces,
-    su objetivo final se limita a unos pocos décimos de grado.
-    """
+    """Deriva restricciones angulares por pose a partir de normales laterales.
+    Exige al menos dos evidencias laterales coherentes y limita la corrección del ángulo mecánico."""
     axis = normalize(axis)
     if axis is None:
         raise ValueError("Eje inválido para observabilidad angular.")
@@ -2440,9 +2337,7 @@ def angular_model_final_diagnostics(
     }
 
 
-# ---------------------------------------------------------------------------
 # Centro / muestras / grafo
-# ---------------------------------------------------------------------------
 
 
 def robust_center_proxy(points: np.ndarray) -> np.ndarray:
@@ -2716,19 +2611,7 @@ def cloud_axis_center_hypothesis_score(
     args,
     include_secondary: bool = False,
 ) -> Tuple[float, dict]:
-    """Score de hipótesis basado en geometría observada, no en planos Manhattan.
-
-    La función combina:
-      - ajuste euclídeo simétrico de aristas primarias;
-      - cola P75 para que unas pocas aristas muy malas no queden ocultas por
-        una media recortada;
-      - penalización de solape bajo;
-      - opcionalmente aristas de segundo orden;
-      - prior físico SUAVE del montaje.
-
-    El objetivo es evitar soluciones de arco/herradura que pueden verse bien
-    en point-to-plane pero desplazan las vistas tangencialmente.
-    """
+    """Puntúa hipótesis con distancias simétricas, cola P75, solape y prior del montaje."""
     primary_scores = []
     primary_weights = []
     primary_overlaps = []
@@ -2849,19 +2732,8 @@ def joint_cloud_axis_center_initialization(
     axis_seed: np.ndarray,
     args,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[int], dict]:
-    """V3.2.2: inicialización conjunta con las nubes de ESTA campaña.
-
-    Se usa únicamente cuando la semilla de eje vino del fallback de planos.
-
-    Parámetros optimizados:
-      x[0:2] = perturbación angular del eje alrededor de axis_seed
-      x[2:4] = desplazamiento del centro dentro del plano perpendicular al eje
-
-    Para cada eje candidato se recalcula la semilla armónica del centro.
-    Se prueban ambos sentidos de giro.
-
-    No se usan archivos históricos, dimensiones del cubo ni primitivas de forma.
-    """
+    """Inicializa eje y centro desde las nubes cuando se usa el fallback de planos.
+    x[0:2] perturba el eje y x[2:4] desplaza el centro en su plano perpendicular."""
     axis_seed = normalize(axis_seed)
     if axis_seed is None:
         return (
@@ -3095,9 +2967,7 @@ def refine_center_local(
     }
 
 
-# ---------------------------------------------------------------------------
 # Modelo de parámetros BA
-# ---------------------------------------------------------------------------
 
 
 def ba_gates(args) -> List[float]:
@@ -3163,9 +3033,7 @@ def relative_from_poses(source_pose: np.ndarray, target_pose: np.ndarray) -> np.
     return inverse_transform(target_pose) @ source_pose
 
 
-# ---------------------------------------------------------------------------
 # Correspondencias
-# ---------------------------------------------------------------------------
 
 
 def _select_correspondence_indices(
@@ -3277,9 +3145,7 @@ def build_correspondence_batches(
     return batches, diagnostics
 
 
-# ---------------------------------------------------------------------------
 # BA restringido
-# ---------------------------------------------------------------------------
 
 
 def make_ba_residual_function(
@@ -3531,17 +3397,8 @@ def run_constrained_ba(
     angular_constraints: Sequence[AngularConstraint],
     args,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[np.ndarray], dict]:
-    """
-    V3.2: BA en dos etapas con bounds y priors angulares por pose.
-
-    Etapa A:
-        primeras N rondas con correcciones angulares prácticamente congeladas.
-        Se obliga al sistema a explicar el registro mediante eje + centro.
-
-    Etapa B:
-        se abre el rango angular residual según la observabilidad de cada pose
-        (hasta ~0.60° por defecto).
-    """
+    """Optimiza primero eje y centro con ángulos casi fijos.
+    Después permite ajustes angulares según la observabilidad de cada pose."""
     axis_e1, axis_e2 = perpendicular_basis(axis0)
     center_e1, center_e2 = perpendicular_basis(axis0)
     n = len(views)
@@ -3685,9 +3542,7 @@ def run_constrained_ba(
     )
 
 
-# ---------------------------------------------------------------------------
 # Manhattan / diagnóstico
-# ---------------------------------------------------------------------------
 
 
 def significant_plane_normals(views: Sequence[ViewData]) -> List[Tuple[int, np.ndarray, float]]:
@@ -3759,7 +3614,7 @@ def manhattan_diagnostics(
         "frame_axes_xyz": [a.tolist() for a in axes if a is not None],
         # Se conserva el estadístico crudo para auditoría.
         "normal_residual_deg": robust_stats(residuals),
-        # V3.2.2: el criterio global usa también la evidencia/área de cada plano.
+        # el criterio global usa también la evidencia/área de cada plano.
         "weighted_normal_residual_deg": weighted_robust_stats(
             residuals,
             residual_weights,
@@ -3774,22 +3629,8 @@ def global_face_compactness(
     manhattan: dict,
     args,
 ) -> dict:
-    """
-    Evalúa si las mismas caras observadas desde múltiples poses colapsan sobre
-    planos compactos.
-
-    IMPORTANTE:
-    no usa el signo de las normales para distinguir caras opuestas porque la
-    orientación de una normal estimada puede invertirse entre vistas.
-
-    En cada familia Manhattan:
-      1. se proyectan los puntos sobre el eje correspondiente;
-      2. se intenta separar hasta dos clusters 1D (caras opuestas);
-      3. se mide el espesor robusto de cada cluster.
-
-    Una unión en arco/herradura genera clusters gruesos incluso si las parejas
-    locales tienen buen point-to-plane.
-    """
+    """Mide espesor por familia Manhattan separando hasta dos caras opuestas.
+    La separación usa posición, porque el signo de las normales puede variar entre vistas."""
     if not manhattan.get("available"):
         return {
             "available": False,
@@ -3960,9 +3801,7 @@ def global_face_compactness(
     }
 
 
-# ---------------------------------------------------------------------------
 # Validación final
-# ---------------------------------------------------------------------------
 
 
 def graph_connected(view_count: int, edge_records: Sequence[dict]) -> bool:
@@ -4057,7 +3896,7 @@ def final_edge_evaluation(
             args.final_primary_maximum_point_plane_p90_mm
         )
 
-        # V3.1: criterio principal = consistencia de superficie.
+        # criterio principal = consistencia de superficie.
         surface_accepted = bool(
             record["overlap"] >= float(args.final_primary_minimum_overlap)
             and pp_rmse_ok
@@ -4155,7 +3994,7 @@ def determine_quality(
                 f"Cierre débil: overlap={closure['overlap']:.3f}, RMSE={closure_rmse:.2f} mm."
             )
 
-    # V3.2: no se rechaza por un máximo angular global. Se compara cada pose
+    # no se rechaza por un máximo angular global. Se compara cada pose
     # contra SU bound adaptativo y contra su observabilidad.
     total_saturated = int(angular_final["saturated_count"])
     high_saturated = int(angular_final["high_observability_saturated_count"])
@@ -4280,9 +4119,7 @@ def determine_quality(
     return quality, reasons, metrics
 
 
-# ---------------------------------------------------------------------------
 # Export / preview
-# ---------------------------------------------------------------------------
 
 
 def projection_panel(points, colors, axis_x, axis_y, width, height, title):
@@ -4454,9 +4291,7 @@ def export_registered(
     return full_points, full_view_colors, reg_points, records, union_extent_ratio
 
 
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
 
 
 def main() -> int:

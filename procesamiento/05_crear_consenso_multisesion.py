@@ -1,33 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Paso 05 V5.2 — consenso multisesión robusto con confirmación ROI independiente.
-
-Las sesiones representan la misma pose física por ``pose_index``. Solo se
-permite una traslación 2D pequeña para compensar tolerancia mecánica; no se
-permite escala, rotación ni deformación.
-
-Principios del consenso:
-1. La profundidad absoluta nunca se recentra, escala ni corrige entre sesiones.
-   El tamaño y la posición métrica del objeto se conservan.
-2. Un medoide ponderado identifica primero una única capa coherente. Solo las
-   observaciones compatibles se fusionan mediante un estimador robusto en
-   profundidad inversa (dominio equivalente a disparidad).
-3. El desacuerdo entre sesiones no se oculta ampliando automáticamente el
-   umbral. Se conserva como confianza, dispersión y soporte por píxel para que
-   las etapas 06, 10 y 11 puedan ponderarlo.
-4. Una observación sin respaldo independiente queda fuera de la profundidad
-   científica y se conserva únicamente como diagnóstico.
-5. La evidencia ROI/multiescala del Paso 02 solo puede cubrir un hueco si al
-   menos dos sesiones independientes confirman la misma capa métrica; nunca
-   reemplaza automáticamente una profundidad base aceptada.
-6. La alineación residual continúa limitada a traslación 2D entera, sin escala,
-   rotación ni deformación.
-7. El veto de plataforma por profundidad continúa DESACTIVADO por defecto.
-
-No se usa geometría específica de cubo, no se fuerzan superficies planas y no
-se rellenan huecos por interpolación espacial.
-"""
+"""Combina profundidad entre sesiones con respaldo independiente por píxel.
+Las observaciones sin acuerdo se conservan como diagnóstico."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -78,7 +53,7 @@ def build_parser():
     p.add_argument("--minimum-independent-depth-support", type=int, default=2)
     p.add_argument("--minimum-valid-ratio", type=float, default=0.18)
 
-    # V4 — el umbral mide fiabilidad; no desplaza ni invalida automáticamente Z.
+    # el umbral mide fiabilidad; no desplaza ni invalida automáticamente Z.
     p.add_argument(
         "--adaptive-depth-agreement",
         action=argparse.BooleanOptionalAction,
@@ -168,7 +143,7 @@ def build_parser():
         help="Escala de residual regional usada solo para calcular confianza.",
     )
 
-    # V3 — veto de plataforma basado en fondo vacío. Es deliberadamente
+    # veto de plataforma basado en fondo vacío. Es deliberadamente
     # conservador: profundidad solo puede QUITAR soporte confirmado, nunca
     # añadir objeto.
     p.add_argument(
@@ -289,10 +264,8 @@ def load_observation(root, obj, manifest_record, regional, depth_source, sil_sou
         else np.full(depth.shape, np.nan, np.float32)
     )
 
-    # Evidencia ROI/multiescala del Paso 02. Es deliberadamente diagnóstica en
-    # origen: aquí solo se conserva como una fuente independiente que puede
-    # promoverse si otra sesión confirma la misma profundidad. La ausencia del
-    # archivo mantiene compatibilidad total con ejecuciones anteriores.
+    # Promover evidencia ROI solo si otra sesión confirma su profundidad.
+    # Admitir entradas anteriores sin archivo ROI.
     roi_depth = np.full(depth.shape, np.nan, np.float32)
     roi_uncertainty = np.full(depth.shape, np.nan, np.float32)
     roi_confidence = np.zeros(depth.shape, np.float32)
@@ -596,13 +569,7 @@ def build_stable_interior_domain(silhouette: np.ndarray, support_domain: np.ndar
 
 
 def estimate_depth_biases(observations, stable_domain, args):
-    """Mide desplazamientos Z entre repeticiones sin aplicarlos.
-
-    El nombre se conserva para que lectores históricos del resumen continúen
-    funcionando. Desde V4 el vector devuelto siempre es cero: una diferencia
-    de profundidad puede representar posición o geometría real y no debe
-    normalizarse. Las medianas se guardan únicamente como diagnóstico.
-    """
+    """Mide diferencias de Z como diagnóstico; devuelve correcciones nulas."""
     biases = [0.0] * len(observations)
     diagnostics = []
     if len(observations) < 2:
@@ -708,13 +675,8 @@ def derive_depth_agreement(observations, biases, stable_domain, args):
 
 
 def support_depth_veto(observations, args):
-    """Detecta soporte visible confirmado sin crear foreground.
-
-    Para cada repetición se estima el ruido de ``background_depth-current`` en
-    la parte visible del soporte (fuera de la silueta). Un píxel del soporte
-    solo se veta cuando al menos N sesiones lo observan como compatible con
-    el fondo y ninguna aporta separación positiva clara de objeto.
-    """
+    """Veta soporte compatible con el fondo en varias sesiones.
+    Una separación positiva clara de objeto impide el veto."""
     shape = observations[0]["depth"].shape
     if not bool(args.support_depth_veto):
         return (
@@ -819,17 +781,8 @@ def consensus_depth(
     maximum_agreement_mm=12.0,
     weak_one_sided_weight=0.70,
 ):
-    """Consenso V5 robusto, métrico y sin correcciones globales de Z.
-
-    El medoide identifica una sola capa por píxel. Las muestras compatibles con
-    esa capa se combinan en 1/Z con pesos de confianza, residual y Huber. Nunca
-    se mezclan capas incompatibles ni se aplica un desplazamiento global Z.
-
-    ``agreement_mm`` se usa como escala de confianza. Una observación sin
-    respaldo independiente dentro de la tolerancia derivada de incertidumbre
-    se conserva únicamente como diagnóstico (``low_agreement`` y ``spread``),
-    pero no se exporta como profundidad científica ni como máscara de nube.
-    """
+    """Selecciona una capa por medoide y combina muestras compatibles en 1/Z.
+    Sin respaldo independiente, la observación queda en low_agreement y spread."""
     depths = np.stack([o["depth"] for o in observations]).astype(np.float32)
     masks = np.stack([o["cloud_mask"] > 0 for o in observations])
     source_uncertainty = np.stack(
@@ -902,11 +855,7 @@ def consensus_depth(
         denominator = np.zeros((h, w), np.float32)
         for j in range(n):
             comparable = candidate_valid & valid[j]
-            # La selección de capa debe priorizar repetibilidad geométrica.
-            # La calidad de evidencia solo modula suavemente este coste para que
-            # dos sesiones débiles coherentes puedan vencer a un único outlier
-            # fuerte. El peso fuerte/débil se aplica con mayor intensidad al
-            # fusionar dentro de la capa ya seleccionada.
+            # Priorizar repetibilidad al elegir la capa; aplicar mayor peso de calidad al fusionarla.
             weight = (
                 (0.65 + 0.35 * source_confidence[j])
                 * (0.85 + 0.15 * evidence_weight[j])
@@ -959,11 +908,8 @@ def consensus_depth(
             better = comparable & (delta < nearest_other)
             nearest_other[better] = delta[better]
 
-    # La dispersión exportada describe la capa respaldada alrededor del
-    # medoide, no el rango total de todas las observaciones. Así, una tercera
-    # sesión claramente discordante no invalida dos medidas coherentes. Si no
-    # existe respaldo dentro del umbral, la distancia a la observación
-    # independiente más cercana deja explícita la incertidumbre.
+    # Medir dispersión en la capa respaldada del medoide.
+    # Sin respaldo, usar la distancia a la observación independiente más cercana.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         agreeing_min = np.nanmin(np.where(agrees, depths, np.nan), axis=0)
@@ -1060,10 +1006,7 @@ def consensus_depth(
 
     all_agree = strong & (agreement_count >= min(3, n))
     pair_agree = strong & ~all_agree
-    # Si el medoide no encuentra al menos ``minimum_support`` observaciones
-    # dentro de la tolerancia por incertidumbre, la capa no tiene respaldo
-    # independiente suficiente. Se conserva su dispersión/procedencia para
-    # diagnóstico, pero queda fuera de la profundidad científica.
+    # Sin minimum_support muestras compatibles, conservar diagnóstico y excluir profundidad científica.
     low_agreement = confirmed_domain & ~strong
     scientific_domain = confirmed_domain & ~low_agreement
     selection_mode[low_agreement] = 1
@@ -1097,18 +1040,8 @@ def consensus_roi_evidence(
     uncertainty_sigma_factor=2.5,
     maximum_agreement_mm=12.0,
 ):
-    """Confirma evidencia ROI/multiescala exclusivamente entre sesiones.
-
-    La segunda inferencia del Paso 02 se guarda como evidencia diagnóstica y
-    nunca sustituye por sí sola la profundidad base. Esta función exige que al
-    menos ``minimum_support`` sesiones independientes describan una misma capa
-    dentro de una tolerancia métrica derivada de sus incertidumbres. El estado
-    LR=4 (contradicción fuerte) queda vetado incondicionalmente.
-
-    La confianza directa, el error fotométrico y la incertidumbre solo
-    ponderan la elección/fusión dentro de una capa ya confirmada; ninguno de
-    ellos puede convertir una única observación en profundidad científica.
-    """
+    """Confirma una capa ROI con minimum_support sesiones y tolerancia por incertidumbre.
+    Veta LR=4; confianza y fotometría ponderan únicamente evidencia ya respaldada."""
     h, w = observations[0]["depth"].shape
     empty_depth = np.full((h, w), np.nan, np.float32)
     empty_mask = np.zeros((h, w), np.uint8)
@@ -1420,12 +1353,8 @@ def _procesar_unidad_independiente(task):
                 )
                 continue
             aligned.append(align_observation(obs, estimate))
-        # Contrato de cobertura angular: el registro posterior trabaja con las 25
-        # poses mecánicas. Si dos repeticiones no superan el umbral de alineación
-        # residual, no se fuerza una fusión mala ni se elimina la pose completa.
-        # Se conserva únicamente la mejor observación de referencia como respaldo
-        # de baja autoridad. Los pasos 06/10 reciben soporte=1 y confianza reducida,
-        # por lo que esa pose aporta cobertura sin hacerse pasar por consenso.
+        # Conservar las 25 poses mecánicas. Si falla la alineación entre sesiones,
+        # usar la mejor referencia con soporte=1 y confianza reducida.
         single_source_fallback = False
         if len(aligned) < args.minimum_independent_depth_support:
             if len(aligned) == 1 and len(loaded) >= args.minimum_independent_depth_support:
@@ -1519,10 +1448,7 @@ def _procesar_unidad_independiente(task):
                 maximum_agreement_mm=float(args.depth_agreement_max_mm),
                 weak_one_sided_weight=float(args.weak_one_sided_weight),
             )
-        # La inferencia ROI/multiescala del Paso 02 es una fuente paralela de
-        # evidencia. Nunca reemplaza profundidad científica ya aceptada: solo
-        # puede cubrir un hueco cuando al menos dos sesiones independientes
-        # confirman la misma capa métrica.
+        # Completar solo huecos con evidencia ROI confirmada por al menos dos sesiones.
         (
             roi_depth_consensus,
             roi_depth_valid,
@@ -1555,11 +1481,7 @@ def _procesar_unidad_independiente(task):
             & (silhouette > 0)
             & np.isfinite(roi_depth_consensus)
         )
-        # Blindaje explícito adicional: una contradicción LR fuerte jamás puede
-        # formar parte de una promoción, incluso si otro mapa ROI coincide.
-        # ``consensus_roi_evidence`` ya la excluye por sesión; este veto evita
-        # que un píxel cuya evidencia ROI disponible sea exclusivamente
-        # contradictoria llegue a científico por una ruta accidental.
+        # Vetar promoción ROI si toda la evidencia disponible tiene contradicción LR fuerte.
         roi_only_contradicted = roi_contradicted_union & ~np.any(
             np.stack(
                 [

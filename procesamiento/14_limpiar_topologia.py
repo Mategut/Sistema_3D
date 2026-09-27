@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-PASO 14 V2.0 — Reparación local sin añadir tapas terminales estimadas.
-Repara pequeños contornos locales; no añade tapas terminales estimadas.
-Publica actividad y tiempos periódicamente durante todas las etapas.
-"""
+"""Repara conectividad, orientación e intersecciones y trata contornos locales."""
 
 from __future__ import annotations
 
@@ -110,9 +106,7 @@ from clasificador_intersecciones import (
     classify_triangle_pair,
 )
 
-# =============================================================================
 # CLI
-# =============================================================================
 
 
 def save_inferred_face_provenance(source_path, final_mesh, output, all_estimated=False):
@@ -161,7 +155,7 @@ def make_parser():
         default="14_limpieza_topologica",
     )
 
-    # V2.0 — las reparaciones topológicas solo usan como anclaje observaciones
+    # las reparaciones topológicas solo usan como anclaje observaciones
     # que conservaron evidencia independiente después de 11/12.
     p.add_argument(
         "--require-evidence-contract", action=argparse.BooleanOptionalAction, default=True
@@ -191,9 +185,7 @@ def make_parser():
         default=0.68,
     )
 
-    # V2.0 — segunda limpieza después de TODAS las reparaciones. Solo puede
-    # retirar componentes completas diminutas que no existían como componente
-    # independiente en la malla fuente del paso 13. Nunca reconecta por forma.
+    # Retirar solo fragmentos pequeños desprendidos por las reparaciones.
     p.add_argument(
         "--post-repair-component-cleanup",
         action=argparse.BooleanOptionalAction,
@@ -268,9 +260,7 @@ def make_parser():
     return p
 
 
-# =============================================================================
 # UTILIDADES
-# =============================================================================
 
 
 def robust_stats(values):
@@ -338,9 +328,7 @@ def make_mesh(vertices, triangles, colors=None):
     return mesh
 
 
-# =============================================================================
 # CONECTIVIDAD / COMPONENTES
-# =============================================================================
 
 
 def build_edge_incidence(triangles):
@@ -505,21 +493,8 @@ def post_repair_component_cleanup(
     spacing,
     args,
 ):
-    """Retira únicamente fragmentos diminutos DESPRENDIDOS por las reparaciones.
-
-    La decisión usa procedencia topológica, no una forma esperada:
-    - se calculan las componentes de la malla fuente de paso 13;
-    - cada componente final se asocia a su componente fuente por cercanía de
-      vértices (la reparación no debe trasladar la geometría global);
-    - una componente final pequeña solo puede eliminarse si comparte ancestro
-      con otra componente final mucho mayor. Por tanto una pieza que YA era
-      independiente en paso 13 nunca se elimina por este mecanismo.
-
-    No se intentan puentes, soldaduras ni cierres: si una reparación separó un
-    residuo diminuto, se retira la componente completa. Las componentes
-    significativas quedan intactas y, si una separación grande aparece, se
-    conserva para revisión en vez de inventar conectividad.
-    """
+    """Retira fragmentos pequeños separados por la reparación de un componente mayor.
+    Conserva las piezas que ya eran independientes en la malla del paso 13."""
     v = np.asarray(vertices, dtype=np.float64)
     f = np.asarray(triangles, dtype=np.int64)
     c = None if colors is None else np.asarray(colors, dtype=np.float64)
@@ -741,24 +716,11 @@ def post_repair_component_cleanup(
     )
 
 
-# =============================================================================
 # SPLIT SIMULTÁNEO DE FANS DE VÉRTICE
-# =============================================================================
 
 
 def split_vertex_fans(vertices, triangles, colors=None):
-    """
-    Convierte cada star de vértice en uno o más fans edge-connected.
-
-    Si un vértice tiene varios fans desconectados:
-    - crea una copia de la MISMA coordenada por fan;
-    - reasigna índices;
-    - no mueve geometría.
-
-    A diferencia de una reparación secuencial, este método reconstruye todos
-    los índices simultáneamente y evita invalidar la conectividad de vértices
-    que todavía no se han procesado.
-    """
+    """Separa fans desconectados duplicando coordenadas y reasignando índices simultáneamente."""
     edge_faces = build_edge_incidence(triangles)
 
     incident_faces = [[] for _ in range(len(vertices))]
@@ -842,9 +804,7 @@ def split_vertex_fans(vertices, triangles, colors=None):
     )
 
 
-# =============================================================================
 # ORIENTABILIDAD
-# =============================================================================
 
 
 def orientation_constraints(triangles):
@@ -1001,17 +961,7 @@ def greedy_weighted_conflict_cover(
     conflict_indices,
     removal_cost,
 ):
-    """
-    Cobertura aproximada de conflictos.
-
-    Cada conflicto es una arista entre dos caras. Debemos retirar al menos una
-    cara de cada arista conflictiva.
-
-    Greedy:
-        prioridad = conflictos_no_cubiertos / coste_de_retirar_cara
-
-    No busca un cubo ni una forma: solo topología + evidencia.
-    """
+    """Selecciona caras para cubrir conflictos con prioridad conflictos_pendientes/coste."""
     face_to_conflicts = defaultdict(set)
 
     for local_id, ci in enumerate(conflict_indices):
@@ -1186,9 +1136,7 @@ def orient_faces_consistently(triangles):
     return out, int(len(flip_idx))
 
 
-# =============================================================================
 # ANÁLISIS DE BORDES / TOPOLOGÍA
-# =============================================================================
 
 
 def boundary_components(vertices, triangles):
@@ -1653,9 +1601,7 @@ def topology_snapshot(mesh):
     return out
 
 
-# =============================================================================
 # EXPORTS
-# =============================================================================
 
 
 def write_csv(path, records, fields):
@@ -1755,9 +1701,7 @@ def preview(
     plt.close(fig)
 
 
-# =============================================================================
 # MAIN
-# =============================================================================
 
 
 def _closure_edge_keys(vertices, triangles, quantum):
@@ -2482,11 +2426,8 @@ def close_repair_boundaries(
             if small:
                 if not fill_existing and (not args.repair_holes or inherited_ratio >= 1.0):
                     raise ValueError("contorno_pequeno_preexistente_o_reparacion_desactivada")
-                # V2.0: un hueco creado durante la reparación solo se vuelve a
-                # cerrar si su borde sigue rodeado por evidencia observacional
-                # pose-diversa. Así no se rellena una región que 11/12 dejó
-                # deliberadamente sin identificar por conflicto entre capas.
-                # La nube observada no cambia al aceptar parches de malla.
+                # Cerrar huecos de reparación solo con evidencia de poses diversas alrededor del borde.
+                # Reutilizar el árbol de la nube observada, que no cambia durante la reparación.
                 if observed_rim_tree is None:
                     observed_rim_tree = cKDTree(cloud_points)
                 rim_d, rim_i = observed_rim_tree.query(rim, k=1, workers=query_threads())
@@ -2925,9 +2866,7 @@ def main():
     print(f"Spacing NN: {spacing:.4f} mm")
     print("Sin relleno de huecos / sin reajuste de poses / sin forma específica.")
 
-    # -------------------------------------------------------------------------
     # 1. Limpieza conservadora de componentes.
-    # -------------------------------------------------------------------------
     (
         vertices,
         triangles,
@@ -2948,10 +2887,8 @@ def main():
 
     print(f"Componentes débiles eliminadas: " f"{removed_components}/{len(component_records)}")
 
-    # -------------------------------------------------------------------------
     _estado14("Reparando conexiones de vértices")
     # 2. Bow-ties existentes.
-    # -------------------------------------------------------------------------
     (
         vertices,
         triangles,
@@ -2965,10 +2902,8 @@ def main():
 
     print(f"Splits bow-tie iniciales: {len(initial_splits)}")
 
-    # -------------------------------------------------------------------------
     _estado14("Reparando aristas no manifold")
     # 3. Asegurar edge-manifold antes de orientar.
-    # -------------------------------------------------------------------------
     intermediate = make_mesh(
         vertices,
         triangles,
@@ -3016,10 +2951,8 @@ def main():
     else:
         edge_repair_splits = []
 
-    # -------------------------------------------------------------------------
     _estado14("Resolviendo conflictos de orientación")
     # 4. Reparación conservadora de ORIENTABILIDAD.
-    # -------------------------------------------------------------------------
     (
         vertices,
         triangles,
@@ -3042,11 +2975,9 @@ def main():
         f"({orientation_info['face_removal_ratio']:.3%})"
     )
 
-    # -------------------------------------------------------------------------
     _estado14("Verificando conexiones tras la reparación")
     # 5. La retirada de caras puede crear nuevos bow-ties.
     #    Se corrigen SIN mover puntos.
-    # -------------------------------------------------------------------------
     (
         vertices,
         triangles,
@@ -3060,16 +2991,12 @@ def main():
 
     print(f"Splits bow-tie después de reparación: " f"{len(final_splits)}")
 
-    # -------------------------------------------------------------------------
     _estado14("Orientando caras de forma consistente")
     # 6. Orientar consistentemente.
-    # -------------------------------------------------------------------------
     triangles, flipped_faces = orient_faces_consistently(triangles)
 
-    # -------------------------------------------------------------------------
     _estado14("Analizando y reparando intersecciones")
     # 6B. Reparación semántica mínima.
-    # -------------------------------------------------------------------------
     prior_budget_faces = int(orientation_info["faces_removed"] + nonmanifold_edge_triangles_removed)
 
     (
@@ -3166,10 +3093,8 @@ def main():
     _estado14("Verificando topología final y normales")
     topology = topology_snapshot(final_mesh)
 
-    # -------------------------------------------------------------------------
     _estado14("Midiendo los bordes que permanecen abiertos")
     # 7. Cuantificar los bordes que continúan abiertos tras los cierres aceptados.
-    # -------------------------------------------------------------------------
     vertices_final = np.asarray(
         final_mesh.vertices,
         dtype=np.float64,
@@ -3244,10 +3169,8 @@ def main():
         "nonmanifold_edge_count_numpy": int(len(nm_numpy)),
     }
 
-    # -------------------------------------------------------------------------
     _estado14("Evaluando calidad topológica")
     # 8. Gate para pasar a paso 17.
-    # -------------------------------------------------------------------------
     blockers = []
 
     if topology.get("edge_manifold_allow_boundary") is not True:
@@ -3288,9 +3211,7 @@ def main():
 
     status = "ready_for_step_15" if not blockers else "review_required"
 
-    # -------------------------------------------------------------------------
     # 9. Guardados.
-    # -------------------------------------------------------------------------
     _estado14("Guardando malla y diagnósticos")
     final_path = output / "malla_final_topologica.ply"
     if not o3d.io.write_triangle_mesh(

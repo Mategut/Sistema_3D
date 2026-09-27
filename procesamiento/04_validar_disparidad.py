@@ -1,30 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-Paso 04 V2.2 — Validación regional de disparidad orientada a observación.
-
-Principios de diseño:
-    - una falla del modelo regional NO debe borrar observaciones estéreo reales;
-    - la confianza es un peso, no un veto binario;
-    - una observación física solo se rechaza si contradice simultáneamente
-      el modelo regional y su vecindario local;
-    - los huecos sin disparidad pueden recuperarse únicamente con evidencia
-      geométrica local o consenso entre modelos vecinos compatibles.
-
-Cada superpíxel intenta ajustar de forma robusta:
-    d(u,v) = a*u + b*v + c
-
-La salida separa explícitamente:
-    - observación directa validada;
-    - observación fuerte preservada sin modelo;
-    - recuperación local respaldada por un modelo regional;
-    - observación ambigua preservada por coherencia local;
-    - recuperación acotada de huecos por modelo propio o consenso vecino;
-    - píxeles que siguen sin evidencia geométrica suficiente.
-
-No se completa una forma conocida ni se usa geometría específica del objeto.
-"""
+"""Valida la disparidad por regiones y exporta profundidad, máscaras y procedencia."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -222,7 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=8.0,
     )
 
-    # V2.2 — validación observation-first.
+    # validación observation-first.
     # Una observación dentro del rango físico ya no se elimina por un único
     # fallo regional. Se exige evidencia conjunta modelo + vecindario.
     parser.add_argument(
@@ -641,16 +618,8 @@ def robust_observed_consensus(
     shape: Tuple[int, int],
     args,
 ) -> Tuple[np.ndarray, dict]:
-    """Valida observaciones existentes con un modelo local NO generativo.
-
-    A diferencia de `robust_plane_fit`, este ajuste no autoriza completar
-    huecos. Su único propósito es responder:
-
-        "¿Estas disparidades observadas de confianza media son coherentes
-         entre sí dentro de este superpíxel?"
-
-    Si la respuesta es sí, se conservan sus valores ORIGINALES.
-    """
+    """Valida la coherencia de disparidades observadas y conserva sus valores originales.
+    Este ajuste no autoriza rellenar huecos."""
     candidates = (
         region
         & np.isfinite(disparity)
@@ -959,15 +928,8 @@ def recover_cross_region_missing_depth(
     effective_max_disparity: float,
     args,
 ) -> dict:
-    """Recuperación NO generativa de observaciones existentes y recuperación
-    acotada de huecos sin observación mediante consenso entre modelos vecinos.
-
-    La recuperación nunca reemplaza una disparidad física observada. Solo
-    actúa donde `base_valid_mask` es falso y exige >=2 modelos vecinos que:
-      - tengan ajuste robusto;
-      - compartan una frontera visual suave con la región objetivo;
-      - predigan disparidades mutuamente compatibles.
-    """
+    """Recupera píxeles no válidos con al menos dos modelos vecinos compatibles.
+    Exige ajustes robustos y fronteras suaves; conserva las disparidades válidas existentes."""
     if not bool(args.cross_region_gap_recovery):
         return {"status": "disabled", "recovered_pixels": 0, "events": []}
 
@@ -1269,7 +1231,7 @@ def reject_inconsistent_adjacencies(
             )
             weaker = a if score_a < score_b else b
 
-            # V2: una inconsistencia entre modelos regionales ya no elimina
+            # una inconsistencia entre modelos regionales ya no elimina
             # observaciones estéreo fuertes. Solo impide completar huecos con
             # el modelo más débil.
             region_results[weaker]["model_recovery_blocked"] = True
@@ -1326,15 +1288,8 @@ def _region_rng(view_index: int, label: int) -> np.random.Generator:
 
 
 def process_view_job(job: dict) -> dict:
-    """
-    Procesa UNA vista completa.
-
-    Esta es la unidad de paralelización. Cada proceso hace para su vista:
-      SLIC -> superpíxeles -> RANSAC regional -> Huber/WLS ->
-      adyacencias -> profundidad -> archivos diagnósticos.
-
-    No existe memoria compartida mutable entre vistas.
-    """
+    """Procesa una vista completa: regiones, ajuste robusto, profundidad y diagnósticos.
+    Cada proceso escribe los archivos de su vista."""
     args = argparse.Namespace(**job["args"])
 
     view_index = int(job["view_index"])
@@ -1424,10 +1379,8 @@ def process_view_job(job: dict) -> dict:
     lr_weak_one_sided = lr_state == 3
     lr_strong = np.isin(lr_state, (1, 2))
     lr_eligible_observation = np.isin(lr_state, (1, 2, 3))
-    # Estados 4 (contradicción fuerte) y 5 (evidencia directa insuficiente) no
-    # se usan como observaciones ni como semillas regionales. Siguen contando
-    # como disparidad físicamente existente para impedir que un modelo rellene
-    # encima de una medición contradictoria/no demostrada.
+    # Excluir estados 4/5 de observaciones y semillas.
+    # Conservar su ocupación física para impedir relleno sobre esas mediciones.
     base_valid_mask = base_physical_mask & lr_eligible_observation
     strict_seed_mask = (
         base_valid_mask
@@ -1615,7 +1568,7 @@ def process_view_job(job: dict) -> dict:
     one_sided_validated_mask = np.zeros(disparity.shape, dtype=np.uint8)
     low_direct_validated_mask = np.zeros(disparity.shape, dtype=np.uint8)
 
-    # V2.2: estadísticas locales calculadas una sola vez por vista.
+    # estadísticas locales calculadas una sola vez por vista.
     local_mean_map, local_scale_map, local_count_map = compute_local_observation_statistics(
         disparity,
         confidence,
@@ -1886,10 +1839,7 @@ def process_view_job(job: dict) -> dict:
         model_tol = float(direct_diag["model_tolerance_px"])
         compatible_observed = eligible_observed & plausible & (residual <= model_tol)
 
-        # Estado 5: nunca es semilla, nunca se acepta solo por confianza y no
-        # participa del fallback sin modelo. Puede recuperarse únicamente cuando
-        # DOS fuentes geométricas independientes coinciden: modelo regional y
-        # vecindario local construido desde estados 1/2/3.
+        # Recuperar estado 5 solo con acuerdo del modelo regional y vecinos de estados 1/2/3.
         low_direct_candidate = observed_physical & (state_here == 5)
         local_available_state5 = (
             np.isfinite(local_mean_map[ys, xs])
@@ -2048,7 +1998,7 @@ def process_view_job(job: dict) -> dict:
             args.model_gap_recovery and not result.get("model_recovery_blocked", False)
         )
 
-    # V2.2: segunda oportunidad SOLO para huecos sin observación. Se exige
+    # segunda oportunidad SOLO para huecos sin observación. Se exige
     # consenso entre al menos dos modelos vecinos compatibles.
     cross_region_recovery = recover_cross_region_missing_depth(
         labels,

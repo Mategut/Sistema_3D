@@ -1,59 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-Paso 10 V3.3 — Registro calibrado con evaluación A/B del refinamiento transversal del eje.
-
-Esta fase reemplaza el registro dependiente de geometría durante el runtime.
-
-NO usa:
-- cuboide;
-- planos;
-- Manhattan;
-- cilindro;
-- pirámide;
-- número de caras;
-- ICP 6DoF libre;
-- correcciones angulares aprendidas del objeto.
-
-Sí usa:
-- nube multisesión de cada pose;
-- eje físico congelado;
-- 2055 pasos/vuelta;
-- ángulos mecánicos;
-- transformaciones rígidas de la plataforma.
-
-De forma opcional EVALÚA únicamente la POSICIÓN de la línea del eje en sus
-dos grados de libertad perpendiculares. La dirección del eje y todos los
-ángulos permanecen congelados. En la ruta normal de reconstrucción la
-calibración congelada sigue siendo autoritativa: el candidato refinado se
-calcula y valida A/B, pero solo se aplica si además se autoriza de forma
-explícita con --apply-axis-line-refinement. La evaluación:
-- no supone ninguna forma concreta;
-- se estima por separado con aristas pares e impares;
-- exige mejoras independientes y de cierre;
-- selecciona el desplazamiento con mejor equilibrio entre pares, impares y cierre;
-- se descarta por completo si resulta inestable;
-- se guarda como modelo temporal de poses, sin modificar la calibración.
-
-La validación es geométricamente general:
-- solape entre nubes vecinas;
-- distancia euclídea;
-- distancia punto-a-plano si existen normales;
-- cierre P24 -> P00.
-
-Una relación con poco solape se marca "uninformative"; no se interpreta
-automáticamente como error de calibración porque objetos muy auto-oclusivos
-pueden mostrar poca superficie común.
-
-V3.0 elimina la hipótesis de escena estática: en objetos simétricos podía borrar
-superficie real porque una pared giratoria puede parecer inmóvil en la cámara.
-Cada voxel registrado se proyecta ahora sobre las 25 siluetas. Salir de una
-silueta visible constituye una contradicción geométrica; caer dentro es
-compatible, y quedar fuera del campo de visión no aporta evidencia. La
-profundidad se conserva como comprobación secundaria de visibilidad/oclusión.
-Solo se recuperan fronteras débiles conectadas. No se habilita ICP 6DoF ni se
-supone ninguna forma, tamaño, número de piezas o color.
-"""
+"""Registra las vistas con la calibración de la plataforma y evalúa su coherencia."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -144,7 +91,7 @@ def parser():
     p.add_argument("--minimum-reliable-points-per-view", type=int, default=2200)
     p.add_argument("--confidence-sampling-power", type=float, default=1.5)
 
-    # V3.0 — tallado global por siluetas y profundidad como evidencia secundaria.
+    # tallado global por siluetas y profundidad como evidencia secundaria.
     p.add_argument("--reprojection-neighbor-pose-radius", type=int, default=3)
     p.add_argument("--reprojection-pixel-radius", type=float, default=2.5)
     p.add_argument("--reprojection-depth-z-score", type=float, default=3.5)
@@ -194,10 +141,8 @@ def parser():
     p.add_argument("--axis-line-optimization-points", type=int, default=1800)
     p.add_argument("--axis-line-trim-axial-percent", type=float, default=12.0)
     p.add_argument("--axis-line-trim-transverse-percent", type=float, default=2.0)
-    # V3.2 separa el gate barato de propuesta del gate final. Un candidato
-    # pequeño y físicamente seguro puede llegar a validación completa aunque no
-    # alcance la ganancia del mejor candidato (que puede exigir un desplazamiento
-    # no permitido por incertidumbre).
+    # Separar el filtro de propuesta de la validación final.
+    # Permitir candidatos seguros aunque su ganancia sea menor que la del mejor ajuste.
     p.add_argument(
         "--axis-line-minimum-improvement-ratio",
         type=float,
@@ -239,7 +184,7 @@ def parser():
         default=0.10,
         help="Penalización por desequilibrio entre las validaciones par e impar.",
     )
-    # V3.1 — aceptación final sobre TODOS los puntos fiables. Además de la
+    # aceptación final sobre TODOS los puntos fiables. Además de la
     # mejora global, ninguna pareja consecutiva puede degradarse de forma
     # material para ganar solamente el cierre P24->P00.
     p.add_argument("--axis-line-full-minimum-rmse-improvement-ratio", type=float, default=0.02)
@@ -256,7 +201,7 @@ def parser():
     p.add_argument("--axis-line-maximum-consecutive-overlap-drop", type=float, default=0.015)
     p.add_argument("--axis-line-maximum-degraded-consecutive-edges", type=int, default=0)
 
-    # V3.2 — validación espacial por bandas axiales. No presupone forma del
+    # validación espacial por bandas axiales. No presupone forma del
     # objeto: usa únicamente el eje físico ya calibrado y compara las mismas
     # regiones antes/después.
     p.add_argument("--axis-line-regional-bands", type=int, default=3)
@@ -823,13 +768,8 @@ def _filter_view_rows(view: dict, keep: np.ndarray) -> dict:
 
 
 def reject_camera_static_hypothesis(registered_views, args):
-    """Rechaza puntos más coherentes fijos en cámara que girando con el objeto.
-
-    La comparación usa exactamente las mismas poses y el mismo radio para las
-    dos hipótesis. Una figura simétrica puede ser coherente bajo ambas y no se
-    elimina: solo se rechaza cuando la hipótesis estática domina por un margen
-    explícito. El límite por pose evita cortes masivos ante evidencia ambigua.
-    """
+    """Compara hipótesis estática y giratoria con las mismas poses y radio.
+    Rechaza solo predominio estático claro, con un límite por pose."""
     expected = len(registered_views)
     radius = max(1, int(args.static_hypothesis_neighbor_radius))
     gate = max(float(args.static_hypothesis_gate_mm), 1e-6)
@@ -1256,13 +1196,8 @@ def multiview_reprojection_support(fused, registered_views, transforms, intrinsi
         delta = z[local_indexes] - observed_depth
         agreed = has_measurement & (np.abs(delta) <= tolerance)
         occluded = has_measurement & (delta > tolerance)
-        # La ausencia de profundidad no demuestra fondo: puede ser oclusión,
-        # baja textura o un hueco del estéreo. Solo una medición válida situada
-        # claramente detrás del voxel constituye contradicción de profundidad.
-        # Si una medición válida está detrás del candidato, el segmento entre
-        # cámara y superficie observada es espacio libre. Esto contradice el
-        # voxel aunque su normal sea ruidosa o esté invertida. Las normales no
-        # deben poder proteger una protuberancia falsa pegada a la superficie.
+        # Solo una medición válida detrás del vóxel confirma espacio libre y lo contradice.
+        # La ausencia de profundidad o una normal ruidosa no decide este veto.
         contradicted = has_measurement & (delta < -tolerance)
         tested = agreed | occluded | contradicted
 
@@ -2614,25 +2549,8 @@ def directional_metrics(
     cap,
     tree=None,
 ):
-    """
-    Métrica direccional GENERAL entre dos vistas ya colocadas por la
-    calibración mecánica.
-
-    Corrección V1.1:
-    ----------------
-    point-to-plane se calcula EXCLUSIVAMENTE sobre correspondencias cuyo
-    vecino más cercano está dentro de ``overlap_gate``.
-
-    En V1.0 se calculaba overlap con ese gate, pero luego point-to-plane usaba
-    TODOS los vecinos finitos, incluso puntos sin superficie común visible.
-    Eso penalizaba auto-oclusiones y cambios de cobertura como si fueran error
-    de pose. En objetos arbitrarios esa métrica no es válida.
-
-    Para una normal unitaria siempre se cumple:
-        |point_to_plane| <= distancia_euclidea
-    Por tanto, si una correspondencia supera el gate de solape, no debe entrar
-    en la validación de alineación superficial.
-    """
+    """Calcula métricas entre vistas registradas.
+    Point-to-plane usa solo vecinos dentro de overlap_gate para excluir zonas sin solape."""
     if len(src) == 0 or len(tgt) == 0:
         return None
 
@@ -3225,7 +3143,7 @@ def main():
             before_validation, after_validation, args
         )
 
-        # V3.2: además de las métricas globales, comprobar que la mejora no
+        # además de las métricas globales, comprobar que la mejora no
         # provenga de sacrificar una zona física del objeto. Las bandas son
         # cuantiles a lo largo del eje calibrado, por lo que son generales.
         regional_bounds = axial_validation_bounds(
@@ -3436,10 +3354,8 @@ def main():
     output = root / "reconstruccion" / "multisesion" / args.output_name
     output.mkdir(parents=True, exist_ok=True)
 
-    # Contrato temporal entre 10 y 11. No modifica la calibración global.
-    # V3.3 conserva además dos modelos diagnósticos A/B muy pequeños: el
-    # congelado y, cuando existe, el candidato refinado. El paso 11 consume
-    # únicamente modelo_poses_runtime_validado.json.
+    # Exportar modelo_poses_runtime_validado.json para el paso 11 y conservar diagnósticos A/B.
+    # La calibración global permanece intacta.
     def _pose_model_payload(transforms, line_point, refinement_applied, role):
         return {
             "schema_version": 1,

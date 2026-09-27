@@ -1,83 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-PASO 11 V11.8 — FUSIÓN MULTIVISTA ROBUSTA GENERAL
-==============================================
-
-Entrada
--------
-- 25 nubes ya registradas y depuradas de 10_registro_calibrado.
-- calibracion_plataforma_candidata/definitiva.json.
-- resultado ACCEPTED o WARNING trazable de 10_registro_calibrado; REJECTED se bloquea.
-- modelo temporal de poses validado por 10, cuando exista y haya sido aceptado.
-
-Salida
-------
-Una única nube 360° fusionada que conserva:
-- posición robusta;
-- color;
-- normal;
-- número de poses independientes que respaldan cada muestra;
-- confianza multivista;
-- dispersión espacial;
-- coherencia de normales;
-- incidencia media.
-
-Diseño
-------
-NO usa forma específica:
-- no cubo;
-- no cilindro;
-- no pirámide;
-- no primitivas globales ni caras predeterminadas;
-- no Manhattan;
-- no ICP 6DoF;
-- no correcciones angulares por objeto.
-
-Fusión regional V11.8 (activada por defecto):
-- La ruta normal NO selecciona primitivas geométricas: el refinamiento de plano/cilindro/cuadrática permanece desactivado por defecto;
-- la conciliación usa superficies cuadráticas locales agnósticas a la forma y evidencia multivista;
-- regiones de trabajo adaptativas, con máximo 512 semillas y halos compartidos;
-- modelos cuadráticos solapados, conciliados simultáneamente sin deriva iterativa;
-- una corrección conserva el soporte propio y se revalida contra cada pose;
-- reparto de procesos y memoria mediante las utilidades optimizadas existentes;
-- --no-regional-fusion conserva la ruta de ajuste local independiente V8;
-- no corrige poses automáticamente ni garantiza circularidad perfecta.
-
-Fusión local de base:
-
-- conserva las observaciones individuales registradas de todas las poses;
-- el voxel organiza semillas reales, con varias superficies por celda;
-- compara vecinos de cada pose por posición y normal orientada;
-- separa capas y ajusta parches cuadráticos locales mediante IRLS;
-- limita el movimiento normal usando incertidumbre EMPÍRICA de consenso;
-- conserva observaciones sin proyectar si el ajuste no está respaldado;
-- registra soporte por pose, conflictos, incertidumbre y causas de fallback.
-No presupone covarianzas calibradas que no estén presentes en las entradas.
-La ruta anterior se puede seleccionar mediante --no-local-surface-fusion.
-
-Selección V8.0: parches independientes con evidencia multivista propia,
-continuidad tangencial, normales compatibles e incertidumbre acotada. El núcleo
-de cinco poses es una etiqueta de evidencia, no una restricción de proximidad.
---no-independent-patches conserva la selección histórica para comparación.
-
-V11.8 añade una segunda pasada de recuperación de COBERTURA OBSERVADA. No
-interpola ni crea puntos: reconsidera únicamente surfels que ya existen en la
-fusión local y que conservan evidencia multivista propia. Un candidato solo
-puede volver si está conectado a superficie validada, mantiene normales y
-residuo tangencial compatibles, posee respaldo de poses/confianza suficiente y
-la recuperación mejora la cobertura sin degradar de forma material la calidad
-global. Esto evita que un filtro local excesivamente conservador fragmente una
-superficie real, sin introducir una forma geométrica esperada.
-
-El completado exporta geometría INFERIDA en un archivo separado y es
-conservador por diseño. Un contorno cerrado no basta: cada candidato debe ser
-compatible con siluetas, visibilidad y espacio libre en múltiples poses
-independientes, además de respetar un presupuesto local de tamaño y distancia
-a observaciones. Las tapas terminales permanecen desactivadas por defecto.
-No añade soporte multivista ficticio ni clasifica la forma del objeto. El paso
-13 solo puede consumir guías que acrediten este contrato multivista.
-"""
+"""Fusiona observaciones registradas mediante parches locales y consenso multivista.
+Conserva soporte, confianza e incertidumbre; exporta la geometría inferida por separado."""
 
 from __future__ import annotations
 import sys as _sys
@@ -258,7 +182,7 @@ def build_parser():
     p.add_argument("--local-normal-angle-deg", type=float, default=35.0)
     p.add_argument("--local-sigma-floor-voxels", type=float, default=0.10)
     p.add_argument("--local-max-shift-voxels", type=float, default=0.50)
-    # V11.0 — soporte no significa solamente contar poses: se exige diversidad
+    # soporte no significa solamente contar poses: se exige diversidad
     # angular y se valida el modelo local contra poses excluidas del ajuste.
     p.add_argument(
         "--minimum-independent-pose-separation",
@@ -281,10 +205,7 @@ def build_parser():
     p.add_argument("--minimum-heldout-pass-numerator", type=int, default=2)
     p.add_argument("--minimum-heldout-pass-denominator", type=int, default=3)
 
-    # V11.3 — coherencia local multiescala para observaciones clase 2.
-    # No presupone primitivas ni una forma global: solo comprueba si una
-    # observación no validada held-out pertenece a una variedad superficial
-    # local estable o a una característica geométrica local coherente.
+    # Validar clase 2 mediante estabilidad superficial y coherencia de aristas en varias escalas.
     p.add_argument("--class2-local-coherence", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--class2-coherence-small-neighbors", type=int, default=18)
     p.add_argument("--class2-coherence-large-neighbors", type=int, default=36)
@@ -315,10 +236,7 @@ def build_parser():
     p.add_argument("--class2-feature-min-family-separation-deg", type=float, default=25.0)
     p.add_argument("--class2-feature-min-tangent-backing-fraction", type=float, default=0.60)
 
-    # V11.8 — recuperación conservadora de cobertura OBSERVADA. No genera
-    # muestras ni rellena huecos geométricamente: solo reincorpora candidatos
-    # ya medidos que quedaron fuera por el filtro local, siempre que estén
-    # respaldados por varias poses y conectados a superficie validada.
+    # Reincorporar candidatos medidos con respaldo multivista y conexión a superficie validada.
     p.add_argument("--observed-coverage-recovery", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--coverage-recovery-iterations", type=int, default=6)
     p.add_argument("--coverage-recovery-max-distance-voxels", type=float, default=3.00)
@@ -365,10 +283,7 @@ def build_parser():
         ),
     )
 
-    # V11.4 — separación post-fit de hojas respaldadas por grupos de poses.
-    # Se aplica antes de declarar una observación como clase 3. No presupone
-    # cilindros, planos ni otra primitiva: solo usa residuos firmados por pose
-    # respecto al modelo local ya validado held-out.
+    # Separar capas por residuos firmados de pose antes de asignar clase 3.
     p.add_argument(
         "--validated-pose-layer-separation", action=argparse.BooleanOptionalAction, default=True
     )
@@ -382,10 +297,7 @@ def build_parser():
     p.add_argument("--validated-layer-max-shift-voxel", type=float, default=0.30)
     p.add_argument("--validated-layer-max-shift-uncertainty-factor", type=float, default=1.50)
 
-    # V11.6 — consenso regional multiescala por procedencia de poses.
-    # Se ejecuta DESPUÉS de la selección propia del 11 y corrige únicamente
-    # ondulaciones que pueden predecirse de manera consistente desde una corona
-    # vecina en dos escalas y desde varias poses independientes.
+    # Corregir ondulaciones predecibles desde una corona vecina, dos escalas y poses independientes.
     p.add_argument("--regional-pose-consensus", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--regional-consensus-small-radius-voxels", type=float, default=3.2)
     p.add_argument("--regional-consensus-large-radius-voxels", type=float, default=5.0)
@@ -413,11 +325,8 @@ def build_parser():
     p.add_argument("--regional-consensus-min-spacing-ratio", type=float, default=0.92)
     p.add_argument("--regional-consensus-max-extent-change-fraction", type=float, default=0.0075)
 
-    # V11.6 — corrección de sesgo relativo por composición de poses usando
-    # residuos de las observaciones CRUDAS del ajuste local, no coordenadas ya fusionadas.
-    # El modelo es aditivo y local: residual(parche,pose)=sesgo_pose-gauge_parche.
-    # Solo corrige la variación del gauge entre parches; un desplazamiento común a todas
-    # las poses queda intacto y por tanto no impone ninguna forma global.
+    # Ajustar residual(parche,pose)=sesgo_pose-gauge_parche con observaciones originales.
+    # Corregir variación entre parches conservando el desplazamiento común de las poses.
     p.add_argument("--raw-pose-bias-consensus", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--raw-pose-bias-small-radius-voxels", type=float, default=4.0)
     p.add_argument("--raw-pose-bias-large-radius-voxels", type=float, default=7.0)
@@ -1067,10 +976,7 @@ def hierarchical_consensus_selection(
     )
     maximum_spread_p90 = max(float(maximum_anchor_spread_p90_mm), 0.0)
 
-    # Se evalúan todos los umbrales. El soporte alto sigue teniendo prioridad,
-    # pero no puede bloquear un nivel inmediatamente inferior si su núcleo es
-    # demasiado ralo. La continuidad es exclusivamente local y no impone una
-    # topología ni una clase de objeto.
+    # Evaluar todos los niveles de soporte para no descartar núcleos inferiores más continuos.
     anchor = np.zeros(candidate_count, dtype=bool)
     anchor_support = legacy
     anchor_candidates = []
@@ -1343,7 +1249,7 @@ def make_preview(path, points, support, confidence):
         raise RuntimeError(
             "No se puede generar preview_fusion_multivista.png porque "
             "matplotlib no está disponible. Ejecuta primero "
-            "herramientas/00_verificar_dependencias.py."
+            "herramientas/verificar_dependencias.py."
         )
     if len(points) > 140000:
         idx = np.linspace(0, len(points) - 1, 140000).astype(int)
@@ -1481,13 +1387,8 @@ def _pose_diversity(pose_ids, expected=25, minimum_separation=2):
 
 
 def _heldout_vote_ok(passed_tests, tests, numerator=2, denominator=3):
-    """Decisión racional exacta para validación held-out.
-
-    Evita el error numérico/semántico de comparar 2/3=0.666... contra 0.67.
-    La condición se evalúa como passed*denominator >= numerator*tests.
-    Sin pruebas disponibles no bloquea: la ausencia de held-out se trata en
-    las demás guardas de diversidad, soporte y conflicto.
-    """
+    """Evalúa passed * denominator >= numerator * tests, evitando redondear fracciones.
+    Sin pruebas held-out disponibles, delega en las otras guardas de evidencia."""
     tests = int(tests)
     passed_tests = int(passed_tests)
     numerator = max(0, int(numerator))
@@ -1948,7 +1849,7 @@ def _local_patch(seed_id, ids, context, proposed_shift=None):
     )
 
 
-# V9: parches solapados, conciliación simultánea e informe por pose.
+# parches solapados, conciliación simultánea e informe por pose.
 _LOCAL_SHAPES = {
     "points": 3,
     "colors": 3,
@@ -3071,20 +2972,8 @@ def _feature_family_rescue(points, normals, uncertainty, seed_index, neighbor_in
 
 
 def _resolve_validated_pose_layers(local_result, voxel, args):
-    """Separa hojas/capas coherentes respaldadas por grupos independientes de poses.
-
-    La validación held-out demuestra que un modelo predice poses excluidas, pero
-    varias poses pueden compartir un sesgo espacial coherente. Este control usa
-    únicamente los residuos firmados por pose respecto al parche local ya
-    validado. Si detecta dos hojas multivista separadas:
-
-    - con ganador claro, conserva solo ese grupo y desplaza el surfel como máximo
-      dentro del presupuesto de incertidumbre;
-    - sin ganador claro, marca el candidato como ambiguo para degradarlo de clase
-      3 a clase 2, donde vuelve a pasar por coherencia local multiescala.
-
-    No clasifica la forma del objeto ni ajusta primitivas globales.
-    """
+    """Separa capas según residuos por pose.
+    Con ganador claro limita el desplazamiento por incertidumbre; sin él degrada a clase 2."""
     n = 0 if local_result is None else len(local_result.get("points", []))
     arrays = {
         "validated_layer_available": np.zeros(n, dtype=np.uint8),
@@ -3325,13 +3214,8 @@ def _resolve_validated_pose_layers(local_result, voxel, args):
 
 
 def _evaluate_class2_local_coherence(points, normals, uncertainty, evidence_class, voxel, args):
-    """Evalúa clase 2 con coherencia superficial local multiescala.
-
-    El test es conservador: un punto solo se rechaza si acumula varios fallos
-    independientes. Si el vecindario parece una arista/esquina coherente, se
-    conserva mediante agrupamiento local de normales. No se ajusta ninguna
-    primitiva global ni se usa el nombre del objeto.
-    """
+    """Evalúa clase 2 en varias escalas y rechaza fallos independientes acumulados.
+    Agrupa normales para conservar aristas y esquinas coherentes."""
     n = len(points)
     result = {
         "available": np.zeros(n, dtype=np.uint8),
@@ -3555,13 +3439,8 @@ def _nearest_spacing_median(points):
 def _two_way_local_pose_bias(
     pose_residual, neighbor_ids, minimum_samples_per_pose, expected_views=25, iterations=4
 ):
-    """Ajuste robusto r[j,p] = b[p] - g[j] + e sin asumir geometría.
-
-    b[p] representa el sesgo relativo de una pose dentro del vecindario y g[j]
-    el gauge inducido por la composición de poses del parche j. El sistema tiene
-    una constante indeterminada; se fija con mediana(b)=0 porque un desplazamiento
-    común no genera ondulación relativa y no debe corregirse.
-    """
+    """Ajusta r[j,p] = b[p] - g[j] + e con mediana(b)=0.
+    b es el sesgo relativo de pose y g el desplazamiento común de cada parche."""
     R = np.asarray(pose_residual, dtype=np.float64)[np.asarray(neighbor_ids, dtype=np.int64)]
     if R.ndim != 2 or R.shape[1] < expected_views or len(R) < 6:
         return None
@@ -3633,15 +3512,8 @@ def _postselection_raw_pose_bias_consensus(
     voxel,
     args,
 ):
-    """Corrige ondulación inducida por cambios de composición de poses.
-
-    A diferencia del consenso regional V11.5, esta etapa usa los residuos por pose
-    calculados desde observaciones originales antes de la fusión. En dos escalas
-    resuelve un modelo aditivo pose/parche y corrige solo el gauge relativo que
-    cambia con el conjunto de poses que soporta cada parche. No usa primitivas ni
-    el nombre del objeto y nunca intenta recuperar un desplazamiento común a todas
-    las poses.
-    """
+    """Corrige sesgo relativo por composición de poses usando residuos originales en dos escalas.
+    Conserva el desplazamiento común a todas las poses."""
     points = np.asarray(points, dtype=np.float64)
     normals = normalize_rows(np.asarray(normals, dtype=np.float64))
     masks = np.asarray(support_pose_mask, dtype=np.uint64)
@@ -3845,17 +3717,8 @@ def _postselection_regional_pose_consensus(
     voxel,
     args,
 ):
-    """Reduce ondulación regional solo cuando varias procedencias de pose coinciden.
-
-    El punto central NO participa en el ajuste. Se predice desde una corona vecina
-    en dos escalas. Para cada pose que respalda el punto se ajusta una superficie
-    cuadrática local usando exclusivamente vecinos cuya procedencia incluye esa
-    pose. Después se exige acuerdo entre poses angularmente independientes y entre
-    ambas escalas. Si el acuerdo falla no se inventa geometría: se marca ambigüedad
-    y se reduce su autoridad aguas abajo.
-
-    No se ajustan cilindros, planos globales, esferas ni dimensiones conocidas.
-    """
+    """Predice desde una corona vecina, excluyendo el punto central.
+    Exige acuerdo entre poses independientes y dos escalas; si falla, reduce la evidencia."""
     points = np.asarray(points, dtype=np.float64)
     normals = normalize_rows(np.asarray(normals, dtype=np.float64))
     masks = np.asarray(support_pose_mask, dtype=np.uint64)
@@ -4192,18 +4055,8 @@ def _recover_observed_surface_coverage(
     minimum_confidence,
     args,
 ):
-    """Recupera cobertura usando únicamente observaciones ya existentes.
-
-    Esta pasada NO interpola puntos, NO desplaza observaciones y NO conoce la
-    forma del objeto. Reconsidera candidatos descartados por el filtro local si
-    mantienen evidencia multivista suficiente y pueden conectarse de forma
-    geométricamente compatible con superficie ya validada.
-
-    La expansión es iterativa pero acotada: cada candidato debe tener evidencia
-    propia, respaldo local y compatibilidad de normal/residuo tangencial. Al
-    final se compara cobertura y calidad global; si la recuperación no mejora
-    cobertura o deteriora demasiado la calidad, se revierte por completo.
-    """
+    """Reincorpora candidatos existentes con respaldo propio y conexión a superficie validada.
+    Revierte la recuperación si no mejora cobertura o degrada la calidad."""
     n = len(points)
     keep = np.asarray(keep, dtype=bool).copy()
     initial_keep = keep.copy()
@@ -4875,7 +4728,7 @@ def select_independent_patches(
         keep[idx] = chosen
         labels_full[idx] = labels
         degree_full[idx] = degree
-    # V11.8 — segunda pasada de cobertura OBSERVADA. La recuperación no
+    # segunda pasada de cobertura OBSERVADA. La recuperación no
     # crea ni desplaza puntos: reincorpora únicamente candidatos ya medidos y
     # con evidencia multivista propia que siguen conectados a la superficie.
     keep, evidence_class, coverage_recovery_report, coverage_recovery_diagnostic = (
@@ -5360,13 +5213,8 @@ def validate_completion_candidates_multiview(candidate, candidate_normals, conte
 def estimate_missing_patches(
     points, normals, colors, voxel, args, completion_context=None, completion_context_report=None
 ):
-    """Guías inferidas, no observaciones, con validación multivista estricta.
-
-    BPA solo propone contornos. La geometría local produce candidatos, pero un
-    candidato no se exporta si contradice siluetas o espacio libre, o si no
-    recibe acuerdo de profundidad desde poses independientes. No se usa radio,
-    diámetro, plantilla de cilindro, convexidad ni clase de objeto.
-    """
+    """Genera guías inferidas desde contornos BPA.
+    Exige acuerdo de profundidad multivista y compatibilidad con siluetas y espacio libre."""
     import open3d as o3d
     from matplotlib.path import Path as PolygonPath
     import time
@@ -6108,7 +5956,7 @@ def main():
                 flush=True,
             )
 
-    # V11.6: antes del consenso geométrico regional, usar los residuos por pose
+    # antes del consenso geométrico regional, usar los residuos por pose
     # de las observaciones originales para estimar y retirar solo el gauge local
     # inducido por cambios del conjunto de poses que soporta cada parche.
     raw_pose_bias_diagnostic = {
@@ -6180,7 +6028,7 @@ def main():
             flush=True,
         )
 
-    # V11.6: la selección ya decidió QUÉ muestras son observadas. Ahora se
+    # la selección ya decidió QUÉ muestras son observadas. Ahora se
     # comprueba si su posición regional puede predecirse de manera consistente
     # desde dos escalas y varias procedencias de pose. No se añaden puntos.
     regional_pose_diagnostic = {
@@ -6272,10 +6120,7 @@ def main():
     coverage_report["gate_note"] = "Cell-count retention is diagnostic only. Require original-cell proximity at one and two voxels, plus point proximity at two voxels."
     local_summary["all_candidate_coverage"] = coverage_report
 
-    # V11.9 — contrato de cobertura mínimo. Una nube puede tener excelentes
-    # métricas locales y aun así estar demasiado fragmentada para reconstruir una
-    # superficie sin extrapolación. En ese caso se detiene aquí y no se delega a
-    # Poisson la tarea de inventar las regiones faltantes.
+    # Exigir cobertura suficiente antes de mallar para limitar la extrapolación de regiones ausentes.
     if np.any(keep):
         occupied_retention = float(coverage_report.get("reference_cell_coverage_one_voxel", 0.0))
         two_voxel_coverage = float(coverage_report.get("within_two_voxels_fraction", 0.0))

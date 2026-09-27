@@ -6,7 +6,7 @@ set "PYTHONUTF8=1"
 set "PYTHONIOENCODING=utf-8"
 set "PY="
 
-REM Priorizar el entorno Conda usado durante el desarrollo.
+REM Preferir el entorno Conda tesis.
 if /I "%CONDA_DEFAULT_ENV%"=="tesis" (
     for /f "delims=" %%P in ('where python 2^>nul') do if not defined PY set "PY=%%P"
 )
@@ -40,7 +40,7 @@ echo Verificando dependencias y recursos del sistema...
 echo.
 
 REM El verificador muestra el estado e instala automaticamente lo que falte.
-"%PY%" "%~dp0herramientas\00_verificar_dependencias.py"
+"%PY%" "%~dp0herramientas\verificar_dependencias.py" --startup
 if errorlevel 1 (
     echo.
     echo ============================================================

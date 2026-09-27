@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "excludes": [
+    "MANIFEST.json"
+  ],
+  "files": {
+    "catalogo.json": {
+      "sha256": "3e88c1db6848b65947f21a24cbe75aeb6c3208a703e6cba92b467198f44060f2",
+      "size_bytes": 20555
+    },
+    "cilindro1/captura_derecha.png": {
+      "sha256": "c386139f1ce43af627a63f51196e6cf6c70fd8fece9555017a631b9515527fdd",
+      "size_bytes": 3411139
+    },
+    "cilindro1/captura_izquierda.png": {
+      "sha256": "cf779a504c531b578110602fac079d42132719e91ad9358c1a7ca917311e9509",
+      "size_bytes": 3400944
+    },
+    "cilindro1/modelo_final_original_mm.ply": {
+      "sha256": "c340bdeed05760e836b529904b18731e9a29822222c0b5723a831e05f7a98aec",
+      "size_bytes": 2167050
+    },
+    "cilindro1/modelo_pre_pulido_mm.ply": {
+      "sha256": "61668a213aa477743bf61eee4bdd3f810bb6607899e46d027cfd25c49b8818b0",
+      "size_bytes": 2167050
+    },
+    "cilindro1/preview_validacion.png": {
+      "sha256": "20e0e1ee54a2e217a32d061e580ff53b12b88b82cf5c4be5e0f53e5e7ea54906",
+      "size_bytes": 1386289
+    },
+    "cilindro1/procedencia.json": {
+      "sha256": "2e1c0f3c748275a498156bf02344fb1a7ff17cc533849af508147354537df2f0",
+      "size_bytes": 2115
+    },
+    "cilindro1/README.md": {
+      "sha256": "fe195f40197d5dd2b9d5b4b20d0da842543250f46e008bb9de24fb29806c1935",
+      "size_bytes": 750
+    },
+    "cilindro1/validacion_17.json": {
+      "sha256": "5fe1f97730c7c83a029330568096c7451878873c75fe65a43f5b415dd1164365",
+      "size_bytes": 12882
+    },
+    "cilindro2/captura_derecha.png": {
+      "sha256": "cd559906836e7555d1bcbb22845fd3e449bdc81f6bd4ced379a76692173bdc49",
+      "size_bytes": 3413166
+    },
+    "cilindro2/captura_izquierda.png": {
+      "sha256": "07cdc80eeef5b646540df82fc05835be326b388a02f7ebab34780386e599f77f",
+      "size_bytes": 3400578
+    },
+    "cilindro2/modelo_final_original_mm.ply": {
+      "sha256": "3eb4b88dbf754485bfa4da113920402f8a0d8b749957db54b778d28ce29ce496",
+      "size_bytes": 3146776
+    },
+    "cilindro2/modelo_pre_pulido_mm.ply": {
+      "sha256": "82f937f606539dfc3e886da8f3e2062cd6700140866c7cc5b7949496c3341521",
+      "size_bytes": 3146776
+    },
+    "cilindro2/preview_validacion.png": {
+      "sha256": "3734b8b57a018112d6d16ba495ae4be5acdbab5d4012b0868534a969e8b2623b",
+      "size_bytes": 1432711
+    },
+    "cilindro2/procedencia.json": {
+      "sha256": "a6d164cd14f5e41accb900ecd17d0b80e45ca72f0d65cdef7cb7c55f5169c6c5",
+      "size_bytes": 2205
+    },
+    "cilindro2/README.md": {
+      "sha256": "1600c69417207acc5ce88e86cd0ef23c567f6c7d2dc38a5115fb480f173bcc77",
+      "size_bytes": 794
+    },
+    "cilindro2/validacion_17.json": {
+      "sha256": "f7a5a7f8e5e15db9382676d1842a54e4bd87f3a357915d7b8388fce54ba8bde8",
+      "size_bytes": 13161
+    },
+    "cilindro3/captura_derecha.png": {
+      "sha256": "73518444b846e010faa153b0b31ee699c7201551e21f17beb1d8f8e170fb5907",
+      "size_bytes": 3411441
+    },
+    "cilindro3/captura_izquierda.png": {
+      "sha256": "44d6aa97a5a48b867c9a5c8e42dadf085a5ab8bd451547ba9495ea8f506b5ae4",
+      "size_bytes": 3402352
+    },
+    "cilindro3/modelo_final_original_mm.ply": {
+      "sha256": "2fe9c393a52661acea77d6030b070d9d69a6c729ca633283656eeaa76c3eb0bb",
+      "size_bytes": 2123026
+    },
+    "cilindro3/modelo_pre_pulido_mm.ply": {
+      "sha256": "d936444c4f5785af48cc155ecd2777c8174eb400609f8b09bc0c2ed9f47dca60",
+      "size_bytes": 2123026
+    },
+    "cilindro3/preview_validacion.png": {
+      "sha256": "f172e21abde9c0111a350535e89672485b9a846479133eb9e7700356e82c3e35",
+      "size_bytes": 1364145
+    },
+    "cilindro3/procedencia.json": {
+      "sha256": "cd47c09bef0c5f6f725bf08b603efd42931475d6eaa9ec6bc0f0a21cc78d1e84",
+      "size_bytes": 2115
+    },
+    "cilindro3/README.md": {
+      "sha256": "d439a90630ac511771ab00e5e7ee2647ce7a776983203e1dbb8c5a7880dc2105",
+      "size_bytes": 750
+    },
+    "cilindro3/validacion_17.json": {
+      "sha256": "5947bacd1e5a4ae76de0e5e31c2647392075702f565ea5d546dcd11c6996380f",
+      "size_bytes": 12881
+    },
+    "comparacion_dimensional.csv": {
+      "sha256": "c0d622d2198e7c79cf98158e3143e897f86f790f866588f6e166acf1f696cdc8",
+      "size_bytes": 5647
+    },
+    "comparacion_dimensional.json": {
+      "sha256": "6170c5770c04f3b5eff25ff5ae14c231042d8794c635993b7d80ba3e73c1ea43",
+      "size_bytes": 42978
+    },
+    "comparacion_dimensional.md": {
+      "sha256": "416ee9b6333ecc87f0ecadf90bc1cafaeae2a5b3c72a6cf84f20412a374f7e13",
+      "size_bytes": 4718
+    },
+    "cubo1/captura_derecha.png": {
+      "sha256": "307d57ea8cd91da1396662855ce7e06d40611ecc53b4f08ea29301274b80d927",
+      "size_bytes": 3386331
+    },
+    "cubo1/captura_izquierda.png": {
+      "sha256": "63042892eab406aba8aa500bb99b1050f322a02f7827a67bd40ce4aba853eef1",
+      "size_bytes": 3374776
+    },
+    "cubo1/modelo_final_original_mm.ply": {
+      "sha256": "f04aa69c64ad98288b0c271f3704745a70d627d5b3bc53196b387f645a9fef86",
+      "size_bytes": 7813029
+    },
+    "cubo1/modelo_pre_pulido_mm.ply": {
+      "sha256": "97363fd9d39b618bd5fc06bee70dc9ba471a16c5a095ba1fb3e80b39768e419b",
+      "size_bytes": 7813029
+    },
+    "cubo1/preview_validacion.png": {
+      "sha256": "f8c6946c07d905afb2af147bfa9da8800a73e88f3730040f6a9268dc95488cd3",
+      "size_bytes": 3086414
+    },
+    "cubo1/procedencia.json": {
+      "sha256": "66914c441e1bdcf7e9dabeebdadf77df9b07681a970e9f10e4bc19db1da734ad",
+      "size_bytes": 2182
+    },
+    "cubo1/README.md": {
+      "sha256": "67df7b1f41b4cf8d273ee84d96d8e1d95b43a68dc80a6c259fd7c18ca514c5cc",
+      "size_bytes": 786
+    },
+    "cubo1/validacion_17.json": {
+      "sha256": "238cf40e843eaca4afc2209b10dc3c2cb6e9755af725351a58f7b69cbb396a83",
+      "size_bytes": 12952
+    },
+    "cubo2/captura_derecha.png": {
+      "sha256": "c74d3763e74aa94def25d3d0ca9f84a77ae53c96ec809c79ffc78284d4f2cba5",
+      "size_bytes": 3391763
+    },
+    "cubo2/captura_izquierda.png": {
+      "sha256": "4f7f30b844dc6ce3ed00078d65a089867c6fd8d8b35ac6709dd5441f71a6dfd9",
+      "size_bytes": 3381027
+    },
+    "cubo2/modelo_final_original_mm.ply": {
+      "sha256": "3eacd90189cf896b6af9431b303bd03196d4ded4f8316761fff7c63011ae2bc6",
+      "size_bytes": 7756460
+    },
+    "cubo2/modelo_pre_pulido_mm.ply": {
+      "sha256": "5770b3bd4c7bee2c5f5576b1d571792f877364c121a836184860ff77f4944a97",
+      "size_bytes": 7756460
+    },
+    "cubo2/preview_validacion.png": {
+      "sha256": "7e83fc0b244455e0768a6b395a3a0cba76b69a6ce9dc74bcb27de74174f103f5",
+      "size_bytes": 2936505
+    },
+    "cubo2/procedencia.json": {
+      "sha256": "c5511e125aabe41cb9960f823d673b783d04e6516b19ed3b1532f6d377fe3f36",
+      "size_bytes": 2182
+    },
+    "cubo2/README.md": {
+      "sha256": "b322f6160d428c882fa923c90cbac76216188eb3235f747b1d9e355ff40ab9f2",
+      "size_bytes": 786
+    },
+    "cubo2/validacion_17.json": {
+      "sha256": "91a9077a3af3671a680d1ba0bd48d2e3258f47eca192e5354c92baf048aac292",
+      "size_bytes": 12940
+    },
+    "cubo3/captura_derecha.png": {
+      "sha256": "c901fc41bf721b1074774d2bf6ac47be9230f03f77c12dc30c819741f8bdd8ff",
+      "size_bytes": 3391353
+    },
+    "cubo3/captura_izquierda.png": {
+      "sha256": "0fd8918d285b5c8d6a78574271e1914d7725ebf36de252f199b60250aa6bfc25",
+      "size_bytes": 3377988
+    },
+    "cubo3/modelo_final_original_mm.ply": {
+      "sha256": "6b017c25f20b6fbdc0b3b6c970898677f4b5d9c153451d6217decd5efaea7339",
+      "size_bytes": 8030562
+    },
+    "cubo3/modelo_pre_pulido_mm.ply": {
+      "sha256": "3d7f61c77fa87a45b0b465731749cf476d16fdec61cf1332d9e1b6edf5548002",
+      "size_bytes": 8030562
+    },
+    "cubo3/preview_validacion.png": {
+      "sha256": "50e23cf5b355e3605e31fed99736d59349d62ba0e47a6858473e1a739cfa5737",
+      "size_bytes": 3188808
+    },
+    "cubo3/procedencia.json": {
+      "sha256": "2aadb7f16cf689cd193b620bed5f7836deedebdb2ac7afa147b3813584fb1e55",
+      "size_bytes": 2174
+    },
+    "cubo3/README.md": {
+      "sha256": "1c2e0fdbeb4eaf8c76611753e4692a0ffd881975d90d5c3abcc7186e1681a5f5",
+      "size_bytes": 785
+    },
+    "cubo3/validacion_17.json": {
+      "sha256": "35bc8805f6bc1fd41551a71eb6eed6a32c7671252c84d0743cd5f2ed7e80a87f",
+      "size_bytes": 12934
+    },
+    "medidas_fisicas.json": {
+      "sha256": "f9d761543f788f12b87a89621ebbfb3d77a77f54733fd1e9aaad35d22ec6242e",
+      "size_bytes": 1128
+    },
+    "medidas_fisicas.md": {
+      "sha256": "b5127664b7cd9ae7b2603937674c9e7a9eac5d1f9154445d6b813a12ddc4c3f4",
+      "size_bytes": 2445
+    },
+    "piramide1/captura_derecha.png": {
+      "sha256": "932f19d571ad595e341755bcc4306c5afdb86506815b0c5f45b59d9257976d58",
+      "size_bytes": 3394242
+    },
+    "piramide1/captura_izquierda.png": {
+      "sha256": "7a546fad96eba3ac0c281864b35bb2c8e0236e472fdd0538b515b091df294823",
+      "size_bytes": 3411966
+    },
+    "piramide1/modelo_final_original_mm.ply": {
+      "sha256": "d382894fad15fde407e0bf66b857827fe55539a86b3a6b4f8a69da711fff7727",
+      "size_bytes": 3623546
+    },
+    "piramide1/modelo_pre_pulido_mm.ply": {
+      "sha256": "a648101b4a890457e8a4138de08c685aac81907c36eea65aa82084f72f787b4a",
+      "size_bytes": 3623546
+    },
+    "piramide1/preview_validacion.png": {
+      "sha256": "97a39eccada3613b88cbd5f617774aadbbae062f838c6d83075bf6f8b6f3e99f",
+      "size_bytes": 2646190
+    },
+    "piramide1/procedencia.json": {
+      "sha256": "c41bc9646d43a55631bfd674f6542f97cad81036cefb65a918f27fc90fabb84e",
+      "size_bytes": 2252
+    },
+    "piramide1/README.md": {
+      "sha256": "e942a8511cb09f866e438d218ccd378cd33500a480c7115e4701e05e7e4b5a42",
+      "size_bytes": 794
+    },
+    "piramide1/validacion_17.json": {
+      "sha256": "5b40599d787aa96a58d52421caacc16490b7779c5309245f1247d9d8b53e4f62",
+      "size_bytes": 52689
+    },
+    "piramide3/captura_derecha.png": {
+      "sha256": "2f5373b52f4f3e1e1edcf3836e4bac44f3f147d4b0e63b89e0dc9395cb402273",
+      "size_bytes": 3394535
+    },
+    "piramide3/captura_izquierda.png": {
+      "sha256": "7f9d44fbfc8a0e2e53444e6513089477836f56342db0cc52cf9a0e1127f91f40",
+      "size_bytes": 3435605
+    },
+    "piramide3/modelo_final_original_mm.ply": {
+      "sha256": "77fe3632d9e6adf4be5a976d548623440152b5b5216fb687f3c3dd0388fee068",
+      "size_bytes": 3423387
+    },
+    "piramide3/modelo_pre_pulido_mm.ply": {
+      "sha256": "0b8cba911d1e35ef9abcaff54494c28d9bc4e8b2c6989cfc7c697282f41cbd09",
+      "size_bytes": 3423387
+    },
+    "piramide3/preview_validacion.png": {
+      "sha256": "c6902b51be81d0b2bcd2b51ab3db290d9e3432906de62a3f4d79395fec8d2bf3",
+      "size_bytes": 2440906
+    },
+    "piramide3/procedencia.json": {
+      "sha256": "47fc7f913c28ee8d4d12b3b62eaef59ba24256062d827cdc2b232fb1927d55f8",
+      "size_bytes": 2252
+    },
+    "piramide3/README.md": {
+      "sha256": "be22cacd1a2da37580e963a43ef855974d7d080aeb269a2e6bf4eff3df5fb840",
+      "size_bytes": 794
+    },
+    "piramide3/validacion_17.json": {
+      "sha256": "5d7df9728390457f1c3189bc2df222bbc807bdceb3a9a6d861404d6f50bfad12",
+      "size_bytes": 27381
+    },
+    "piramide4/captura_derecha.png": {
+      "sha256": "b66abdadbc64b3491dd91c90dcbea2e3786a43d87e8ca2889354a8bb8e5a409a",
+      "size_bytes": 3407262
+    },
+    "piramide4/captura_izquierda.png": {
+      "sha256": "200bc863ceb4203e3144d40d3e798922ddf2ce8e42e591b50ec027005aed08b2",
+      "size_bytes": 3430675
+    },
+    "piramide4/modelo_final_original_mm.ply": {
+      "sha256": "d0af2ef67c44ddac984d5b7448b50dc91a5cd8aadc7819f47f45417308791d18",
+      "size_bytes": 3379295
+    },
+    "piramide4/modelo_pre_pulido_mm.ply": {
+      "sha256": "b59d74cdf0f1d83e247b90013a7047d52928156f2bb98716e41326a0c217f0d2",
+      "size_bytes": 3379295
+    },
+    "piramide4/preview_validacion.png": {
+      "sha256": "73c679f6be3d38c139d779e7901d55fb860af435431c0d60b004ff503deef34a",
+      "size_bytes": 2515248
+    },
+    "piramide4/procedencia.json": {
+      "sha256": "87ed8bd6f9ea5b3a8a056d45b5ed2cf3e6aaf4f1171fe6174d3f18c2ab967415",
+      "size_bytes": 2252
+    },
+    "piramide4/README.md": {
+      "sha256": "f79c09f3ce84b209c4ef8ba0dc5f5d816ca40a1a433813a88cad0ce4195e30a1",
+      "size_bytes": 794
+    },
+    "piramide4/validacion_17.json": {
+      "sha256": "81cfe697949be42f38fe104df276f7464be903d8c36d7093a2daae7fd0ecaad6",
+      "size_bytes": 12901
+    },
+    "README.md": {
+      "sha256": "c1007c6c762c5b25fa0dc04855c2305e408769ba208cca5865f4a388b27e715d",
+      "size_bytes": 2522
+    }
+  }
+}

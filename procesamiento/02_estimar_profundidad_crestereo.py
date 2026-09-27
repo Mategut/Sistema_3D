@@ -1,36 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Paso 02 — Estimación de profundidad con CREStereo ONNX.
-
-Entradas: pares estereoscópicos, calibración y fondo vacío del montaje.
-La red recibe RGB float32 en el rango 0..255: el modelo ONNX incluido ya
-contiene su normalización. Se calcula disparidad en ambos sentidos y se
-evalúan consistencia izquierda-derecha, fotometría, gradiente y suavidad.
-
-La profundidad científica (*_depth_mm.npy) conserva evidencia estéreo fuerte
-y observaciones unilaterales débiles con procedencia explícita.
-*_trusted_mask.png contiene solo evidencia fuerte; *_usable_mask.png añade
-observaciones débiles que deberán ser confirmadas por 04/05/06. Ambas dependen
-de rectificación, evidencia estéreo y rango físico. La máscara visual (*_object_mask.png) se conserva como diagnóstico
-y no elimina por sí sola profundidad válida. Se guarda la disparidad del
-fondo para la comparación local del paso 03.
-
-La auditoría epipolar del fondo es diagnóstica y la rectificación calibrada
-permanece congelada. Una tendencia SIFT no modifica automáticamente la imagen
-derecha ni P1/P2/Q; si se confirma físicamente debe repetirse la calibración.
-La coordenada
-horizontal y la escala métrica fx*B/d permanecen definidas por la calibración.
-
-La recuperación visual cerca del soporte exige profundidad fiable, conexión
-con la semilla del objeto y separación del plano local de la plataforma.
-La profundidad del fondo vacío no decide por sí sola la pertenencia al objeto.
-
-CUDA es obligatorio por defecto con --provider auto/cuda. No se importa
-PyTorch para evitar cargar otro runtime OpenMP en Windows; se utiliza el
-modelo ONNX local. Los controles por vista y por sesión se conservan en los
-resúmenes y las profundidades rechazadas se invalidan explícitamente.
-"""
+"""Estima disparidad y profundidad con CREStereo sobre pares rectificados.
+Conserva la confianza, el estado LR y la evidencia ROI para las etapas posteriores."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -74,11 +46,7 @@ except Exception as exc:
         f"Detalle: {exc}"
     )
 
-# No se importa torch. En algunos entornos Conda de Windows, OpenCV/NumPy ya
-# han inicializado OpenMP y la importación adicional de PyTorch intenta cargar
-# otra libiomp5md.dll, lo que provoca OMP Error #15 y aborto del proceso.
-# ONNX Runtime >= 1.21 puede localizar por sí mismo las DLL de CUDA/cuDNN y
-# precargarlas sin inicializar el runtime completo de PyTorch.
+# Precargar CUDA/cuDNN con ONNX Runtime para evitar cargar otro runtime OpenMP de PyTorch.
 ORT_PRELOAD_ERROR: Optional[str] = None
 if os.name == "nt" and hasattr(ort, "preload_dlls"):
     try:
@@ -89,9 +57,7 @@ if os.name == "nt" and hasattr(ort, "preload_dlls"):
         ORT_PRELOAD_ERROR = f"{type(exc).__name__}: {exc}"
 
 
-# ---------------------------------------------------------------------------
 # Calibración, emparejamiento y rectificación
-# ---------------------------------------------------------------------------
 
 
 def read_yaml_matrix(yaml_path: Path, key: str) -> np.ndarray:
@@ -591,9 +557,7 @@ def estimate_epipolar_vertical_correction(
     return result
 
 
-# ---------------------------------------------------------------------------
 # Inferencia ONNX
-# ---------------------------------------------------------------------------
 
 
 def onnxruntime_environment_diagnostics() -> Dict[str, object]:
@@ -668,10 +632,13 @@ class CREStereoONNX:
         preferred_provider: str = "auto",
         require_cuda: bool = False,
     ):
+        preferred_provider = preferred_provider.lower().strip()
         self.model_path = model_path
         self.available_providers = ort.get_available_providers()
         self.environment_diagnostics = onnxruntime_environment_diagnostics()
-        self.require_cuda = bool(require_cuda)
+        self.require_cuda = preferred_provider == "cuda" or bool(require_cuda)
+        if self.require_cuda and preferred_provider not in ("auto", "cuda"):
+            raise ValueError("--require-cuda solo es compatible con --provider auto/cuda.")
         if self.require_cuda and "CUDAExecutionProvider" not in self.available_providers:
             raise RuntimeError(
                 format_cuda_runtime_error(
@@ -702,7 +669,13 @@ class CREStereoONNX:
                         self.environment_diagnostics,
                     )
                 ) from exc
-            raise
+            if preferred_provider != "auto" or "CPUExecutionProvider" not in self.available_providers:
+                raise
+            self.environment_diagnostics["automatic_fallback_reason"] = str(exc)
+            print("[WARN] No se pudo iniciar la aceleración; auto intentará CPU.", flush=True)
+            self.session = ort.InferenceSession(
+                model_path, sess_options=session_options, providers=["CPUExecutionProvider"]
+            )
 
         active_providers = list(self.session.get_providers())
         self.environment_diagnostics["session_providers"] = active_providers
@@ -715,6 +688,18 @@ class CREStereoONNX:
                     self.environment_diagnostics,
                 )
             )
+
+        if preferred_provider != "auto" and (
+            not active_providers or active_providers[0] != self.providers[0]
+        ):
+            raise RuntimeError(
+                f"Se solicitó {preferred_provider}, pero la sesión usa {active_providers}."
+            )
+        if self.require_cuda or preferred_provider != "auto":
+            # Impedir que ORT cambie a CPU silenciosamente ante un error de ejecución.
+            self.session.disable_fallback()
+        if preferred_provider == "auto" and active_providers[:1] == ["CPUExecutionProvider"]:
+            print("[PROVIDER] auto ejecutará CREStereo en CPU.", flush=True)
 
         self.input_names = [item.name for item in self.session.get_inputs()]
         if len(self.input_names) < 2:
@@ -776,13 +761,8 @@ class CREStereoONNX:
         self,
         image_bgr: np.ndarray,
     ) -> Tuple[np.ndarray, Dict[str, int | float]]:
-        """Prepara la entrada sin deformar la relación de aspecto.
-
-        Los modelos CREStereo de tamaño fijo suelen aceptar una rejilla concreta,
-        pero deformar 16:9 a 4:3 altera pendientes, bordes y texturas. Se usa
-        letterbox simétrico y luego la disparidad se deshace usando únicamente
-        la escala horizontal real del contenido, no la del canvas completo.
-        """
+        """Aplica letterbox sin deformar la imagen.
+        La disparidad se recupera usando la escala horizontal del contenido."""
         original_h, original_w = image_bgr.shape[:2]
 
         if self.target_h > 0 and self.target_w > 0:
@@ -873,9 +853,7 @@ class CREStereoONNX:
 
         disparity = disparity.astype(np.float32)
 
-        # Retirar el letterbox antes de volver al tamaño original. La disparidad
-        # está expresada en píxeles del contenido redimensionado; solo se escala
-        # por la relación horizontal real original/contenido.
+        # Retirar letterbox y escalar la disparidad por la relación horizontal original/contenido.
         y0 = int(prep["pad_top"])
         x0 = int(prep["pad_left"])
         ch = int(prep["content_h"])
@@ -900,16 +878,8 @@ class CREStereoONNX:
         rect_l: np.ndarray,
         rect_r: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Obtiene dos mapas con disparidad positiva:
-
-        d_lr: referencia en la cámara izquierda.
-        d_rl: referencia en la cámara derecha.
-
-        Para calcular d_rl sin exigir que el modelo produzca disparidad
-        negativa, se intercambian las cámaras y se invierten horizontalmente.
-        Al terminar, el resultado se invierte de nuevo.
-        """
+        """Devuelve disparidades positivas d_lr (izquierda) y d_rl (derecha).
+        Para d_rl intercambia e invierte las imágenes y después deshace la inversión."""
         disparity_lr = self(rect_l, rect_r)
 
         flipped_right = cv2.flip(rect_r, 1)
@@ -924,9 +894,7 @@ class CREStereoONNX:
         return disparity_lr, disparity_rl
 
 
-# ---------------------------------------------------------------------------
 # Segmentación por fondo vacío
-# ---------------------------------------------------------------------------
 
 
 def robust_threshold_from_background(
@@ -1210,14 +1178,8 @@ def _object_recovery_envelope(
     domain_mask: np.ndarray,
     minimum_area: int,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, object]]:
-    """Separa el cuerpo del objeto de la plataforma antes de crear la envolvente.
-
-    La máscara RGB puede contener la plataforma completa. Usar su convex hull
-    global hace que la envolvente cubra todo el soporte y deja cero muestras
-    para ajustar el plano. Aquí la parte situada sobre el borde superior de la
-    plataforma define el cuerpo; su caja se prolonga solo hasta el borde
-    inferior del soporte para buscar la cara inferior ausente.
-    """
+    """Prolonga el cuerpo detectado sobre el plato hasta el borde inferior del soporte.
+    Evita que una máscara que incluye la plataforma ocupe toda la región de ajuste."""
     seed = ((foreground > 0) & (domain_mask > 0)).astype(np.uint8) * 255
     support = ((support_mask > 0) & (domain_mask > 0)).astype(np.uint8) * 255
     envelope = np.zeros_like(seed)
@@ -1668,9 +1630,7 @@ def recover_foreground_from_stereo_geometry(
     return recovered_u8, recovery_mask, envelope, support_delta_mm, diagnostics
 
 
-# ---------------------------------------------------------------------------
 # Confianza estéreo
-# ---------------------------------------------------------------------------
 
 
 def disparity_to_depth_mm(
@@ -1743,14 +1703,8 @@ def robust_median_filter_float(
     valid_mask: np.ndarray,
     kernel_size: int = 9,
 ) -> np.ndarray:
-    """
-    Calcula una referencia local suave sobre float32 sin usar medianBlur.
-
-    OpenCV 5 puede limitar cv2.medianBlur a imágenes CV_8U en algunas
-    compilaciones optimizadas. Como la disparidad es float32, se utiliza
-    una media gaussiana normalizada por la máscara de validez. Esto evita
-    convertir la disparidad a 8 bits y conserva su escala en píxeles.
-    """
+    """Calcula una referencia gaussiana normalizada por validez sobre float32.
+    Evita las restricciones de medianBlur a CV_8U sin perder la escala de disparidad."""
     array = np.asarray(array, dtype=np.float32)
     valid = np.asarray(valid_mask, dtype=bool) & np.isfinite(array)
 
@@ -1836,21 +1790,8 @@ def compute_confidence(
     one_sided_minimum_smoothness_score: float = 0.55,
     lr_contradiction_factor: float = 2.5,
 ) -> Dict[str, object]:
-    """Confianza estéreo con procedencia explícita y LR no binario.
-
-    La confianza directa (fotometría + gradiente + suavidad) permanece separada
-    de la consistencia izquierda-derecha. La validación inversa tiene tres
-    resultados útiles:
-
-    - fuerte bidireccional: LR/RL coinciden;
-    - unilateral débil: la medición directa es plausible pero la inversa no es
-      suficientemente observable o solo muestra una discrepancia moderada;
-    - contradicha: existe textura local suficiente y LR/RL discrepan de forma
-      fuerte, por lo que la observación no debe propagarse como evidencia real.
-
-    Esto evita convertir automáticamente ``LR inconsistente`` en ``superficie
-    inexistente`` en zonas oscuras/homogéneas, sin desactivar la protección LR.
-    """
+    """Separa confianza directa y consistencia LR.
+    Distingue evidencia bidireccional, unilateral débil y contradicción fuerte."""
     sampled_rl, inside_lr = remap_right_to_left(
         disparity_rl.astype(np.float32),
         disparity_lr,
@@ -2092,9 +2033,7 @@ def compute_confidence(
     }
 
 
-# ---------------------------------------------------------------------------
 # Estadísticas y control de calidad
-# ---------------------------------------------------------------------------
 
 
 
@@ -2521,9 +2460,7 @@ def apply_session_quality_control(
     return session_summary
 
 
-# ---------------------------------------------------------------------------
 # Escritura de resultados
-# ---------------------------------------------------------------------------
 
 
 def save_initial_outputs(
@@ -2576,9 +2513,7 @@ def save_initial_outputs(
         object_overlay,
     )
 
-    # Compatibilidad con las etapas posteriores: valid_mask representa el
-    # dominio científico utilizable (fuerte + unilateral débil). La máscara
-    # trusted_mask conserva exclusivamente evidencia fuerte.
+    # valid_mask incluye evidencia fuerte y unilateral débil; trusted_mask solo la fuerte.
     imwrite_checked(
         str(out_dir / f"{stem}_valid_mask.png"),
         confidence_data.get("usable_mask", trusted_mask),
@@ -2884,9 +2819,7 @@ def finalize_view_output(
     if usable_mask is None:
         usable_mask = trusted_mask.copy()
 
-    # V2.3.0: el QC de vista/sesión queda como diagnóstico.
-    # Nunca se destruye una observación estéreo que ya pasó los filtros por
-    # píxel. La aceptación final se resolverá en los pasos posteriores.
+    # El QC de vista es diagnóstico; conservar las observaciones que pasan los filtros por píxel.
     final_depth = depth_before_qc
     final_mask = usable_mask
 
@@ -2996,9 +2929,7 @@ def write_session_csv(
             )
 
 
-# ---------------------------------------------------------------------------
 # Programa principal
-# ---------------------------------------------------------------------------
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -3043,11 +2974,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--require-cuda",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help=(
-            "Con provider auto/cuda, cancela si CUDAExecutionProvider no queda "
-            "activo. Evita una ejecución CPU silenciosa. --provider cpu o "
-            "--no-require-cuda permiten una prueba deliberada sin CUDA."
+            "Con provider auto, exige CUDA en lugar de permitir CPU. "
+            "--provider cuda siempre exige CUDA, incluso con --no-require-cuda."
         ),
     )
     parser.add_argument(
@@ -3310,7 +3240,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.30,
     )
 
-    # V2.2.4 — auditoría/corrección epipolar usando el fondo vacío.
+    # auditoría/corrección epipolar usando el fondo vacío.
     parser.add_argument(
         "--epipolar-audit",
         action=argparse.BooleanOptionalAction,
@@ -3439,9 +3369,7 @@ def main() -> None:
             calibration,
         )
 
-    # V2.2.4: la validez de CREStereo depende de que las correspondencias
-    # estén epipolarmente alineadas. Auditar ANTES de cargar el modelo evita
-    # horas de cómputo sobre una rectificación físicamente obsoleta.
+    # Auditar alineación epipolar antes de cargar el modelo.
     rect_background_right_pre_epipolar = rect_background_right.copy()
     epipolar_diagnostics = estimate_epipolar_vertical_correction(
         rect_background_left,
@@ -3528,7 +3456,7 @@ def main() -> None:
     estimator = CREStereoONNX(
         str(model_path),
         preferred_provider=args.provider,
-        require_cuda=bool(args.require_cuda and args.provider in ("auto", "cuda")),
+        require_cuda=bool(args.require_cuda),
     )
     provider_used = estimator.session.get_providers()[0]
 
@@ -3566,7 +3494,7 @@ def main() -> None:
     )
     background_disparity_lr[background_valid_mask == 0] = np.nan
 
-    # V2.3.0: producto científico reutilizable por 03.
+    # producto científico reutilizable por 03.
     np.save(
         str(output_dir / "background_disparity_lr.npy"),
         background_disparity_lr.astype(np.float32),
@@ -3851,9 +3779,7 @@ def main() -> None:
             cv2.applyColorMap(support_delta_vis, cv2.COLORMAP_TURBO),
         )
 
-        # --------------------------------------------------------------
-        # V2.3.0 — PROFUNDIDAD DE ESCENA, NO MÁSCARA DE OBJETO
-        # --------------------------------------------------------------
+        # PROFUNDIDAD DE ESCENA, NO MÁSCARA DE OBJETO
         trusted_scene_mask = (
             (stereo_trusted_before_object > 0) & physical_depth_mask & (rect_valid_mask > 0)
         )
@@ -3881,10 +3807,8 @@ def main() -> None:
         confident_depth_mm = np.full(raw_depth_mm.shape, np.nan, dtype=np.float32)
         confident_depth_mm[usable_scene_mask] = raw_depth_mm[usable_scene_mask]
 
-        # Incertidumbre métrica para el consenso multisesión. No deriva del
-        # error LR cuando la observación es unilateral: se calcula a partir de
-        # confianza directa, suavidad y observabilidad, y se infla de forma
-        # explícita para el estado débil.
+        # En observaciones unilaterales, estimar incertidumbre con confianza directa,
+        # suavidad y observabilidad; aumentarla para evidencia débil.
         fx_rectified = float(calibration["P1"][0, 0])
         fb_px_mm = fx_rectified * float(calibration["baseline_mm"])
         disparity_uncertainty_px = (

@@ -1,53 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-Paso 03 V5.3 — Silueta visual conservadora + exclusión del hardware visible + recuperación local del contacto por evidencia estéreo.
-
-Objetivo
---------
-Responder únicamente:
-
-    ¿Qué píxeles pertenecen VISUALMENTE al objeto?
-
-Este paso NO utiliza:
-- nube de puntos;
-- forma conocida;
-- caras;
-- dimensiones del objeto;
-- máscara preliminar de CREStereo como autoridad global.
-
-La disparidad se usa SOLO dentro de la banda local de contacto objeto-soporte,
-como verificación de oclusión respecto al mismo fondo vacío. Nunca se usa para
-detectar foreground en paredes, mesa o resto de la escena.
-
-Sí utiliza:
-- imagen izquierda rectificada;
-- fondo vacío rectificado único;
-- diferencia Lab;
-- cromaticidad;
-- luminancia con signo;
-- diferencia de gradientes;
-- dominio completo válido de rectificación;
-- anchor visual adaptativo respecto del fondo vacío;
-- sombra conservadora por conectividad estructural;
-- dominio físico del soporte sin tratarlo automáticamente como fondo;
-- banda ambigua de contacto objeto-soporte derivada de la geometría de imagen;
-- comparación robusta contra la captura de fondo vacío como evidencia, no como veto;
-- conectividad geodésica desde el objeto ya detectado;
-- recuperación geodésica local del contacto, sin GraphCut de soporte;
-- bloqueo del plato únicamente fuera de la banda de contacto;
-- histéresis;
-- morfología pequeña;
-- selección espacial de componentes;
-- relleno limitado de huecos.
-
-Compatible con nombres V7.2:
-    A0000 -> 0.0°
-    A0144 -> 14.4°
-    ...
-    A3456 -> 345.6°
-"""
+"""Segmenta el objeto respecto al fondo vacío y excluye el soporte visible.
+La disparidad solo interviene en la banda local de contacto objeto-soporte."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -94,9 +49,7 @@ from utilidades_mascaras import (
     validate_summary_context,
 )
 
-# ---------------------------------------------------------------------------
 # Argumentos
-# ---------------------------------------------------------------------------
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -133,10 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
     )
 
-    # ------------------------------------------------------------------
-    # Dominio adaptativo de producto.
-    # No existe rectángulo duro capaz de cortar el objeto.
-    # ------------------------------------------------------------------
+    # Dominio adaptativo del objeto.
     p.add_argument("--rect-valid-erosion-px", type=int, default=2)
     p.add_argument("--adaptive-anchor-minimum-threshold", type=float, default=7.0)
     p.add_argument("--adaptive-anchor-mad-factor", type=float, default=4.5)
@@ -156,9 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--anchor-width-fraction", type=float, default=0.30)
     p.add_argument("--anchor-height-fraction", type=float, default=0.52)
 
-    # ------------------------------------------------------------------
     # Evidencia visual.
-    # ------------------------------------------------------------------
     p.add_argument("--weak-z-threshold", type=float, default=3.3)
     p.add_argument("--strong-z-threshold", type=float, default=5.8)
     p.add_argument("--minimum-raw-difference", type=float, default=8.0)
@@ -169,14 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--luminance-weight", type=float, default=0.42)
     p.add_argument("--gradient-weight", type=float, default=0.52)
 
-    # ------------------------------------------------------------------
-    # Rechazo de sombras.
-    #
-    # Una sombra típica:
-    #   L_actual < L_fondo
-    #   cambio de cromaticidad pequeño
-    #   estructura de gradiente poco convincente
-    # ------------------------------------------------------------------
+    # Sombras: caída de luminancia con poco cambio cromático y estructural.
     p.add_argument(
         "--shadow-min-darkening-l",
         type=float,
@@ -220,13 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.03,
     )
 
-    # ------------------------------------------------------------------
-    # Exclusión del cuerpo físico de la plataforma.
-    #
-    # IMPORTANTE: NO agranda support_mask. La superficie útil sigue siendo
-    # exactamente la misma. Se crea una segunda máscara exterior/inferior
-    # para impedir que el aro gris del hardware entre en la silueta final.
-    # ------------------------------------------------------------------
+    # Excluir el cuerpo exterior del soporte con una máscara separada de su superficie útil.
     p.add_argument(
         "--support-hardware-exclusion",
         action=argparse.BooleanOptionalAction,
@@ -303,12 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--graphcut-iterations", type=int, default=3)
     p.add_argument("--graphcut-sure-fg-erosion-px", type=int, default=4)
 
-    # ------------------------------------------------------------------
-    # V5.0 — recuperación LOCAL del contacto objeto-plataforma.
-    #
-    # La disparidad NO participa en la detección global. Solo puede añadir
-    # píxeles dentro del UNKNOWN ya derivado del cuerpo visual.
-    # ------------------------------------------------------------------
+    # Recuperación estéreo limitada a la banda UNKNOWN del contacto.
     p.add_argument(
         "--local-contact-depth-verification",
         action=argparse.BooleanOptionalAction,
@@ -396,9 +326,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=400,
     )
 
-    # ------------------------------------------------------------------
     # Banda ambigua objeto-soporte — V3.1
-    # ------------------------------------------------------------------
     p.add_argument(
         "--support-occlusion-recovery",
         action=argparse.BooleanOptionalAction,
@@ -497,12 +425,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=3.0,
     )
 
-    # ------------------------------------------------------------------
-    # V3.1 — banda ambigua de contacto.
-    #
-    # La región del soporte que cae inmediatamente bajo la proyección del
-    # objeto se considera UNKNOWN aunque fotométricamente se parezca al plato.
-    # ------------------------------------------------------------------
+    # Considerar UNKNOWN la zona del soporte bajo el objeto, incluso si su apariencia coincide.
     p.add_argument(
         "--contact-band-horizontal-margin-px",
         type=int,
@@ -559,14 +482,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=120,
     )
 
-    # ------------------------------------------------------------------
-    # V3.2 — continuidad condicionada dentro de la banda UNKNOWN.
-    #
-    # No rellena por forma ni usa primitivas geométricas. Construye un prior
-    # suave desde el cuerpo ya confirmado y lo atenúa al atravesar bordes
-    # horizontales fuertes. Sirve para evitar cortes prematuros cuando
-    # objeto y plataforma tienen apariencia muy similar.
-    # ------------------------------------------------------------------
+    # Propagar continuidad desde el cuerpo confirmado dentro de UNKNOWN, atenuada por bordes.
     p.add_argument(
         "--contact-continuity-enabled",
         action=argparse.BooleanOptionalAction,
@@ -618,9 +534,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.18,
     )
 
-    # ------------------------------------------------------------------
-    # Morfología. El cierre baja de 9 a 5 para NO pegar cubo con sombras.
-    # ------------------------------------------------------------------
+    # Cierre morfológico pequeño para evitar unir objeto y sombras.
     p.add_argument("--open-kernel", type=int, default=3)
     p.add_argument("--close-kernel", type=int, default=3)
     p.add_argument("--maximum-hole-area", type=int, default=6000)
@@ -667,9 +581,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-# ---------------------------------------------------------------------------
 # Geometría 2D de la zona de captura
-# ---------------------------------------------------------------------------
 
 
 def normalized_rectangle_mask(
@@ -744,9 +656,7 @@ def build_product_domain_and_anchor(
     )
 
 
-# ---------------------------------------------------------------------------
 # Evidencia visual / sombra
-# ---------------------------------------------------------------------------
 
 
 def gradient_magnitude(gray: np.ndarray) -> np.ndarray:
@@ -909,16 +819,8 @@ def compute_visual_evidence(
         + 0.48 * gray_difference
     ).astype(np.float32)
 
-    # ---------------------------------------------------------------
-    # Modelo explícito de sombra:
-    #
-    # - se oscureció;
-    # - casi no cambió cromaticidad;
-    # - el cambio estructural de bordes no es fuerte.
-    #
-    # Se conserva un override para bordes/cromas muy fuertes, evitando
-    # eliminar una cara real del objeto solo por ser oscura.
-    # ---------------------------------------------------------------
+    # Detectar oscurecimiento sin cambio cromático o estructural fuerte.
+    # Conservar bordes y cromas intensos para proteger caras oscuras del objeto.
     shadow_candidate = (
         (signed_delta_l <= -args.shadow_min_darkening_l)
         & (chroma_z <= args.shadow_max_chroma_z)
@@ -998,9 +900,7 @@ def compute_visual_evidence(
     }
 
 
-# ---------------------------------------------------------------------------
 # Oclusión explícita del soporte
-# ---------------------------------------------------------------------------
 
 
 def _robust_low_change_threshold(
@@ -1157,27 +1057,8 @@ def build_contact_ambiguity_band(
     support_evidence: Optional[np.ndarray] = None,
     visual_extension: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
-    """Construye una banda UNKNOWN donde objeto y soporte pueden solaparse.
-
-    Esta función NO mira color ni diferencia contra el fondo para decidir si
-    el píxel es fondo. El objetivo es evitar el error de V3.0:
-
-        objeto claro ≈ plato claro -> "fondo seguro"
-
-    La banda usa:
-    - dominio físico del soporte;
-    - columnas ocupadas por el objeto ya detectado;
-    - proximidad vertical entre el cuerpo y la frontera superior del soporte;
-    - evidencia visual estricta dentro del soporte, siempre que ya haya sido
-      validada como conectada al cuerpo del objeto.
-
-    La evidencia estricta permite abrir columnas laterales que pertenecen al
-    objeto pero que nacen ya dentro de la proyección del plato (por ejemplo,
-    caras inclinadas o bases anchas). No modifica la geometría del soporte ni
-    depende del nombre o forma conocida del objeto.
-
-    El soporte fuera de esta banda sí puede bloquearse como background.
-    """
+    """Delimita UNKNOWN con el soporte, el cuerpo detectado y evidencia conectada.
+    Permite extensión lateral dentro del plato sin modificar la máscara del soporte."""
     support = (np.asarray(support_mask) > 0) & (np.asarray(roi) > 0)
     seed = (np.asarray(object_seed) > 0) & (np.asarray(roi) > 0)
 
@@ -1268,15 +1149,8 @@ def build_contact_ambiguity_band(
             support.astype(np.uint8) * 255,
         )
 
-    # ------------------------------------------------------------------
-    # V5.3 — extensión lateral guiada por evidencia estricta del objeto.
-    #
-    # El método anterior abría UNKNOWN solo en columnas donde el cuerpo ya
-    # existía FUERA del soporte. Eso recortaba objetos cuya parte inferior
-    # aparece por primera vez dentro de la proyección del plato. Aquí se usa
-    # únicamente evidencia estricta que ya fue validada como conectada al
-    # cuerpo; nunca se desplaza ni se redimensiona support_mask.
-    # ------------------------------------------------------------------
+    # Extender UNKNOWN lateralmente con evidencia estricta conectada al cuerpo.
+    # Conservar la geometría de support_mask.
     evidence_added_pixels = 0
     evidence_columns_count = 0
 
@@ -1480,19 +1354,8 @@ def build_contact_feature_image(
     object_foreground: np.ndarray,
     visible_support_background: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
-    """Características de contacto con modelos multimodales FG/BG.
-
-    C0 = afinidad de apariencia FG frente a BG.
-    C1 = luminancia Lab actual.
-    C2 = estructura local / cambio cromático.
-
-    La afinidad se aprende de:
-      - FG: cuerpo ya aceptado, preferentemente cerca del contacto;
-      - BG: plataforma visible bloqueada, preferentemente cerca del contacto.
-
-    Así una cara blanca sobre un plato blanco no depende únicamente de
-    |imagen - fondo|.
-    """
+    """Construye canales de contacto: afinidad FG/BG, luminancia y estructura local.
+    Aprende apariencia del cuerpo aceptado y de la plataforma visible."""
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     dom = np.asarray(domain).astype(bool)
     fg = np.asarray(object_foreground).astype(bool)
@@ -1605,21 +1468,8 @@ def build_contact_continuity_prior(
     evidence: dict,
     args,
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
-    """Prior suave de continuidad objeto-soporte para V3.2.
-
-    Principios:
-    - parte únicamente del objeto ya confirmado fuera del soporte;
-    - opera solo dentro de UNKNOWN;
-    - no usa rectángulos, planos, caras ni dimensiones conocidas;
-    - favorece continuidad hacia la zona de contacto;
-    - se debilita gradualmente con la profundidad;
-    - se debilita después de bordes horizontales fuertes;
-    - no convierte por sí sola la banda completa en foreground.
-
-    Retorna:
-        continuity_prior: [0,1]
-        combined_prior:   [0,1], apariencia + continuidad
-    """
+    """Propaga continuidad desde el cuerpo dentro de UNKNOWN.
+    Devuelve continuidad y combinación con apariencia en [0, 1]; atenúa con profundidad y bordes."""
     unknown = np.asarray(contact_unknown).astype(bool)
     obj = np.asarray(object_mask_outside_support).astype(bool)
 
@@ -1798,10 +1648,7 @@ def build_contact_continuity_prior(
         )
         processed_columns += 1
 
-    # Apariencia + continuidad.
-    #
-    # La apariencia domina si ya es convincente. Si es ambigua, la
-    # continuidad puede elevarla, pero nunca fuera de UNKNOWN.
+    # Usar continuidad para reforzar apariencia ambigua dentro de UNKNOWN.
     continuity_candidate = 0.72 * continuity + 0.28 * appearance_prob
     combined = np.maximum(
         appearance_prob,
@@ -1920,20 +1767,8 @@ def contact_aware_support_graphcut(
     roi: np.ndarray,
     args,
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
-    """Resuelve UNKNOWN con apariencia + continuidad condicionada.
-
-    V3.2 mantiene la banda de contacto de V3.1, pero evita que GraphCut
-    corte prematuramente una pieza cuyo color se parece al soporte.
-
-    La continuidad:
-      - nace solo del cuerpo previamente confirmado;
-      - se propaga únicamente dentro de UNKNOWN;
-      - decae con la profundidad;
-      - se atenúa después de bordes horizontales fuertes;
-      - nunca puede expandirse fuera de UNKNOWN.
-
-    No se usan primitivas geométricas ni dimensiones conocidas.
-    """
+    """Resuelve UNKNOWN mediante apariencia y continuidad desde el cuerpo.
+    La propagación decae con la profundidad y los bordes horizontales."""
     support = (np.asarray(support_mask) > 0) & (np.asarray(roi) > 0)
     unknown = (np.asarray(contact_unknown) > 0) & support
     object_out = (np.asarray(object_mask_outside_support) > 0) & (~support) & (np.asarray(roi) > 0)
@@ -2107,19 +1942,8 @@ def contact_aware_support_graphcut(
 
     raw_fg = ((gc == cv2.GC_FGD) | (gc == cv2.GC_PR_FGD)) & unknown
 
-    # ------------------------------------------------------------------
-    # Rescate conservador de continuidad.
-    #
-    # Si GraphCut rechaza un píxel que:
-    #   - sigue dentro de UNKNOWN;
-    #   - mantiene continuidad fuerte con el cuerpo;
-    #   - no es una sombra fuerte;
-    #   - no es absolutamente incompatible con la apariencia del objeto;
-    # se permite volver a considerarlo candidato.
-    #
-    # Luego TODOS los candidatos deben seguir conectados al objeto mediante
-    # _keep_contact_components.
-    # ------------------------------------------------------------------
+    # Reconsiderar píxeles de UNKNOWN con continuidad, apariencia compatible y sin sombra fuerte.
+    # Exigir conexión al objeto mediante _keep_contact_components.
     shadow = np.asarray(evidence["shadow_mask"]).astype(bool)
 
     rescue = (
@@ -2181,20 +2005,8 @@ def derive_support_occlusion_search(
     evidence: dict,
     args,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
-    """Separa plataforma visible de plataforma plausiblemente ocluida.
-
-    Regla fundamental:
-        la plataforma completa nunca es espacio probable de objeto.
-
-    Solo puede abrirse una región del soporte cuando:
-        1) difiere de la captura de fondo;
-        2) no es explicable como sombra;
-        3) contiene evidencia visual suficiente;
-        4) está conectada geodésicamente con evidencia del objeto.
-
-    La conectividad primaria es anisotrópica: favorece continuidad vertical
-    hacia la plataforma y penaliza saltos laterales.
-    """
+    """Busca oclusión del soporte con diferencia visual, rechazo de sombra y conectividad.
+    Favorece continuidad vertical y limita saltos laterales."""
     support = (np.asarray(support_mask) > 0) & (np.asarray(roi) > 0)
     zero = np.zeros(support.shape, dtype=np.uint8)
 
@@ -2336,10 +2148,7 @@ def derive_support_occlusion_search(
         > 0
     )
 
-    # Proyección de columnas ocupadas por el cuerpo detectado.
-    # Estar "cerca" lateralmente no basta: la oclusión debe caer debajo de
-    # una columna que realmente contiene evidencia del objeto, admitiendo
-    # solo un margen pequeño.
+    # Buscar oclusión bajo columnas con evidencia del cuerpo, con un margen lateral pequeño.
     seed_columns = np.any(seed, axis=0).astype(np.uint8) * 255
     column_kernel_width = 2 * max(2, rx) + 1
     seed_columns = (
@@ -2464,9 +2273,7 @@ def derive_support_occlusion_search(
     )
 
 
-# ---------------------------------------------------------------------------
 # Componentes con selección espacial
-# ---------------------------------------------------------------------------
 
 
 def bbox_gap(
@@ -2565,9 +2372,7 @@ def select_spatial_components(
 
         center_distance = float(np.linalg.norm(centroid_array - expected_center))
 
-        # IMPORTANTE V2.1:
-        # JSON no puede serializar np.ndarray. Se conserva el ndarray solo
-        # durante los cálculos y se guarda una lista Python [x, y].
+        # Convertir coordenadas ndarray a listas al exportar JSON.
         centroid = centroid_array.astype(float).tolist()
 
         center_score = math.exp(-0.5 * (center_distance / center_sigma) ** 2)
@@ -2681,14 +2486,10 @@ def select_spatial_components(
     }
 
 
-# ---------------------------------------------------------------------------
 # Silueta completa
-# ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# V5.0 — verificación estéreo LOCAL del contacto
-# ---------------------------------------------------------------------------
+# verificación estéreo LOCAL del contacto
 
 
 def _robust_median_sigma(
@@ -2717,14 +2518,8 @@ def local_contact_depth_evidence(
     rect_valid_mask: np.ndarray,
     args,
 ) -> Tuple[np.ndarray, np.ndarray, dict, np.ndarray]:
-    """Obtiene candidatos de oclusión SOLO dentro del contacto.
-
-    Importante:
-    -----------
-    - Nunca produce foreground fuera de contact_unknown.
-    - Aprende el sesgo d_actual-d_fondo sobre plato visible FUERA del contacto.
-    - Si esa referencia no es estable, desactiva la cue estéreo para la vista.
-    """
+    """Busca evidencia estéreo dentro de contact_unknown.
+    Estima el sesgo en plato visible y desactiva la evidencia si la referencia es inestable."""
     shape = support_mask.shape
     empty = np.zeros(shape, dtype=np.uint8)
     delta_corrected = np.full(shape, np.nan, dtype=np.float32)
@@ -3038,14 +2833,7 @@ def protect_support_rim_near_object(
     core_clearance_px: int = 14,
     column_margin_px: int = 10,
 ) -> Tuple[np.ndarray, np.ndarray, dict]:
-    """Evita que el guard fino recorte un objeto que cruza el borde del plato.
-
-    El guard del filo es estático y proviene del hardware. Para no convertirlo
-    en una suposición sobre la geometría del objeto, solo se desactiva en las
-    columnas donde existe una semilla visual del objeto que se prolonga más
-    allá de una banda cercana al soporte. Un falso borde del plato, al estar
-    pegado a la elipse, no genera por sí solo ese núcleo profundo.
-    """
+    """Protege el borde del objeto donde su semilla se prolonga más allá del plato."""
     rim = np.asarray(rim_guard) > 0
     support = np.asarray(support_mask) > 0
     seed = np.asarray(object_seed) > 0
@@ -3167,12 +2955,8 @@ def create_silhouette(
         args,
     )
 
-    # La superficie superior detectada permanece intacta. Se manejan dos
-    # exclusiones independientes del hardware:
-    #   1) falda inferior: cuerpo/aro gris grande;
-    #   2) rim guard: filo fino inmediatamente exterior a la elipse.
-    # El rim guard se protege después en columnas ocupadas por un núcleo real
-    # del objeto, para no recortar el objeto cuando cruza visualmente ese borde.
+    # Excluir falda inferior y filo exterior por separado.
+    # Proteger el filo en columnas con evidencia del objeto.
     if bool(args.support_hardware_exclusion):
         support_hardware_skirt, support_hardware_diag = (
             build_support_hardware_exclusion_mask(
@@ -3213,9 +2997,7 @@ def create_silhouette(
 
     evidence = compute_visual_evidence(image, background, roi, rect_valid_mask, support_mask, args)
 
-    # La falda inferior sí es un veto seguro durante la búsqueda de semilla.
-    # El filo fino aún NO se veta: primero necesitamos saber dónde está el
-    # cuerpo real del objeto para no cortar sus columnas.
+    # Aplicar la falda al buscar la semilla; decidir el veto del filo después de detectar el cuerpo.
     strong_for_seed = evidence["strong"].copy()
     strong_for_seed[support_hardware_skirt_bool] = False
     strong_seed = strong_for_seed.astype(np.uint8) * 255
@@ -3237,9 +3019,7 @@ def create_silhouette(
     else:
         roi_diag["seed_anchor_source"] = "adaptive_visual_fallback"
 
-    # Activar el filo fino solo donde no hay evidencia de un cuerpo real que
-    # se prolonga fuera de la vecindad inmediata del plato. Así el pequeño
-    # borde gris queda bloqueado, pero el objeto no se recorta.
+    # Vetar el filo solo donde no exista un cuerpo que se prolongue más allá del plato.
     (
         support_rim_guard,
         support_rim_protected,
@@ -3261,11 +3041,9 @@ def create_silhouette(
 
     support_bool = (support_mask > 0) & (roi > 0)
 
-    # ------------------------------------------------------------------
-    # V3.2: el soporte NO se clasifica aquí como fondo/objeto.
+    # el soporte NO se clasifica aquí como fondo/objeto.
     # Primero se segmenta únicamente el cuerpo fuera del soporte.
     # Después una segunda etapa resuelve el contacto.
-    # ------------------------------------------------------------------
     object_seed_for_support = (selected_seed > 0) & (~support_bool) & (anchor > 0)
 
     if np.count_nonzero(object_seed_for_support) < 120:
@@ -3281,10 +3059,7 @@ def create_silhouette(
         )
         object_seed_for_support = (fallback_visual_seed > 0) & (~support_bool) & (anchor > 0)
 
-    # Primero se calcula evidencia estricta dentro del soporte. Esta salida
-    # ya exige conexión espacial con el cuerpo y por tanto puede usarse para
-    # ampliar de forma segura la banda UNKNOWN en objetos cuya base aparece
-    # lateralmente dentro de la proyección del plato.
+    # Ampliar UNKNOWN con evidencia del soporte conectada espacialmente al cuerpo.
     (
         support_occlusion_strict,
         _legacy_support_search,
@@ -3381,25 +3156,15 @@ def create_silhouette(
         args,
     )
 
-    # ------------------------------------------------------------------
     # Segunda segmentación: resolver únicamente el contacto con el soporte.
     # Todo píxel del soporte que haya entrado en la máscara preliminar se
     # elimina y debe ser revalidado por este paso.
-    # ------------------------------------------------------------------
     mask_outside_support = mask.copy()
     mask_outside_support[support_bool] = 0
     mask_outside_support[support_hardware_bool] = 0
 
-    # ------------------------------------------------------------------
-    # V5.0 — NO usar GraphCut para separar objeto/plataforma.
-    #
-    # 1) el cuerpo visual fuera del soporte queda intacto;
-    # 2) la disparidad se compara con el fondo SOLO dentro del UNKNOWN;
-    # 3) la recuperación crece geodésicamente desde el cuerpo aceptado.
-    #
-    # Resultado: una pared o una zona lejana con disparidad distinta jamás
-    # puede entrar porque no pertenece al contacto y no está conectada al cuerpo.
-    # ------------------------------------------------------------------
+    # Conservar el cuerpo visual y recuperar contacto por crecimiento geodésico.
+    # Comparar disparidad con el fondo solo dentro de UNKNOWN.
     (
         support_depth_weak,
         support_depth_strong,
@@ -3618,9 +3383,7 @@ def create_silhouette(
     )
 
 
-# ---------------------------------------------------------------------------
 # Calidad de sesión
-# ---------------------------------------------------------------------------
 
 
 def session_quality(
@@ -3707,9 +3470,7 @@ def session_quality(
     }
 
 
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
 
 
 def _process_mask_view(task):
@@ -4056,11 +3817,7 @@ def _process_mask_view(task):
     tint[:, :, 2] = debug["support_background_locked"]
     support_overlay = cv2.addWeighted(support_overlay, 0.82, tint, 0.35, 0.0)
 
-    # Mostrar también en ESTE mismo diagnóstico la falda de hardware.
-    # Antes la exclusión sí se aplicaba a la máscara final, pero este
-    # overlay no la dibujaba, por lo que visualmente parecía que nada
-    # había cambiado. Se usa magenta para distinguirla del rojo/verde
-    # ya empleados por la lógica de oclusión del soporte.
+    # Dibujar en magenta la falda de hardware excluida de la máscara.
     skirt_bool = debug["support_hardware_skirt"] > 0
     if np.any(skirt_bool):
         hw_color = np.array([255, 0, 255], dtype=np.float32)  # BGR: magenta
@@ -4300,7 +4057,7 @@ def main() -> int:
                 f"área={ratio:.2%}"
             )
 
-    # V5.0 — disparidad del fondo para verificar únicamente el contacto.
+    # disparidad del fondo para verificar únicamente el contacto.
     background_disparity_path = source_dir / "background_disparity_lr.npy"
     background_disparity = None
 

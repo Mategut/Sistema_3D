@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: "Referencia del método CREStereo utilizado. No es la citación de la tesis ni acredita el origen exacto del ONNX local."
+title: "Practical Stereo Matching via Cascaded Recurrent Network with Adaptive Correlation"
+type: software
+authors:
+  - family-names: Li
+    given-names: Jiankun
+  - family-names: Wang
+    given-names: Peisen
+  - family-names: Xiong
+    given-names: Pengfei
+  - family-names: Cai
+    given-names: Tao
+  - family-names: Yan
+    given-names: Ziwei
+  - family-names: Yang
+    given-names: Lei
+  - family-names: Liu
+    given-names: Jiangyu
+  - family-names: Fan
+    given-names: Haoqiang
+  - family-names: Liu
+    given-names: Shuaicheng
+url: "https://github.com/megvii-research/CREStereo"
+preferred-citation:
+  type: conference-paper
+  title: "Practical Stereo Matching via Cascaded Recurrent Network with Adaptive Correlation"
+  authors:
+    - family-names: Li
+      given-names: Jiankun
+    - family-names: Wang
+      given-names: Peisen
+    - family-names: Xiong
+      given-names: Pengfei
+    - family-names: Cai
+      given-names: Tao
+    - family-names: Yan
+      given-names: Ziwei
+    - family-names: Yang
+      given-names: Lei
+    - family-names: Liu
+      given-names: Jiangyu
+    - family-names: Fan
+      given-names: Haoqiang
+    - family-names: Liu
+      given-names: Shuaicheng
+  collection-title: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+  year: 2022
+  url: "https://arxiv.org/abs/2203.11483"

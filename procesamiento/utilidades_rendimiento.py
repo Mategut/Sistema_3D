@@ -1,4 +1,4 @@
-"""Recursos compartidos y tareas independientes; sin modificar geometría."""
+"""Distribuye tareas y recursos de CPU y memoria entre procesos."""
 
 from __future__ import annotations
 import os
@@ -76,13 +76,9 @@ def _available_memory():
 
 
 def ejecutar_bloques(worker, context, outputs, count, block, label):
-    """Ejecuta bloques independientes y escribe sus resultados en los arrays de salida.
-
-    worker recibe (inicio, fin) y devuelve (inicio, fin, valores), donde valores
-    es un diccionario de arrays. El número de procesos se limita por CPU, memoria
-    y cantidad de tareas. Con spawn, el worker debe poder importarse en el hijo.
-    La ventana de tareas pendientes evita acumular copias innecesarias.
-    """
+    """Distribuye bloques y reúne arrays de salida por posición.
+    worker recibe (inicio, fin) y devuelve (inicio, fin, valores); debe ser importable con spawn.
+    Limita procesos por CPU, memoria y tareas pendientes."""
     import pickle
 
     block = max(1, int(block))

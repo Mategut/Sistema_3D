@@ -1,82 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-PASO 12 V4.7 — LIMPIEZA 3D MULTIVISTA Y REGULARIZACIÓN SUPERFICIAL GENERAL
-
-Objetivo
---------
-Reducir rugosidad geométrica de alta frecuencia SIN asumir:
-- cubo;
-- caras planas;
-- ángulos rectos;
-- convexidad;
-- dimensiones conocidas;
-- una clase geométrica concreta.
-
-El paso aplica primero una limpieza conservadora inicial:
-1. Statistical Outlier Removal (SOR).
-2. Radius Outlier Removal (ROR).
-3. Preselección de puntos con soporte/confianza alto.
-
-Después realiza una limpieza tridimensional independiente de la figura:
-4. Mide respaldo espacial mediante número de vecinos locales.
-5. Agrupa puntos por adyacencia geométrica con DBSCAN.
-6. Evalúa cada componente combinando:
-   - número y proporción de puntos;
-   - densidad local;
-   - soporte de vistas;
-   - confianza;
-   - distancia respecto a los componentes principales.
-7. Conserva componentes separados cuando son grandes o tienen evidencia
-   multivista suficiente. Nunca se limita a conservar solamente el mayor.
-8. Elimina ruido disperso y componentes pequeños, alejados y con evidencia
-   espacial/multivista insuficiente.
-
-Después añade una regularización superficial general:
-9. Recalcula desde cero las normales sobre la geometría ya limpia.
-10. Suavizado bilateral punto-superficie:
-   - el punto se mueve PRINCIPALMENTE a lo largo de su normal;
-   - vecinos lejanos pesan menos;
-   - vecinos con normal distinta pesan mucho menos;
-   - soporte multivista y confianza ponderan la estimación;
-   - discontinuidades geométricas reducen automáticamente el suavizado;
-   - bordes abiertos se detectan por asimetría del vecindario y se protegen.
-11. El desplazamiento por iteración y el desplazamiento total están acotados
-   por el espaciamiento real de la nube.
-12. Guarda de escala de muestreo:
-   - compara el spacing antes y después del suavizado;
-   - si el suavizado colapsa capas cercanas y reduce demasiado el spacing,
-     mezcla adaptativamente la solución regularizada con la nube filtrada
-     original hasta recuperar una escala de muestreo segura;
-   - esto evita que 13 reduzca en exceso los radios de Ball Pivoting.
-13. Reestimación final y orientación consistente de normales.
-
-La regularización NO:
-- agrega puntos;
-- rellena huecos;
-- cierra superficies;
-- proyecta a planos globales;
-- ajusta primitivas;
-- modifica los registros ni la fusión de los pasos anteriores;
-- fuerza watertight.
-
-Compatibilidad
---------------
-Conserva exactamente las salidas consumidas por 13:
-
-    nube_regularizada_general.npz
-    nube_regularizada_general.ply
-
-y añade trazabilidad:
-
-    nube_filtrada_sin_suavizado.npz
-    nube_filtrada_sin_suavizado.ply
-    desplazamiento_regularizacion_mm.npy
-    diagnostico_regularizacion_superficial.npz
-    preview_nube_regularizada_general.png
-    preview_comparacion_regularizacion.png
-    resumen_12_regularizacion_nube.json
-"""
+"""Limpia y regulariza la nube fusionada conservando su evidencia multivista."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -113,9 +37,7 @@ except Exception:
     plt = None
 
 
-# ---------------------------------------------------------------------------
 # CLI
-# ---------------------------------------------------------------------------
 
 
 def parser():
@@ -145,7 +67,7 @@ def parser():
     p.add_argument("--always-preserve-support", type=int, default=3)
     p.add_argument("--always-preserve-confidence", type=float, default=0.72)
 
-    # V4.0 — contrato de evidencia del paso 11. Soporte/confianza altos ya no
+    # contrato de evidencia del paso 11. Soporte/confianza altos ya no
     # pueden rescatar automáticamente una capa local marcada como ambigua.
     p.add_argument("--minimum-input-evidence-class", type=int, default=2)
     p.add_argument("--minimum-input-independent-support", type=int, default=2)
@@ -334,7 +256,7 @@ def parser():
         default=2.60,
     )
 
-    # Guarda de escala de muestreo.
+    # Evitar que el suavizado reduzca el spacing y los radios de Ball Pivoting en exceso.
     p.add_argument(
         "--minimum-spacing-ratio-after-smoothing",
         type=float,
@@ -417,9 +339,7 @@ def parser():
     return p
 
 
-# ---------------------------------------------------------------------------
 # Estadística y escala
-# ---------------------------------------------------------------------------
 
 
 def stats(values):
@@ -506,9 +426,7 @@ def bit_count_u64(values):
     return _POPCOUNT_BYTES[raw].sum(axis=1).astype(np.int16).reshape(shape)
 
 
-# ---------------------------------------------------------------------------
 # Limpieza 3D por respaldo espacial, componentes y evidencia multivista
-# ---------------------------------------------------------------------------
 
 
 def radius_neighbor_counts(points: np.ndarray, radius: float) -> np.ndarray:
@@ -578,17 +496,8 @@ def clean_geometric_components(
     spacing: float,
     args,
 ):
-    """Limpia una nube sin imponer una forma ni conservar solo el mayor.
-
-    La decisión se toma en dos escalas:
-
-    1. Respaldo local: elimina puntos espacialmente aislados, con una excepción
-       limitada para muestras de alta calidad que todavía tengan vecinos.
-    2. Componente: DBSCAN agrupa por adyacencia y cada grupo se evalúa por
-       tamaño, densidad, soporte, confianza y distancia a los componentes
-       principales. Un componente separado puede sobrevivir por tamaño o por
-       evidencia multivista, por lo que se admiten objetos de varias partes.
-    """
+    """Filtra puntos aislados y evalúa componentes DBSCAN por tamaño, densidad y evidencia.
+    Conserva componentes separados cuando tienen respaldo suficiente."""
     p = np.asarray(points, dtype=np.float64)
     c = np.asarray(colors, dtype=np.uint8)
     s = np.asarray(support)
@@ -1002,9 +911,7 @@ def clean_geometric_components(
     }
 
 
-# ---------------------------------------------------------------------------
 # Normales PCA vectorizadas
-# ---------------------------------------------------------------------------
 
 
 def estimate_pca_normals(
@@ -1014,13 +921,7 @@ def estimate_pca_normals(
     radius: float,
     reference_normals: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Estima normales locales con PCA ponderado.
-
-    Devuelve:
-        normals
-        curvature = lambda_min / sum(lambda)
-        neighbor_counts
-    """
+    """Devuelve normales PCA ponderadas, curvatura lambda_min/sum(lambda) y número de vecinos."""
     p = np.asarray(points, dtype=np.float64)
     n_points = len(p)
 
@@ -1121,9 +1022,7 @@ def estimate_pca_normals(
     return normals, curvature, counts
 
 
-# ---------------------------------------------------------------------------
 # Regularización bilateral punto-superficie
-# ---------------------------------------------------------------------------
 
 
 def _neighbor_quality_weights(
@@ -1314,7 +1213,7 @@ def surface_bilateral_iteration(
         )
     )
 
-    # V2.1: mediana enmascarada para no emitir All-NaN slice warnings
+    # mediana enmascarada para no emitir All-NaN slice warnings
     # en puntos que temporalmente no tienen vecinos coherentes.
     h_masked = np.ma.array(
         signed_height,
@@ -1378,10 +1277,8 @@ def surface_bilateral_iteration(
         where=wsum > 1e-12,
     )
 
-    # --------------------------------------------------------------
     # Protección de características:
     # dispersión de normales local.
-    # --------------------------------------------------------------
     base_for_feature = w_spatial * valid
     base_sum = np.sum(
         base_for_feature,
@@ -1412,11 +1309,9 @@ def surface_bilateral_iteration(
         1.0,
     )
 
-    # --------------------------------------------------------------
     # Protección de borde abierto:
     # un vecindario interior es aproximadamente balanceado en el plano
     # tangente; junto a un borde, su centro de masa tangencial se desplaza.
-    # --------------------------------------------------------------
     boundary_base = w_spatial * w_normal * valid
     boundary_sum = np.sum(
         boundary_base,
@@ -1471,9 +1366,7 @@ def surface_bilateral_iteration(
     )
     boundary_factor = 1.0 - t * (1.0 - float(args.boundary_min_strength))
 
-    # --------------------------------------------------------------
     # Puntos con alta evidencia se usan como anclas suaves, no rígidas.
-    # --------------------------------------------------------------
     target_support = np.clip(
         support.astype(np.float64)
         / max(
@@ -1729,9 +1622,7 @@ def regularize_surface(
     }
 
 
-# ---------------------------------------------------------------------------
 # Métrica de rugosidad local
-# ---------------------------------------------------------------------------
 
 
 def evaluate_local_roughness(
@@ -1842,9 +1733,7 @@ def evaluate_local_roughness(
     }
 
 
-# ---------------------------------------------------------------------------
-# V2.1 — Guarda de escala de muestreo
-# ---------------------------------------------------------------------------
+# Guarda de escala de muestreo
 
 
 def spacing_median_deterministic(
@@ -1888,14 +1777,8 @@ def apply_sampling_scale_guard(
     bisection_steps: int,
     sample_points: int,
 ):
-    """Reduce solo la INTENSIDAD efectiva del suavizado si colapsa el spacing.
-
-    No añade/elimina puntos y no modifica topología. Busca el mayor alpha:
-
-        P_final = P_original + alpha * (P_smooth - P_original)
-
-    tal que spacing(P_final) >= minimum_ratio * spacing_original.
-    """
+    """Busca el mayor alpha en P_original + alpha * (P_smooth - P_original)
+    que conserve spacing >= minimum_ratio * spacing_original."""
     p0 = np.asarray(original_points, dtype=np.float64)
     ps = np.asarray(smoothed_points, dtype=np.float64)
 
@@ -1965,9 +1848,7 @@ def apply_sampling_scale_guard(
     }
 
 
-# ---------------------------------------------------------------------------
 # Open3D / I/O
-# ---------------------------------------------------------------------------
 
 
 def require_open3d():
@@ -2079,9 +1960,7 @@ def orient_final_normals(
     return pcd, normals, orientation_ok
 
 
-# ---------------------------------------------------------------------------
 # Preview
-# ---------------------------------------------------------------------------
 
 
 def preview(
@@ -2275,9 +2154,7 @@ def comparison_preview(
     plt.close(fig)
 
 
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
 
 
 def main():
@@ -2615,12 +2492,7 @@ def main():
             ),
             dtype=np.float64,
         )
-        # V4.7 / 11 V11.8 — contrato de recuperación de COBERTURA OBSERVADA.
-        # No representa geometría sintetizada: solo identifica surfels que ya
-        # existían en la fusión local y que 11 reincorporó tras validar
-        # evidencia multivista, continuidad local y ausencia de degradación
-        # global. 12 debe respetar ese contrato para no volver a descartarlos
-        # únicamente por el veredicto de coherencia previo a la recuperación.
+        # Conservar surfels recuperados y revalidados por 11; no son puntos sintetizados.
         has_observed_coverage_recovery_contract = (
             "observed_coverage_recovery_contract_valid" in d.files
             and bool(
@@ -2822,9 +2694,7 @@ def main():
             flush=True,
         )
 
-    # --------------------------------------------------------------
     # Limpieza histórica conservadora.
-    # --------------------------------------------------------------
     pcd_all = make_pcd(
         points_all,
         colors_all,
@@ -2927,11 +2797,7 @@ def main():
             & heldout_compatible_all
             & layer_contract_consistent_all
         )
-        # V4.7: se conserva el contrato de coherencia local, pero 11 V11.8 puede
-        # publicar una recuperación de cobertura OBSERVADA ya revalidada. Esa
-        # recuperación no crea puntos ni evita los demás filtros de evidencia:
-        # soporte independiente, diversidad angular, conflicto, held-out y
-        # separación de capas siguen siendo obligatorios aquí.
+        # Respetar la recuperación observada del 11 y aplicar los demás filtros de evidencia.
         if has_local_coherence_contract:
             local_surface_safe = (surface_evidence_all >= 3) | local_coherence_accept_all
             if has_observed_coverage_recovery_contract:
@@ -3247,11 +3113,9 @@ def main():
         f"{geometric['report'].get('components_retained', 0)} componentes retenidos."
     )
 
-    # --------------------------------------------------------------
     # Normales recalculadas DESPUÉS de la limpieza geométrica.
     # La nube anterior no aporta normales para evitar propagar orientación
     # procedente de residuos eliminados.
-    # --------------------------------------------------------------
     base_pcd = make_pcd(
         points,
         colors,
@@ -3288,9 +3152,7 @@ def main():
         dtype=np.float64,
     )
 
-    # --------------------------------------------------------------
     # Guardar la nube filtrada ANTES de suavizado.
-    # --------------------------------------------------------------
     output = root / "reconstruccion" / "multisesion" / args.output_name
     output.mkdir(
         parents=True,
@@ -3425,9 +3287,7 @@ def main():
         maximum_points=int(args.maximum_diagnostic_points),
     )
 
-    # --------------------------------------------------------------
     # Regularización superficial general.
-    # --------------------------------------------------------------
     if bool(args.surface_regularization):
         result = regularize_surface(
             points,
@@ -3489,13 +3349,7 @@ def main():
             dtype=float,
         )
 
-    # --------------------------------------------------------------
-    # V2.1 — Guarda de escala de muestreo.
-    #
-    # La V2.0 podía reducir mucho el spacing NN al colapsar ruido/capas
-    # cercanas. 13 interpretaba entonces la nube como mucho más densa
-    # y reducía en exceso sus radios de Ball Pivoting.
-    # --------------------------------------------------------------
+    # Evitar que el suavizado reduzca el spacing y los radios de Ball Pivoting en exceso.
     (
         regularized_points,
         spacing_guard,
@@ -3535,9 +3389,7 @@ def main():
     result["curvature"] = guarded_curvature
     result["normal_neighbor_count"] = guarded_normal_counts
 
-    # --------------------------------------------------------------
     # Normales finales para 13.
-    # --------------------------------------------------------------
     final_pcd, final_normals, orientation_ok = orient_final_normals(
         regularized_points,
         colors,
@@ -3557,9 +3409,7 @@ def main():
 
     extent_after = robust_extent(regularized_points)
 
-    # --------------------------------------------------------------
     # Sanidad dimensional.
-    # --------------------------------------------------------------
     before_extent = np.asarray(
         extent_before["extent"],
         dtype=float,
@@ -3614,9 +3464,7 @@ def main():
 
     quality = "accepted" if not warnings else "warning"
 
-    # --------------------------------------------------------------
     # Salidas compatibles con 13.
-    # --------------------------------------------------------------
     out_npz = output / "nube_regularizada_general.npz"
     np.savez_compressed(
         out_npz,

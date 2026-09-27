@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Mensajes de progreso uniformes para los ejecutables del pipeline."""
+"""Publica el estado y la duración de las operaciones del pipeline."""
 
 from __future__ import annotations
 

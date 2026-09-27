@@ -1,0 +1,807 @@
+{
+  "estimated_completion": {
+    "enabled": true,
+    "all_faces_are_estimated": true,
+    "has_estimated_patches": false,
+    "base_left_open": true,
+    "observational_support_increased": false,
+    "method": "continuous_walls_open_base",
+    "wall_completion": {
+      "attempted": true,
+      "accepted": true,
+      "base_left_open": true,
+      "before": {
+        "boundary_edges": 622,
+        "lateral_boundary_edges": 459,
+        "base_boundary_edges": 163,
+        "base_y_mm": 140.56524658203125,
+        "base_tolerance_mm": 1.5349754691123962
+      },
+      "input_points": 15913,
+      "voxel_mm": 0.7,
+      "after": {
+        "boundary_edges": 1139,
+        "lateral_boundary_edges": 0,
+        "base_boundary_edges": 1139,
+        "base_y_mm": 140.56524658203125,
+        "base_tolerance_mm": 1e-06
+      },
+      "evaluation": {
+        "name": "continuous_walls_open_base",
+        "coverage_within_gate": 1.0,
+        "coverage_gate_mm": 3.0,
+        "cloud_to_mesh_mm": {
+          "count": 15913,
+          "median": 0.5309174656867981,
+          "mean": 0.5298143986263071,
+          "p90": 0.6288182020187378,
+          "p95": 0.6628875374794005,
+          "max": 2.6063175201416016
+        },
+        "mesh_to_cloud_mm": {
+          "count": 30000,
+          "median": 0.6885951471101645,
+          "mean": 0.7574332895877811,
+          "p90": 0.976463722426518,
+          "p95": 1.1441831863246352,
+          "max": 5.80035358386941
+        },
+        "bbox_extent_ratio_xyz": [
+          0.9980505211308677,
+          1.0052265859628682,
+          0.9870847873116277
+        ],
+        "topology": {
+          "vertices": 44648,
+          "triangles": 88155,
+          "self_intersecting": null,
+          "self_intersection_check": "deferred_to_step_16",
+          "unique_edges": 132802,
+          "boundary_edges": 1139,
+          "boundary_edge_ratio": 0.008576678062077379,
+          "boundary_components": 1,
+          "nonmanifold_edges": 0,
+          "nonmanifold_edge_ratio": 0.0,
+          "connected_components": 1,
+          "largest_component_triangle_ratio": 1.0,
+          "edge_manifold": true,
+          "vertex_manifold": true,
+          "orientable": true
+        },
+        "expensive_self_intersection_check": "deferred_to_step_16"
+      },
+      "construction": {
+        "cap_pixels_estimated": 8952,
+        "solid_voxels": 483259,
+        "shell_voxels": 53814,
+        "discarded_component_voxels": 0,
+        "base_and_other_clipped_ends_are_estimated": true,
+        "surface_is_entirely_reconstructed_not_observed": true
+      },
+      "base_cap_exported": false,
+      "construction_is_temporary_proxy": true,
+      "policy": "continuity_of_walls_without_unobserved_bottom_cap",
+      "original_geometry_preserved": false,
+      "rgb_policy": "nearest_observation_on_reconstructed_vertices",
+      "self_intersection_pairs": 0
+    },
+    "local_patch_attempt": {
+      "enabled": true,
+      "method": "local_observation_bounded_patches",
+      "all_faces_are_estimated": false,
+      "has_estimated_patches": true,
+      "observational_support_increased": false,
+      "existing_vertices_moved": 0,
+      "original_triangles_preserved": 20111,
+      "rgb_unchanged": true,
+      "new_triangles": 35,
+      "loops_filled": 32,
+      "invalid_boundary_components": 14,
+      "distance_bound_mm": 2.0,
+      "records": [
+        {
+          "boundary_vertices": 4,
+          "accepted": true,
+          "diameter_mm": 2.7422025313982874,
+          "planarity_max_mm": 0.012936660544510648,
+          "max_distance_bound_mm": 1.1218098880988499
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 2.8742230555484327,
+          "planarity_max_mm": 0.4690570471333355,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.588726540638521,
+          "planarity_max_mm": 3.497202527569243e-15,
+          "max_distance_bound_mm": 1.1608367801752721
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.5724077925021516,
+          "planarity_max_mm": 1.9012569296705806e-15,
+          "max_distance_bound_mm": 1.432483221701641
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.8598897084048787,
+          "planarity_max_mm": 3.0531133177191805e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.737846375158836,
+          "planarity_max_mm": 9.020562075079397e-17,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.6898434432888707,
+          "planarity_max_mm": 2.0261570199409107e-15,
+          "max_distance_bound_mm": 1.3758916264406504
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 2.2037716323408842,
+          "planarity_max_mm": 3.4416913763379853e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.636966267147138,
+          "planarity_max_mm": 2.636779683484747e-16,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.5038530379266786,
+          "planarity_max_mm": 4.524158825347513e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 2.361657182420118,
+          "planarity_max_mm": 1.0547118733938987e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 2.9372944909939727,
+          "planarity_max_mm": 0.2553531015893615,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 2.715272484878516,
+          "planarity_max_mm": 2.831068712794149e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.6592354724251008,
+          "planarity_max_mm": 2.55351295663786e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.4520629700426224,
+          "planarity_max_mm": 1.6930901125533637e-15,
+          "max_distance_bound_mm": 1.4965912922176126
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.7674068009862176,
+          "planarity_max_mm": 2.6229018956769323e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.2919498792375856,
+          "planarity_max_mm": 9.43689570931383e-16,
+          "max_distance_bound_mm": 0.9613168069364473
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.4371136202571826,
+          "planarity_max_mm": 6.661338147750939e-16,
+          "max_distance_bound_mm": 1.219805784065322
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": true,
+          "diameter_mm": 3.668925927666714,
+          "planarity_max_mm": 0.009046267394930141,
+          "max_distance_bound_mm": 1.3656004594788667
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 2.470006375542709,
+          "planarity_max_mm": 1.5040052536718918e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 3.229293666577352,
+          "planarity_max_mm": 0.055531743064971884,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 5,
+          "accepted": false,
+          "diameter_mm": 3.0721529297425794,
+          "planarity_max_mm": 0.25124628633394025,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 5,
+          "accepted": false,
+          "diameter_mm": 2.429794501988959,
+          "planarity_max_mm": 0.16186617239684392,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": true,
+          "diameter_mm": 2.9369245350465656,
+          "planarity_max_mm": 0.0046882077084903495,
+          "max_distance_bound_mm": 1.2518186630302277
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 3.405770189956346,
+          "planarity_max_mm": 3.3306690738754696e-16,
+          "max_distance_bound_mm": 1.8812652833738222
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 3.04501683056968,
+          "planarity_max_mm": 1.5543122344752192e-15,
+          "max_distance_bound_mm": 1.5985812043395786
+        },
+        {
+          "boundary_vertices": 5,
+          "accepted": false,
+          "diameter_mm": 2.3618048457939826,
+          "planarity_max_mm": 0.32554631246346055,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 1.5278263718915077,
+          "planarity_max_mm": 1.0269562977782698e-15,
+          "max_distance_bound_mm": 0.7864638306363055
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 2.6887978585277215,
+          "planarity_max_mm": 2.275957200481571e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.3562870826255553,
+          "planarity_max_mm": 1.887379141862766e-15,
+          "max_distance_bound_mm": 1.2046565777477904
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.7335919615938384,
+          "planarity_max_mm": 4.773959005888173e-15,
+          "max_distance_bound_mm": 1.2178338933508073
+        },
+        {
+          "boundary_vertices": 5,
+          "accepted": false,
+          "diameter_mm": 3.192146851367871,
+          "planarity_max_mm": 0.029449822094724104,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 2.865625618978563,
+          "planarity_max_mm": 0.040220397205314465,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.8188643071384267,
+          "planarity_max_mm": 2.248201624865942e-15,
+          "max_distance_bound_mm": 1.4447470702946756
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 3.093390301415978,
+          "planarity_max_mm": 0.044065790843892214,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.4500738981117163,
+          "planarity_max_mm": 7.563394355258879e-16,
+          "max_distance_bound_mm": 1.4863154352890449
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.7799971868766593,
+          "planarity_max_mm": 1.8726339923169633e-15,
+          "max_distance_bound_mm": 1.5856623977220716
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.5676047007990044,
+          "planarity_max_mm": 3.011479954295737e-15,
+          "max_distance_bound_mm": 1.4446653391591364
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.7753849152127175,
+          "planarity_max_mm": 2.248201624865942e-15,
+          "max_distance_bound_mm": 1.562164528023228
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.7707226536562595,
+          "planarity_max_mm": 7.494005416219807e-16,
+          "max_distance_bound_mm": 1.4876175280316102
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.7528361910616357,
+          "planarity_max_mm": 1.942890293094024e-16,
+          "max_distance_bound_mm": 1.2398789201585094
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 2.121463242369751,
+          "planarity_max_mm": 7.105427357601002e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 3.020438463509349,
+          "planarity_max_mm": 0.003422532780065435,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.808888086489709,
+          "planarity_max_mm": 1.0824674490095276e-15,
+          "max_distance_bound_mm": 1.527482272189289
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.9530267125108685,
+          "planarity_max_mm": 2.3869795029440866e-15,
+          "max_distance_bound_mm": 1.398435870329072
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 2.6595865950549498,
+          "planarity_max_mm": 1.27675647831893e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.5929997790014636,
+          "planarity_max_mm": 1.27675647831893e-15,
+          "max_distance_bound_mm": 1.5515435798088477
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.2270709386498573,
+          "planarity_max_mm": 1.9984014443252818e-15,
+          "max_distance_bound_mm": 1.0500353472412858
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 3.050867657149549,
+          "planarity_max_mm": 0.062487951496046565,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.3598856233835703,
+          "planarity_max_mm": 7.216449660063518e-16,
+          "max_distance_bound_mm": 1.1749493914727822
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.5689961844913398,
+          "planarity_max_mm": 1.762479051592436e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.662146247616768,
+          "planarity_max_mm": 1.3461454173580023e-15,
+          "max_distance_bound_mm": 1.1873674528229938
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.6511098626353826,
+          "planarity_max_mm": 2.942091015256665e-15,
+          "max_distance_bound_mm": 1.2301316520687036
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.809468082975354,
+          "planarity_max_mm": 2.7200464103316335e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 2.8309367672802543,
+          "planarity_max_mm": 0.006647555248342207,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.284031093407967,
+          "planarity_max_mm": 3.885780586188048e-16,
+          "max_distance_bound_mm": 1.1786488986827521
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.605268686447733,
+          "planarity_max_mm": 4.0245584642661925e-15,
+          "max_distance_bound_mm": 1.1827922860213578
+        },
+        {
+          "boundary_vertices": 4,
+          "accepted": false,
+          "diameter_mm": 2.690878121070813,
+          "planarity_max_mm": 0.4736171717812751,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": false,
+          "diameter_mm": 1.569022814027761,
+          "planarity_max_mm": 1.1657341758564144e-15,
+          "reason": "outside_boundary_or_sharp_edge"
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.5114281487093573,
+          "planarity_max_mm": 2.886579864025407e-15,
+          "max_distance_bound_mm": 0.9944366965443541
+        },
+        {
+          "boundary_vertices": 3,
+          "accepted": true,
+          "diameter_mm": 2.5688081553875373,
+          "planarity_max_mm": 2.498001805406602e-16,
+          "max_distance_bound_mm": 1.2229938193158512
+        }
+      ],
+      "activation": {
+        "mode": "auto",
+        "triggered": true,
+        "activation_policy": "evaluate_every_open_boundary_independently",
+        "boundary_components": 75,
+        "boundary_edge_ratio": 0.023618436138500343,
+        "boundary_perimeter_mm": 1227.8160298387372,
+        "perimeter_to_bbox_diagonal": 7.621339707101537,
+        "diameter_limit_mm": 0.0,
+        "note": "0 significa sin limite de diametro; cada parche debe superar evidencia, orientacion e intersecciones."
+      },
+      "upstream_guidance": {
+        "enabled": false,
+        "applied": false,
+        "estimated_points": 0,
+        "counts_as_observed_evidence": false,
+        "source": "ruta_local_omitida/completado_geometrico_estimado.npz",
+        "reason": "disabled_or_no_completion_file"
+      }
+    }
+  },
+  "schema_version": "1.5",
+  "version": "V1.8",
+  "method": "general_geometric_fidelity_topology_classified_self_intersection_and_coherent_interpolation_validation",
+  "object": "piramide3",
+  "quality": "warning",
+  "reject_reasons": [],
+  "warning_reasons": [
+    "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+  ],
+  "shape_specific_assumptions": false,
+  "geometry_fidelity": {
+    "coverage_gate_mm": 3.0,
+    "cloud_to_mesh_coverage": 1.0,
+    "cloud_to_mesh_mm": {
+      "count": 15913,
+      "median": 0.5208621621131897,
+      "mean": 0.5206005169740313,
+      "p90": 0.6106493592262268,
+      "p95": 0.6406339645385742,
+      "max": 2.673267364501953
+    },
+    "mesh_to_cloud_mm": {
+      "count": 44648,
+      "median": 0.6815659093619308,
+      "mean": 0.7503779344326402,
+      "p90": 0.9690451910840937,
+      "p95": 1.1242832219304986,
+      "max": 5.713803680563556
+    },
+    "mesh_to_cloud_thresholds": {
+      "mode": "adaptive_spacing",
+      "sampling_spacing_mm": 0.5116584897041321,
+      "warning_absolute_mm": 2.0,
+      "reject_absolute_mm": 4.0,
+      "warning_spacing_factor": 2.5,
+      "reject_spacing_factor": 5.0,
+      "maximum_reject_mm": 6.0,
+      "effective_warning_mm": 2.0,
+      "effective_reject_mm": 4.0,
+      "sampling_spacing_source": "meshing_reference_spacing_mm"
+    },
+    "coherent_interpolation_validation": {
+      "enabled": false,
+      "coherent": false,
+      "mesh_to_cloud_decision": "accepted_within_warning_limit",
+      "mesh_to_cloud_p95_extent_ratio": 0.012654391145891942,
+      "reference_extent_mm": 88.84530349731446,
+      "thresholds": {
+        "minimum_coverage": 0.95,
+        "maximum_bbox_expansion_ratio": 1.12,
+        "minimum_largest_component_area_ratio": 0.97,
+        "maximum_boundary_edge_ratio": 0.05,
+        "maximum_mesh_cloud_p95_extent_ratio": 0.12
+      },
+      "criteria": {
+        "no_other_rejection": true,
+        "cloud_coverage": true,
+        "cloud_to_mesh_p90": true,
+        "strong_core_available": true,
+        "strong_core_coverage": true,
+        "strong_core_to_mesh_p90": true,
+        "bbox_expansion": true,
+        "dominant_connected_surface": true,
+        "limited_boundary": true,
+        "relative_interpolation_extent": true,
+        "manifold_and_orientable": true,
+        "no_true_or_ambiguous_intersections": true
+      },
+      "policy": "mesh_to_cloud_p90_never_rejects_by_itself_when_all_independent_coherence_checks_pass"
+    },
+    "cloud_bbox_extent_mm": [
+      99.41103744506836,
+      78.0811767578125,
+      99.87369537353516
+    ],
+    "mesh_bbox_extent_mm": [
+      99.21723772821068,
+      78.4638518541316,
+      98.40743603150167
+    ],
+    "mesh_to_cloud_bbox_extent_ratio_xyz": [
+      0.9980505211308677,
+      1.004900990382177,
+      0.9853188636252062
+    ],
+    "maximum_bbox_expansion_ratio": 1.004900990382177,
+    "strong_multiview_core": {
+      "mode": "pose_diverse_heldout_validated_evidence",
+      "legacy_raw_support_threshold": 5,
+      "criteria": {
+        "minimum_evidence_class": 3,
+        "minimum_independent_support": 2,
+        "minimum_angular_span_poses": 2,
+        "maximum_conflict_pose_ratio": 0.2,
+        "minimum_heldout_pass_ratio": 0.8
+      },
+      "minimum_points_required": 500,
+      "available": true,
+      "points": 10311,
+      "cloud_to_mesh_coverage": 1.0,
+      "cloud_to_mesh_mm": {
+        "count": 10311,
+        "median": 0.5251684188842773,
+        "mean": 0.5257452288954593,
+        "p90": 0.6046484708786011,
+        "p95": 0.6251793801784515,
+        "max": 1.85714590549469
+      }
+    },
+    "observation_envelope_check": {
+      "all_cloud_robust_extent_mm": [
+        88.84530349731446,
+        72.04879486083983,
+        88.60966094970703
+      ],
+      "strong_core_robust_extent_mm": [
+        87.49854621887206,
+        69.79000778198241,
+        87.16860389709473
+      ],
+      "all_to_strong_extent_ratio_xyz": [
+        1.0153917674823256,
+        1.0323654796817572,
+        1.0165318358696387
+      ],
+      "maximum_expansion_ratio": 1.0323654796817572
+    }
+  },
+  "evidence_contract_validation": {
+    "available": true,
+    "required": true,
+    "surface_evidence_class": {
+      "count": 15913,
+      "median": 3.0,
+      "mean": 2.9489725381763336,
+      "p90": 3.0,
+      "p95": 3.0,
+      "max": 3.0
+    },
+    "independent_support_poses": {
+      "count": 15913,
+      "median": 6.0,
+      "mean": 5.894111732545717,
+      "p90": 7.0,
+      "p95": 7.0,
+      "max": 9.0
+    },
+    "support_angular_span_poses": {
+      "count": 15913,
+      "median": 11.0,
+      "mean": 10.464148809149751,
+      "p90": 12.0,
+      "p95": 12.0,
+      "max": 12.0
+    },
+    "conflict_pose_ratio": {
+      "count": 15913,
+      "median": 0.0,
+      "mean": 0.0581226247367299,
+      "p90": 0.1875,
+      "p95": 0.25,
+      "max": 0.3333333432674408
+    },
+    "heldout_pass_ratio": {
+      "count": 15303,
+      "median": 1.0,
+      "mean": 0.906390909187577,
+      "p90": 1.0,
+      "p95": 1.0,
+      "max": 1.0
+    },
+    "evidence_strength": {
+      "count": 15913,
+      "median": 0.6797651648521423,
+      "mean": 0.6494430801446378,
+      "p90": 0.8511457920074463,
+      "p95": 0.8788827300071717,
+      "max": 0.9570895433425903
+    },
+    "strong_core_mode": "pose_diverse_heldout_validated_evidence",
+    "strong_core_points": 10311,
+    "policy": "final_validation_uses_pose_diverse_evidence_not_raw_pose_count"
+  },
+  "raw_open3d_topology": {
+    "edge_manifold_allow_boundary": true,
+    "vertex_manifold": true,
+    "orientable": true,
+    "raw_self_intersecting": false,
+    "raw_watertight": false,
+    "non_manifold_vertex_count": 0
+  },
+  "intersection_validation": {
+    "source": "ruta_local_omitida/resumen_16_validacion_intersecciones.json",
+    "raw_open3d_intersection_pairs": 0,
+    "coincident_contact_pairs": 0,
+    "true_self_intersection_pairs": 0,
+    "ambiguous_intersection_pairs": 0,
+    "classification_counts": {},
+    "semantic_status": "no_true_self_intersections"
+  },
+  "components": {
+    "count": 1,
+    "largest_triangle_ratio": 1.0,
+    "largest_area_ratio": 1.0
+  },
+  "boundaries": {
+    "unique_edge_count": 132802,
+    "boundary_edge_count": 1139,
+    "boundary_edge_ratio": 0.008576678062077379,
+    "boundary_component_count": 1,
+    "total_boundary_perimeter_mm": 307.49020527017103,
+    "nonmanifold_edge_count_numpy": 0
+  },
+  "closure_status": "open_manifold_surface",
+  "surface_area_mm2": 13889.664619081774,
+  "volume_mm3_if_valid_closed_surface": null,
+  "support_views": {
+    "count": 15913,
+    "median": 11.0,
+    "mean": 11.146358323383398,
+    "p90": 13.0,
+    "p95": 13.0,
+    "max": 17.0
+  },
+  "independent_support_poses": {
+    "count": 15913,
+    "median": 6.0,
+    "mean": 5.894111732545717,
+    "p90": 7.0,
+    "p95": 7.0,
+    "max": 9.0
+  },
+  "fusion_confidence": {
+    "count": 15913,
+    "median": 0.9195021390914917,
+    "mean": 0.9122897384490792,
+    "p90": 0.927043616771698,
+    "p95": 0.9300465941429138,
+    "max": 0.9654619693756104
+  },
+  "policy": {
+    "raw_open3d_self_intersection_is_diagnostic": true,
+    "coincident_contacts_are_documented": true,
+    "coincident_contacts_block_geometric_fidelity": false,
+    "true_transverse_or_coplanar_intersections_block": true,
+    "ambiguous_intersections_block": true,
+    "watertight_required_for_general_geometric_validity": false,
+    "closed_embedded_surface_required_for_volume": true,
+    "strong_multiview_core_checked_independently": true,
+    "raw_pose_count_is_not_strong_core_evidence": true,
+    "weak_observation_envelope_is_shape_agnostic": true,
+    "coherent_connected_interpolation_is_not_rejected_by_mesh_cloud_p90_alone": true
+  },
+  "storage_compacted": true,
+  "storage_compaction_note": "Los artefactos intermedios por vista/pose fueron retirados después de completar el pipeline. Las métricas de este resumen se conservan; algunas rutas históricas dentro de 'outputs' pueden apuntar a archivos ya eliminados.",
+  "storage_report": "ruta_local_omitida/resumen_almacenamiento.json"
+}

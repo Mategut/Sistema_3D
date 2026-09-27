@@ -1,26 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Referencias inmutables por campaña.
-
-Cada trabajo conserva dentro de ``documentacion/`` una copia de los recursos
-científicos con los que fue capturado y procesado. La estructura canónica es::
-
-    trabajo/
-    └── documentacion/
-        ├── referencias/
-        │   ├── fondo_vacio/
-        │   ├── calibracion_estereo/
-        │   ├── calibracion_plataforma/   # solo reconstrucción
-        │   ├── modelo/
-        │   └── firmware/
-        ├── configuracion_captura.json
-        └── referencias_campana.json
-
-Así, ``capturas/`` contiene solo datos adquiridos y ``reconstruccion/`` solo
-resultados calculados. Actualizar los recursos globales del sistema no cambia
-una campaña histórica ni invalida su reproducibilidad.
-"""
+"""Gestiona las referencias de calibración, fondo y modelo de cada trabajo."""
 
 from __future__ import annotations
 

@@ -1,84 +1,104 @@
 # Sistema de reconstrucción 3D por visión estereoscópica
 
-Este repositorio contiene el software desarrollado para mi proyecto de grado de reconstrucción tridimensional de bajo costo mediante dos cámaras web y una plataforma giratoria controlada.
+Software de un proyecto de grado para reconstruir objetos mediante dos cámaras web y una plataforma giratoria controlada por Arduino. Integra adquisición, estimación de profundidad, registro multivista, reconstrucción de superficie y exportación en escala métrica.
 
-El sistema captura pares estereoscópicos en múltiples posiciones angulares, estima profundidad, genera nubes de puntos por vista, realiza registro y fusión multivista, reconstruye la superficie y exporta el modelo final en escala métrica.
+Cada adquisición se organiza como una **campaña**, con sus capturas, referencias del montaje, resultados e informes de calidad. La configuración habitual utiliza tres sesiones de 25 posiciones: 75 pares estéreo.
+
+## Documentación
+
+| Guía | Contenido |
+| --- | --- |
+| [Instalación y uso](documentacion/instalacion_y_uso.md) | Entorno, montaje, captura, comandos y reanudación |
+| [Arquitectura y código](documentacion/arquitectura_y_codigo.md) | Responsabilidad de cada script y organización de módulos |
+| [Resultados y validación](documentacion/resultados_y_validacion.md) | Exportaciones, unidades, métricas y relleno |
+| [Rendimiento](documentacion/rendimiento.md) | Procesamiento en CPU y GPU, memoria y almacenamiento |
+| [Operación y cierre](documentacion/operacion_y_cierre.md) | Parámetros decisivos, recuperación, integridad y alcance de la entrega |
+| [Referencia de parámetros](documentacion/referencia_parametros.md) | Argumentos y valores declarados por etapa |
+| [Resultados seleccionados](resultados/README.md) | Nueve campañas con modelos, imágenes, métricas y advertencias |
+| [Modelo y atribuciones](modelos/README.md) | Identidad del ONNX, procedencia conocida, licencia upstream y citación |
 
 ## Requisitos
 
-- Windows.
-- Python 3.11 recomendado.
-- Arduino con el firmware incluido en `firmware/`.
-- Dos cámaras web configuradas para captura estéreo.
-- GPU NVIDIA compatible con CUDA para ejecutar CREStereo mediante ONNX Runtime GPU.
+- Windows y Python 3.11 recomendado.
+- Dos cámaras en un montaje estéreo fijo.
+- Plataforma giratoria con Arduino y el [firmware incluido](firmware/control_plataforma_2055_pasos/control_plataforma_2055_pasos.ino).
+- Modelo `crestereo_init_iter10_480x640.onnx` en `modelos/`.
+- Calibraciones y fondo vacío correspondientes al montaje.
+- Para acelerar la inferencia: GPU NVIDIA y entorno CUDA/cuDNN compatible con ONNX Runtime GPU. También existe ejecución por CPU.
 
-Las dependencias están definidas en `requirements.txt`.
+Las dependencias están en [requirements.txt](requirements.txt). Las calibraciones del repositorio corresponden al montaje de desarrollo; deben revisarse antes de utilizarlas en otro equipo.
 
-## Inicio
+## Inicio rápido
 
-1. Ejecutar `VERIFICAR_SISTEMA.bat`.
-   - El verificador comprueba las dependencias del entorno.
-   - Si falta un paquete requerido, intenta instalarlo automáticamente con el mismo Python utilizado por el sistema.
-   - La disponibilidad de CUDA/cuDNN no puede resolverse únicamente con `pip`; si ONNX Runtime no detecta `CUDAExecutionProvider`, el verificador lo reportará.
-2. Ejecutar `INICIAR_SISTEMA_3D.bat`.
-3. Actualizar el fondo vacío cuando cambie físicamente el montaje.
-4. Crear un trabajo desde la interfaz y realizar la captura o reconstrucción correspondiente.
+Desde la raíz del proyecto, con el entorno Python activado:
 
-Las carpetas `trabajos/` y `registros/` se crean automáticamente y no se versionan en Git.
-
-## Estructura
-
-```text
-Sistema_3D.py                 Interfaz, captura y control general
-firmware/                     Control de la plataforma giratoria
-herramientas/                 Verificación y calibración estéreo
-modelos/                      Modelo ONNX de CREStereo
-procesamiento/                Pipeline de reconstrucción 01-18
-sistema/
-  calibracion_estereo/        Calibración estéreo activa para nuevas campañas
-  calibracion_plataforma/     Calibración activa para nuevas campañas
-  fondo_vacio/                Fondo vigente para nuevas campañas
-trabajos/
-  <campaña>/
-    capturas/                 Tres sesiones de captura
-    documentacion/
-        referencias/          Snapshot inmutable de los recursos de esa campaña
-        configuracion_captura.json
-        referencias_campana.json
-    reconstruccion/           Productos intermedios y checkpoints
-    resultado_final/          Modelo final
+```powershell
+python -m pip install -r requirements.txt
+python herramientas/verificar_dependencias.py --no-install
 ```
 
-## Referencias congeladas por campaña
+Después:
 
-Cada trabajo conserva dentro de su propia carpeta `documentacion/` una copia de las referencias con las que fue creado. Esa carpeta pertenece al trabajo, no al repositorio, y permite reprocesar la campaña sin depender de cambios posteriores del montaje o de los recursos globales.
+1. Preparar las cámaras y cargar el firmware en Arduino.
+2. Comprobar las calibraciones y referencias del montaje.
+3. Ejecutar `INICIAR_SISTEMA_3D.bat`.
+4. Configurar cámaras y puerto serie, y actualizar el fondo vacío sin el objeto.
+5. Crear la campaña, capturar las sesiones y ejecutar la reconstrucción.
+6. Revisar los informes de calidad y `resultado_final/`.
 
-## Pipeline
+`VERIFICAR_SISTEMA.bat` intenta instalar las dependencias faltantes. La opción `--no-install` permite comprobarlas sin instalar. El lanzador busca preferentemente el entorno Conda `tesis`; para usar el intérprete activo puede ejecutar `python Sistema_3D.py`.
+
+La interfaz organiza las acciones en **Captura**, **Calibración** y **Herramientas**. Permite crear y verificar la calibración estéreo, evaluar candidatas de plataforma, preparar su informe independiente y activarlas con evidencia revisada sin abrir PowerShell. Incluye diagnósticos, registros y selección de motor y almacenamiento. Consulte el [flujo de calibración en la interfaz](documentacion/instalacion_y_uso.md#calibraciones-desde-la-interfaz).
+
+## Organización
+
+```text
+Sistema_3D.py                 Interfaz, adquisición y control general
+INICIAR_SISTEMA_3D.bat        Lanzador
+VERIFICAR_SISTEMA.bat         Verificación del entorno
+firmware/                    Control de la plataforma
+herramientas/                Calibración y auditoría
+modelos/                     Modelo ONNX
+procesamiento/               Coordinador, etapas 01–18 y utilidades
+sistema/                     Referencias activas del montaje
+documentacion/               Guías de uso y referencia técnica
+resultados/                  Nueve campañas seleccionadas y comparación dimensional
+trabajos/<campaña>/
+  capturas/                  Pares estéreo originales
+  documentacion/             Configuración y referencias congeladas
+  reconstruccion/            Intermedios, informes y checkpoints
+  resultado_final/           Exportación validada
+registros/                   Logs y rendimiento
+```
+
+`trabajos/` y `registros/` están excluidos de Git. Las referencias globales de `sistema/` sirven para nuevas campañas; las existentes conservan sus copias en `documentacion/referencias/`.
+
+Consulte la [guía de referencias del montaje](sistema/README.md) para conocer el contenido de `sistema/` y cuándo actualizarlo. La [guía de arquitectura](documentacion/arquitectura_y_codigo.md#herramientas-por-finalidad) organiza las herramientas según su finalidad y frecuencia de uso.
+
+## Flujo de procesamiento
 
 Reconstrucción normal:
 
 ```text
-01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18
+01 → 02 → 03 → 04 → 05 → 06 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18
 ```
 
 Calibración de plataforma:
 
 ```text
-01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09
+01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09
 ```
 
-`procesamiento/00_ejecutar_pipeline.py` coordina las etapas y permite reanudar ejecuciones mediante checkpoints. Cuando el trabajo contiene referencias congeladas, el coordinador las resuelve automáticamente aunque los argumentos de línea de comandos apunten a los recursos globales.
+El [coordinador 00](procesamiento/00_ejecutar_pipeline.py) ejecuta la ruta y permite reanudar mediante checkpoints. Los pasos 07–09 pertenecen a la calibración y no se repiten en cada reconstrucción normal.
 
-En una campaña de calibración de plataforma, el resultado del paso 09 se guarda primero dentro del propio trabajo en `resultado_calibracion_plataforma/`. Solo después de terminar correctamente se promociona como calibración activa del sistema, conservando la anterior en `registros/`.
+## Resultados
 
-El paso 04 valida la profundidad observada dentro de la silueta del paso 03: descarta píxeles sin disparidad válida, fuera del dominio rectificado o fuera del rango físico de profundidad. La consistencia entre sesiones continúa en el paso 05. Como control visual, el paso genera una hoja de contacto con todas las vistas procesadas.
+La exportación genera un OBJ en metros para Blender y versiones OBJ y PLY en milímetros. El PLY conserva los atributos de color de la malla. Cada campaña incluye informes de calidad y una referencia anterior al pulido para comparar la geometría.
 
-## Criterio de diseño
+La superficie puede incorporar regiones estimadas y conservar la base inferior abierta. La [guía de resultados](documentacion/resultados_y_validacion.md) explica las unidades, las métricas y los estados de validación.
 
-El pipeline está planteado para trabajar con geometrías distintas sin imponer una forma conocida al objeto. Las decisiones de filtrado, registro, fusión y reconstrucción se basan en evidencia estéreo, consistencia multivista, incertidumbre y continuidad geométrica.
+## Almacenamiento
 
-Las calibraciones incluidas corresponden al montaje utilizado durante el desarrollo. Si cambia la posición relativa entre las cámaras debe repetirse la calibración estéreo. Si el conjunto de cámaras cambia respecto a la plataforma, también debe actualizarse el fondo vacío y revisarse/repetirse la calibración de plataforma antes de crear nuevas campañas.
+El modo predeterminado `reducido` conserva capturas, referencias, resultados finales, informes y evidencia geométrica de validación y relleno; retira otros intermedios pesados al finalizar. El modo `completo` conserva también los productos de cada etapa.
 
-## Almacenamiento reducido
-
-La aplicación conserva por defecto solo los productos científicos relevantes al terminar cada reconstrucción: modelos finales, resúmenes, tablas de calidad, hojas de contacto y previews globales. Los artefactos pesados por vista/pose se usan durante el cálculo y se retiran al finalizar. Las capturas originales, las referencias congeladas del trabajo y el resultado final no se eliminan.
+La calibración de plataforma nueva queda como candidata. Su instalación para evaluación y su activación con evidencia revisada son operaciones explícitas: [validación independiente de plataforma](documentacion/validacion_independiente_plataforma.md).

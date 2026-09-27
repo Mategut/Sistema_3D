@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Utilidades compartidas para la cadena de máscaras finales."""
+"""Utilidades de segmentación, detección del soporte y diagnóstico de máscaras."""
 
 from __future__ import annotations
 
@@ -149,18 +149,7 @@ def imwrite_checked(path: Path, image: np.ndarray) -> None:
 
 
 def parse_angle(stem: str) -> float:
-    """Interpreta el token angular del nombre de captura.
-
-    Formato V7.2:
-        A0000 -> 0.0°
-        A0144 -> 14.4°
-        A3456 -> 345.6°
-
-    Compatibilidad histórica:
-        A000 -> 0°
-        A015 -> 15°
-        A345 -> 345°
-    """
+    """Lee ángulos del nombre: A0144 = 14,4°; formato anterior A015 = 15°."""
     match = ANGLE_RE.search(stem)
     if not match:
         raise ValueError(f"No se encontró el ángulo en: {stem}")
@@ -537,14 +526,7 @@ def _estimate_support_from_background_image(
     background_bgr: np.ndarray,
     rect_valid_mask: np.ndarray,
 ) -> Tuple[np.ndarray, dict]:
-    """Detecta la plataforma directamente en el fondo vacío rectificado.
-
-    La revisión del montaje mostró que ajustar la elipse directamente al mapa de
-    profundidad puede absorber el suelo/pared cuando CREStereo suaviza superficies
-    blancas poco texturizadas. Esta ruta usa múltiples umbrales de luminancia y
-    selecciona la elipse cuyo borde coincide mejor con discontinuidades reales de
-    la imagen. El centro NO se supone en el centro de la fotografía.
-    """
+    """Ajusta la elipse del soporte a bordes del fondo rectificado con varios umbrales."""
     image = np.asarray(background_bgr)
     valid = np.asarray(rect_valid_mask) > 0
     h, w = valid.shape
@@ -814,16 +796,8 @@ def estimate_turntable_support_mask(
     search_y_fraction: Tuple[float, float] = (0.46, 0.92),
     near_quantile: float = 0.42,
 ) -> Tuple[np.ndarray, dict]:
-    """Máscara robusta de la plataforma mediante consenso imagen + profundidad.
-
-    Política V2.0.1:
-    - la imagen del fondo vacío es la fuente primaria para la elipse;
-    - la profundidad se conserva únicamente como evidencia secundaria/diagnóstico;
-    - una discrepancia entre ambas NO desplaza la elipse hacia la profundidad;
-    - si la evidencia visual no es suficientemente fuerte, se devuelve máscara
-      vacía: no se permite que CREStereo recorte objeto por un falso plato;
-    - el score no contiene una preferencia por x=0.5 ni por ningún centro fijo.
-    """
+    """Estima el soporte desde la imagen y usa profundidad como diagnóstico.
+    Devuelve máscara vacía si falta evidencia visual suficiente."""
     depth_mask, depth_diag = _estimate_support_from_depth(
         background_depth_mm,
         rect_valid_mask,
@@ -857,11 +831,7 @@ def estimate_turntable_support_mask(
         selected_source = "background_image_edge_validated"
         selected_confidence = float(image_diag.get("confidence_score", 0.0))
 
-    # Política de seguridad: la profundidad del fondo se conserva como
-    # DIAGNÓSTICO, pero nunca puede activar por sí sola un recorte duro. En
-    # superficies blancas CREStereo puede suavizar plato + suelo y producir una
-    # elipse grande/descentrada. Si la imagen no respalda la plataforma, es más
-    # seguro continuar SIN prior de soporte que recortar objeto real.
+    # Usar profundidad del fondo como diagnóstico; exigir evidencia visual para recortar el soporte.
 
     agreement = None
     if np.count_nonzero(image_mask) and np.count_nonzero(depth_mask):
@@ -902,19 +872,8 @@ def build_support_rim_guard_mask(
     valid_domain: np.ndarray,
     rim_px: int = 6,
 ) -> Tuple[np.ndarray, dict]:
-    """Crea una banda fina exterior para cubrir el filo físico del plato.
-
-    La elipse de ``support_mask`` se conserva sin cambios porque sigue siendo
-    la superficie útil usada por la lógica de contacto. El guard es una
-    segunda máscara, de pocos píxeles, formada únicamente FUERA del soporte.
-    Su objetivo es absorber el pequeño borde gris que queda inmediatamente
-    adyacente a la elipse estimada y que puede aparecer como falso foreground.
-
-    Esta función no decide todavía qué parte del guard debe quedar protegida
-    por la presencia de un objeto. Esa protección se resuelve en el paso 03 a
-    partir de la semilla visual del objeto, antes de convertir el guard en un
-    veto definitivo.
-    """
+    """Crea una banda fina exterior al soporte sin modificar su elipse.
+    El paso 03 protege las columnas donde el objeto cruza el borde."""
     support_u8 = (np.asarray(support_mask) > 0).astype(np.uint8) * 255
     valid = np.asarray(valid_domain) > 0
 
@@ -976,21 +935,8 @@ def build_support_hardware_exclusion_mask(
     maximum_lateral_px: int = 64,
     maximum_downward_px: int = 96,
 ) -> Tuple[np.ndarray, dict]:
-    """Construye una falda de exclusión para el cuerpo visible de la plataforma.
-
-    ``support_mask`` sigue representando exclusivamente la superficie superior
-    útil del plato y NO se modifica. Esta función crea una segunda máscara,
-    exterior y dirigida hacia abajo, para cubrir el aro/cuerpo gris del
-    hardware que puede aparecer como falso foreground por pequeñas variaciones
-    de iluminación.
-
-    La expansión es deliberadamente asimétrica:
-    - un margen lateral pequeño cubre el borde físico que sobresale;
-    - la mayor expansión se hace hacia abajo, donde está el cuerpo del plato;
-    - la parte alta de la elipse nunca se expande, para no recortar el objeto.
-
-    El resultado es siempre disjunto de ``support_mask``.
-    """
+    """Crea una máscara exterior para el cuerpo del plato, disjunta de support_mask.
+    Se extiende lateralmente y hacia abajo, conservando el arco superior."""
     support_u8 = (np.asarray(support_mask) > 0).astype(np.uint8) * 255
     valid = np.asarray(valid_domain) > 0
 
@@ -1044,9 +990,7 @@ def build_support_hardware_exclusion_mask(
 
     skirt = (expanded > 0) & (support_u8 == 0) & valid
 
-    # El aro gris solo es visible en la mitad baja de la plataforma. Limitar la
-    # falda aquí evita introducir un veto alrededor del arco superior, donde
-    # puede encontrarse el objeto.
+    # Limitar la falda a la mitad inferior del plato para proteger el objeto.
     start_fraction = float(np.clip(lower_start_fraction, 0.0, 1.0))
     start_y = int(round(y0 + start_fraction * height))
     skirt[: max(0, min(skirt.shape[0], start_y)), :] = False
@@ -1156,12 +1100,7 @@ def graphcut_recover_foreground(
     if img.shape[:2] != (h, w):
         raise ValueError("GraphCut: imagen y máscaras no coinciden.")
 
-    # Zona de búsqueda global:
-    # - anchor: región visual alrededor del objeto ya detectado;
-    # - support: cualquier zona del plato que el objeto podría estar ocultando.
-    #
-    # Esto NO convierte el plato en foreground. Solo permite que GrabCut
-    # decida globalmente si un píxel del soporte está siendo ocluido.
+    # Permitir búsqueda en anchor y soporte; GrabCut decide qué píxeles pertenecen al objeto.
     search_zone = (anchor | support) & capture
     probable_seed = probable & search_zone
 
@@ -1243,9 +1182,7 @@ def graphcut_recover_foreground(
 
     gc_fg = (gc == cv2.GC_FGD) | (gc == cv2.GC_PR_FGD)
 
-    # La clasificación global puede recuperar píxeles que los filtros
-    # locales no marcaron como probables, pero únicamente dentro de la zona
-    # físicamente plausible (anchor ∪ soporte).
+    # Limitar la recuperación global a anchor y soporte.
     recovered = gc_fg & search_zone & (~initial)
     refined = initial | recovered
 

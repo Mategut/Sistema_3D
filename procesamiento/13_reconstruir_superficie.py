@@ -1,23 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-PASO 13 V5.3 — RECONSTRUCCIÓN CON CONTINUIDAD Y RESPALDO OBSERVACIONAL
-
-Reconstrucción general, sin suponer cubo, cilindro, pirámide ni otra forma.
-
-La ruta normal ejecuta un único Screened Poisson sobre una representación
-auxiliar ponderada por confianza y soporte. Después de Poisson se eliminan
-únicamente componentes completas que sean pequeñas, estén aisladas y carezcan
-de respaldo suficiente. Nunca se borran caras individuales del cuerpo válido.
-Las regiones débiles usan Taubin restringido y tendencia cuadrática de la nube
-a dos escalas. La proximidad aislada no inmoviliza una desviación local
-verificada. Los cambios conservan orientación y no añaden pares de intersección.
-
-La nube completa nunca se sustituye: se conserva para respaldo, color,
-evaluación y trazabilidad. Ball Pivoting queda como rescate únicamente si
-Poisson falla. El repliegue de fronteras verifica que no aparezcan nuevos pares de
-intersección; el paso 16 conserva la validación semántica completa.
-"""
+"""Reconstruye y compara superficies según su fidelidad a la nube.
+El relleno se valida por evidencia y topología; la base puede permanecer abierta."""
 
 from __future__ import annotations
 
@@ -187,7 +171,7 @@ def make_parser():
     p.add_argument("--meshing-minimum-voxel-mm", type=float, default=1.0)
     p.add_argument("--meshing-confidence-exponent", type=float, default=1.5)
     p.add_argument("--meshing-support-exponent", type=float, default=0.65)
-    # V5.0 — contrato de evidencia procedente de 11/12. El mallado no debe
+    # contrato de evidencia procedente de 11/12. El mallado no debe
     # volver a legitimar una capa que ya fue marcada como ambigua.
     p.add_argument(
         "--require-evidence-contract", action=argparse.BooleanOptionalAction, default=True
@@ -653,14 +637,8 @@ def prepare_poisson_cloud(
     evidence_strength=None,
     evidence_contract=False,
 ):
-    """Crea el proxy de Poisson sin reabrir decisiones de capas de 11/12.
-
-    Cuando existe contrato de evidencia, ``support`` representa soporte
-    independiente y ``evidence_strength`` modula explícitamente cuánto puede
-    influir cada observación. El paso 13 ya no vuelve a decidir cuál de dos
-    capas es verdadera usando solo densidad/soporte local: esa decisión debe
-    haberse validado contra poses independientes en 11 y preservado en 12.
-    """
+    """Prepara Poisson conservando las decisiones de capas de 11/12.
+    El soporte independiente y evidence_strength ponderan las observaciones."""
     points = np.asarray(points, dtype=np.float64)
     colors = np.asarray(colors, dtype=np.float64)
     normals = np.asarray(normals, dtype=np.float64)
@@ -937,15 +915,8 @@ def legacy_support_constrained_trim(
     support_available,
     args,
 ):
-    """Implementación V4.1 conservada solo como referencia; no se ejecuta.
-
-    Recorta la superficie implícita donde Poisson extrapoló sin mediciones.
-
-    Se muestrean vértices, centroides y puntos medios de cada triángulo. Una
-    cara solo puede sobrevivir si está dentro de la banda máxima y pertenece a
-    una componente que contiene semillas cercanas y fiables. Así se conservan
-    varias piezas legítimas, pero no láminas o puentes sin respaldo.
-    """
+    """Recorte legacy conservado como referencia; no se usa en la ruta actual.
+    Retiene caras próximas a observaciones en componentes con semillas fiables."""
     if not bool(args.support_trim):
         return mesh, {
             "enabled": False,
@@ -1190,9 +1161,7 @@ def retain_supported_components(
             seed_faces >= int(args.support_component_min_seed_faces)
             or (seed_faces >= 3 and seed_ratio >= float(args.support_component_min_seed_ratio))
         )
-        # La componente dominante representa el cuerpo interpolado continuo y
-        # nunca se recorta por ausencia local de muestras. Las secundarias se
-        # conservan si combinan entidad geométrica y respaldo observacional.
+        # Conservar el cuerpo dominante; exigir tamaño y evidencia a las componentes secundarias.
         keep = bool(component == main or (evidenced and substantial))
         keep_component[component] = keep
         records.append(
@@ -1847,13 +1816,7 @@ def poisson_extrapolation_risk(evaluation, spacing, args):
 
 
 def candidate_selection_score(evaluation, spacing):
-    """Menor es mejor; prioriza evidencia observada en ambos sentidos.
-
-    V5.6 evita que el número bruto de bucles de borde domine la decisión. Un
-    método observacional como BPA puede dejar muchos huecos pequeños que los
-    pasos topológicos posteriores pueden tratar; eso no debe pesar más que una
-    malla implícita que se aleja varios milímetros de las observaciones.
-    """
+    """Puntúa fidelidad bidireccional y calidad de malla; un valor menor es mejor."""
     h = max(float(spacing), 1e-6)
     coverage = float(evaluation.get("coverage_within_gate") or 0.0)
     m50 = _finite_metric(evaluation, "mesh_to_cloud_mm", "median")
@@ -2036,15 +1999,8 @@ def retract_observation_boundaries(
     search_margin_mm=0.0,
     enabled=True,
 ):
-    """Repliega extremos abiertos con evidencia local, sin recortar caras.
-
-    Se trabaja en el marco tangente de cada frontera, nunca en un eje global.
-    La ausencia de puntos por sí sola no autoriza un movimiento: se exige una
-    franja observada detrás del límite, continuidad entre vecinos de frontera
-    y ausencia de observaciones compatibles por delante. Las zonas ambiguas
-    permanecen inmóviles. La incertidumbre ausente se aproxima por muestreo y
-    dispersión normal local; no se presenta como covarianza calibrada.
-    """
+    """Repliega fronteras con evidencia local en su marco tangente, sin recortar caras.
+    Conserva zonas ambiguas y estima incertidumbre desde muestreo y dispersión local."""
     import heapq
     from collections import Counter
 
@@ -2364,9 +2320,7 @@ def retract_observation_boundaries(
     fragile = ~np.isfinite(area2) | (area2 <= 1e-12 * h * h)
     delta[np.unique(t[fragile])] = 0
     affected = np.any(np.linalg.norm(delta[t], axis=2) > 1e-12 * h, axis=1)
-    # Thin triangles may need a smaller movement locally. Attenuate their
-    # one-ring before the final global guard, rather than letting one fragile
-    # face unnecessarily reduce every other independently supported endpoint.
+    # Reducir localmente el movimiento cerca de triángulos finos antes de la guarda global.
     local_scale = np.ones(len(v))
     local_guard_history = []
     for _ in range(12):
@@ -3012,6 +2966,10 @@ def verify_ply_rgb(path, mesh):
 def main():
     """Reconstruye y evalúa una superficie a partir de la nube regularizada."""
     args = make_parser().parse_args()
+    # Fallar antes de reconstruir: una dependencia ausente no debe seleccionar
+    # silenciosamente una superficie distinta en otra instalación.
+    if args.complete_walls_open_base:
+        from skimage.measure import marching_cubes  # noqa: F401
     started = time.perf_counter()
     root = Path(args.root).expanduser().resolve()
     source_dir = root / "reconstruccion" / "multisesion" / args.source
@@ -3053,9 +3011,7 @@ def main():
                 int(np.asarray(data["evidence_contract_valid"]).reshape(-1)[0])
             )
         else:
-            # V4.0 de 12 podía publicar nombres de campos aun cuando provenían
-            # de defaults legacy. Un span angular completamente nulo identifica
-            # ese caso sin inventar evidencia.
+            # Un span angular nulo identifica evidencia legacy sin diversidad confirmada.
             candidate_span = (
                 np.asarray(data["support_angular_span_poses"], dtype=np.int16).reshape(-1)
                 if "support_angular_span_poses" in data.files
@@ -3226,10 +3182,7 @@ def main():
     evidence_contract_accept = evidence_contract_accept[valid]
     evidence_strength = np.clip(evidence_strength[valid], 0.0, 1.0)
     if evidence_contract_available:
-        # El paso 12 es la única etapa que adjudica el contrato de evidencia.
-        # 13 NO vuelve a reinterpretar held-out, conflicto o diversidad. Esto
-        # evita que un cambio de representación (p.ej. 2/3 frente a 0.67) haga
-        # desaparecer cobertura ya validada.
+        # Conservar el contrato de evidencia del paso 12 sin reinterpretar sus umbrales.
         if evidence_contract_accept_published:
             evidence_safe = evidence_contract_accept.copy()
             verification_mode = "authoritative_step12_accept_mask"
@@ -3581,7 +3534,7 @@ def main():
         try:
             wall_mesh, wall_report, wall_evaluation = propose_continuous_walls(mesh,points[accepted],
                 normals[accepted],colors[accepted],spacing,root,args,evaluation)
-        except (ValueError, RuntimeError, ImportError) as exc:
+        except (ValueError, RuntimeError) as exc:
             wall_mesh=None;wall_report={"accepted":False,"failure":str(exc)}
         if wall_mesh is not None:
             if not (output / "malla_observacional_antes_relleno.ply").is_file():

@@ -1,49 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Paso 15 — Pulido de malla con protección geométrica y topológica.
-
-Consume la malla reparada por el paso 14 y la nube de referencia del paso 12.
-Reduce ondulaciones y rugosidad sin asumir una clase geométrica del objeto.
-La conectividad recibida permanece fija: no se añaden ni eliminan vértices
-o triángulos y no se cierran bordes durante el pulido.
-
-Método
-------
-- Filtrado bilateral de normales y tendencia cuadrática local multiescala.
-- Corrección robusta de salientes en vecindarios conectados de la malla.
-- Regularización Taubin con protección de aristas y bordes abiertos.
-- Acabado residual adaptativo mediante ajustes cuadráticos robustos (IRLS).
-- Corrección contextual limitada, con evidencia de la nube de referencia.
-
-Los desplazamientos se limitan según el espaciado físico. El acabado adicional
-usa por defecto un máximo de 0.28 veces el espaciado de referencia y puede
-desactivarse con --no-residual-finish. Las superficies locales describen la
-curvatura del vecindario; no imponen planos, cilindros ni dimensiones conocidas.
-
-Protecciones
-------------
-Los bordes abiertos, las aristas persistentes y las costuras protegidas
-restringen el movimiento. Se verifica la procedencia de las costuras por hash.
-Los vértices geométricamente coincidentes reciben desplazamientos compatibles
-para no abrir separaciones artificiales en la malla.
-
-Las guardas comprueban orientación de caras, dimensiones, intersecciones y
-fidelidad respecto a la nube. Ante conflictos se reduce el desplazamiento
-local con una transición suave; el retroceso global queda como alternativa
-de seguridad. El clasificador semántico comparte criterios con el paso 14.
-Su tolerancia usa el espaciado de ese paso; el espaciado del paso 12 limita
-la magnitud del pulido. Un candidato rechazado conserva la salida previa.
-
-Salidas principales en 15_pulido_final/
--------------------------------------
-malla_antes_regularizacion.ply, malla_regularizada_general.ply,
-malla_final_topologica.ply, desplazamiento_vertices_mm.npy,
-proteccion_vertices.npz, preview_regularizacion_malla.png y
-resumen_15_pulido_final.json.
-
-La malla resultante pasa a la validación de intersecciones del paso 16,
-la validación final del paso 17 y la exportación del paso 18.
-"""
+"""Suaviza la malla con controles locales de orientación, evidencia e intersecciones."""
 
 from __future__ import annotations
 
@@ -186,7 +143,7 @@ def parser():
         default="15_pulido_final",
     )
 
-    # V1.25 — el pulido y sus guardas usan únicamente evidencia multivista
+    # el pulido y sus guardas usan únicamente evidencia multivista
     # validada por 11/12; soporte bruto de poses vecinas no cuenta como ancla.
     p.add_argument(
         "--require-evidence-contract", action=argparse.BooleanOptionalAction, default=True
@@ -197,7 +154,7 @@ def parser():
     p.add_argument("--maximum-conflict-pose-ratio", type=float, default=0.35)
     p.add_argument("--minimum-heldout-pass-ratio", type=float, default=0.67)
 
-    # V1.4 — campo de normales + tendencia multiescala.
+    # campo de normales + tendencia multiescala.
     p.add_argument(
         "--normal-trend-enabled",
         action=argparse.BooleanOptionalAction,
@@ -329,7 +286,7 @@ def parser():
         default=0.75,
     )
 
-    # V1.3 — despiking robusto de salientes locales.
+    # despiking robusto de salientes locales.
     p.add_argument(
         "--despike-enabled",
         action=argparse.BooleanOptionalAction,
@@ -397,7 +354,7 @@ def parser():
     p.add_argument("--normal-component", type=float, default=1.0)
     p.add_argument("--tangential-component", type=float, default=0.10)
 
-    # V1.11 — acabado residual para rugosidad espacialmente correlacionada.
+    # acabado residual para rugosidad espacialmente correlacionada.
     p.add_argument(
         "--surface-fairing-enabled",
         action=argparse.BooleanOptionalAction,
@@ -558,7 +515,7 @@ def parser():
         ),
     )
 
-    # V1.1 — guarda semántica idéntica a Paso 14.
+    # guarda semántica idéntica a Paso 14.
     p.add_argument(
         "--semantic-intersection-guard",
         action=argparse.BooleanOptionalAction,
@@ -781,14 +738,8 @@ def enforce_coincident_group_motion(
     *,
     vertex_strength=None,
 ):
-    """Impone el MISMO desplazamiento a cada grupo coincidente.
-
-    Se conserva la pequeña diferencia geométrica original entre miembros:
-        P_final_i = P_original_i + delta_grupo
-
-    Si cualquier miembro está completamente protegido (p.ej. borde abierto),
-    se congela todo el grupo para no mover indirectamente dicho borde.
-    """
+    """Aplica un desplazamiento común a cada grupo coincidente.
+    Si un miembro está protegido, inmoviliza todo el grupo."""
     if not groups:
         return np.asarray(candidate_vertices, dtype=np.float64).copy()
 
@@ -1180,9 +1131,7 @@ def multiscale_normal_trend_pass(
     small_count = np.zeros(len(p), dtype=np.int32)
     large_count = np.zeros(len(p), dtype=np.int32)
 
-    # Consulta por bloques: k=500 es deliberadamente amplio para que la
-    # escala grande pueda "ver" alrededor de una saliente de varios mm,
-    # pero no queremos reservar arrays N x 500 para toda la malla.
+    # Consultar k=500 por bloques para cubrir salientes sin reservar N×500 vecinos.
     progress_marks = {max(1, int(math.ceil(len(p) * f))) for f in (0.25, 0.50, 0.75, 1.0)}
     progress_printed = set()
 
@@ -1694,13 +1643,7 @@ def surface_fairing_pass(
     spacing_mm,
     args,
 ):
-    """Una pasada de fairing robusto sin ninguna primitiva geométrica.
-
-    El ajuste usa exclusivamente vecinos conectados por la malla. La
-    predicción cuadrática representa la posición de la superficie local en la
-    normal del vértice central; por tanto, no aplana sistemáticamente una zona
-    curva como sí podría hacerlo una media cartesiana.
-    """
+    """Ajusta una superficie cuadrática local con vecinos conectados por la malla."""
     p = np.asarray(vertices, dtype=np.float64)
     p0 = np.asarray(original_vertices, dtype=np.float64)
 
@@ -1934,14 +1877,7 @@ def feature_guide_vertices(
     iterations,
     lambda_factor,
 ):
-    """Crea una copia multiescala SOLO para detectar features.
-
-    El objetivo es que una ondulación de 1-2 triángulos deje de parecer una
-    arista real, mientras una discontinuidad geométrica persistente sigue
-    apareciendo a una escala mayor.
-
-    Esta copia nunca se exporta ni reemplaza la geometría científica.
-    """
+    """Genera una copia multiescala para detectar aristas persistentes; no se exporta."""
     p = np.asarray(vertices, dtype=np.float64).copy()
     e = np.asarray(edges, dtype=np.int64)
     boundary = np.asarray(boundary_vertex, dtype=bool)
@@ -2179,7 +2115,7 @@ def limited_pass(
             float(max_total_mm) / total_norm[total_clip, None]
         )
 
-    # V1.2: los vértices coincidentes no pueden separarse por el suavizado.
+    # los vértices coincidentes no pueden separarse por el suavizado.
     candidate = enforce_coincident_group_motion(
         candidate,
         p0,
@@ -2436,17 +2372,8 @@ def vertexwise_orientation_guard(
     coincident_groups=None,
     max_iterations=28,
 ):
-    """Reduce solo el desplazamiento de los vertices que crean caras inseguras.
-
-    La guarda anterior propagaba el rollback por anillos completos. Cuando los
-    pocos triángulos problemáticos estaban distribuidos por toda la superficie,
-    esos anillos acababan cubriendo casi toda la malla y anulaban el pulido.
-
-    Aquí cada cara invertida o degenerada reduce a la mitad únicamente el paso
-    de sus tres vértices. Las caras vecinas se verifican de nuevo en la siguiente
-    iteración, por lo que la transición sigue siendo geométricamente segura sin
-    convertir un problema local en un rollback global.
-    """
+    """Reduce a la mitad el movimiento de vértices en caras invertidas o degeneradas.
+    Revalida las caras vecinas en cada iteración."""
     p0 = np.asarray(original_vertices, dtype=np.float64)
     ps = np.asarray(candidate_vertices, dtype=np.float64)
     t = np.asarray(triangles, dtype=np.int64)
@@ -2498,9 +2425,7 @@ def vertexwise_orientation_guard(
         if np.array_equal(previous, alpha[affected]):
             break
 
-    # Última salida conservadora: solo los vértices de las caras que aún no son
-    # seguras regresan a la posición original. Se repite porque esa corrección
-    # puede trasladar el conflicto a una cara adyacente.
+    # Restaurar vértices de caras inseguras y repetir para verificar conflictos adyacentes.
     for iteration in range(64):
         unsafe = unsafe_orientation_face_indices(p0, candidate, t)
         if len(unsafe) == 0:
@@ -2541,9 +2466,7 @@ def apply_global_safety_guard(
     p0 = np.asarray(original_vertices, dtype=np.float64)
     ps_full = np.asarray(smoothed_vertices, dtype=np.float64)
 
-    # ----------------------------------------------------------
     # 1) Solo la dimensión robusta puede reducir globalmente.
-    # ----------------------------------------------------------
     full_metrics = safety_metrics(
         p0,
         ps_full,
@@ -2594,9 +2517,7 @@ def apply_global_safety_guard(
             "fallback_global_used": False,
         }
 
-    # ----------------------------------------------------------
     # 2) Rollback adaptativo por vértice para flips/degenerados.
-    # ----------------------------------------------------------
     vertexwise, vertex_alpha, vertex_records, vertexwise_safe = vertexwise_orientation_guard(
         p0,
         ps,
@@ -2633,9 +2554,7 @@ def apply_global_safety_guard(
                 "fallback_global_used": False,
             }
 
-    # Compatibilidad defensiva: la estrategia por anillos queda únicamente como
-    # segundo recurso para mallas patológicas que no puedan resolverse de forma
-    # local por vértice.
+    # Usar rollback por anillos si falla la corrección local por vértice.
     best = None
     best_metrics = None
     best_alpha_field = None
@@ -2775,9 +2694,7 @@ def apply_global_safety_guard(
             "fallback_global_used": False,
         }
 
-    # ----------------------------------------------------------
     # 3) Fallback global: seguridad antes que apariencia.
-    # ----------------------------------------------------------
     low = 0.0
     high = 1.0
     best_global = p0.copy()
@@ -2872,9 +2789,7 @@ def load_terminal_seams(mesh_path, vertices, triangles, topology_info, spacing):
         policy_ok = rec.get("seam_motion_policy") == "bounded_curve_tangential_redistribution_only"
         for j, group in enumerate(ids):
             mask[np.asarray(group, dtype=int)] = True
-            # Solo redistribución sobre UN segmento existente, sin cruzar la
-            # arista tapa-pared ni volver a estimar su altura en el pulido.
-            # Las esquinas y las coincidencias topológicas permanecen inmóviles.
+            # Redistribuir sobre el segmento existente; conservar esquinas, costuras y altura de la tapa.
             if policy_ok and not fixed[j] and len(group) == 1 and budget > 0:
                 back = xyz[j] - xyz[j - 1]
                 ahead = xyz[(j + 1) % len(xyz)] - xyz[j]
@@ -3376,9 +3291,7 @@ def regularize_mesh_core(
             }
         )
 
-    # --------------------------------------------------------------
-    # V1.4 — campo de normales + tendencia multiescala.
-    # --------------------------------------------------------------
+    # campo de normales + tendencia multiescala.
     if bool(args.normal_trend_enabled):
         p, normal_trend = multiscale_normal_trend_regularization(
             p,
@@ -3416,9 +3329,7 @@ def regularize_mesh_core(
             "total_shift_mm": np.zeros(len(p)),
         }
 
-    # --------------------------------------------------------------
-    # V1.3 — despiking robusto residual antes del Taubin.
-    # --------------------------------------------------------------
+    # despiking robusto residual antes del Taubin.
     if bool(args.despike_enabled):
         p, despike = despike_mesh_vertices(
             p,
@@ -3481,11 +3392,7 @@ def regularize_mesh_core(
             }
         )
 
-    # --------------------------------------------------------------
-    # V1.11 — fairing residual adaptativo.
-    # Corrige rugosidad formada por regiones, no únicamente picos aislados.
-    # Se ejecuta al final para medir el residuo que realmente dejó Taubin.
-    # --------------------------------------------------------------
+    # Corregir rugosidad residual por regiones después de Taubin.
     if bool(args.surface_fairing_enabled):
         p, surface_fairing = adaptive_surface_fairing_regularization(
             p,
@@ -3940,14 +3847,7 @@ def apply_semantic_intersection_guard(
     local_rollback_ring_floor=0.25,
     coincident_groups=None,
 ):
-    """V1.5: máxima corrección segura mediante rollback LOCAL.
-
-    Fuera de las regiones conflictivas:
-        alpha_v = 1.0
-
-    Solo los vértices cercanos a pares bloqueantes reciben:
-        alpha_v < 1.0
-    """
+    """Reduce el movimiento cerca de intersecciones bloqueantes mediante alpha por vértice."""
     p0 = np.asarray(original_vertices, dtype=np.float64)
     ps = np.asarray(candidate_vertices, dtype=np.float64)
     t = np.asarray(triangles, dtype=np.int64)
@@ -3988,7 +3888,7 @@ def apply_semantic_intersection_guard(
             },
         }
 
-    # V1.21: antes de ampliar anillos o mezclar globalmente, inmovilizar
+    # antes de ampliar anillos o mezclar globalmente, inmovilizar
     # únicamente caras conflictivas. Cada transición se vuelve a verificar.
     localized = ps.copy()
     frozen = np.zeros(len(p0), dtype=bool)
@@ -4710,13 +4610,8 @@ def localized_residual_finish(
     semantic_spacing,
     args,
 ):
-    """Pasada adicional reversible; nunca rehace el suavizado ni cambia caras.
-
-    Se mantiene como respaldo la salida del pulido anterior, ya protegida por sus
-    guardas. Si esta pasada no es verificable o se rechaza, se devuelve ese respaldo.
-    Los ajustes se calculan en paralelo solo para los candidatos. Se conservan
-    fronteras, aristas, costuras coincidentes y puntos de observación confiables.
-    """
+    """Corrige residuos sobre el pulido validado, conservando bordes y evidencia fiable.
+    Devuelve el respaldo si la pasada adicional no supera las guardas."""
     base = np.asarray(vertices, dtype=np.float64).copy()
     t = np.asarray(triangles, dtype=np.int64)
     h = float(spacing_mm)
@@ -5368,11 +5263,7 @@ def main():
     )
     final_vertices = result["vertices"]
 
-    # --------------------------------------------------------------
-    # V1.1 — Guarda semántica de auto-intersecciones.
-    # La misma clasificación usada después por Paso 14 se ejecuta aquí
-    # ANTES de publicar la geometría.
-    # --------------------------------------------------------------
+    # Validar intersecciones antes de publicar la geometría.
     if bool(args.semantic_intersection_guard):
         (
             final_vertices,

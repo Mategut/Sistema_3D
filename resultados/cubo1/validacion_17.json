@@ -1,0 +1,387 @@
+{
+  "estimated_completion": {
+    "enabled": true,
+    "all_faces_are_estimated": true,
+    "has_estimated_patches": false,
+    "base_left_open": true,
+    "observational_support_increased": false,
+    "method": "continuous_walls_open_base",
+    "wall_completion": {
+      "attempted": true,
+      "accepted": true,
+      "base_left_open": true,
+      "before": {
+        "boundary_edges": 238,
+        "lateral_boundary_edges": 237,
+        "base_boundary_edges": 1,
+        "base_y_mm": 140.5401611328125,
+        "base_tolerance_mm": 1.5470032095909119
+      },
+      "input_points": 51846,
+      "voxel_mm": 0.7,
+      "after": {
+        "boundary_edges": 1226,
+        "lateral_boundary_edges": 0,
+        "base_boundary_edges": 1226,
+        "base_y_mm": 140.5401611328125,
+        "base_tolerance_mm": 1e-06
+      },
+      "evaluation": {
+        "name": "continuous_walls_open_base",
+        "coverage_within_gate": 0.9998,
+        "coverage_gate_mm": 3.0,
+        "cloud_to_mesh_mm": {
+          "count": 30000,
+          "median": 0.3991388976573944,
+          "mean": 0.4017090427868844,
+          "p90": 0.594794911146164,
+          "p95": 0.6335052788257599,
+          "max": 3.6635916233062744
+        },
+        "mesh_to_cloud_mm": {
+          "count": 30000,
+          "median": 0.6095714197280075,
+          "mean": 0.6260852730610199,
+          "p90": 0.8777391812750703,
+          "p95": 0.9788899748498092,
+          "max": 3.496822576063897
+        },
+        "bbox_extent_ratio_xyz": [
+          0.9829850150400208,
+          0.9942429154142343,
+          1.0015508109341087
+        ],
+        "topology": {
+          "vertices": 101671,
+          "triangles": 202114,
+          "self_intersecting": null,
+          "self_intersection_check": "deferred_to_step_16",
+          "unique_edges": 303784,
+          "boundary_edges": 1226,
+          "boundary_edge_ratio": 0.004035762252126511,
+          "boundary_components": 1,
+          "nonmanifold_edges": 0,
+          "nonmanifold_edge_ratio": 0.0,
+          "connected_components": 1,
+          "largest_component_triangle_ratio": 1.0,
+          "edge_manifold": true,
+          "vertex_manifold": true,
+          "orientable": true
+        },
+        "expensive_self_intersection_check": "deferred_to_step_16"
+      },
+      "construction": {
+        "cap_pixels_estimated": 18234,
+        "solid_voxels": 2445154,
+        "shell_voxels": 121005,
+        "discarded_component_voxels": 0,
+        "base_and_other_clipped_ends_are_estimated": true,
+        "surface_is_entirely_reconstructed_not_observed": true
+      },
+      "base_cap_exported": false,
+      "construction_is_temporary_proxy": true,
+      "policy": "continuity_of_walls_without_unobserved_bottom_cap",
+      "original_geometry_preserved": false,
+      "rgb_policy": "nearest_observation_on_reconstructed_vertices",
+      "self_intersection_pairs": 0
+    },
+    "local_patch_attempt": {
+      "enabled": true,
+      "method": "local_observation_bounded_patches",
+      "all_faces_are_estimated": false,
+      "has_estimated_patches": false,
+      "observational_support_increased": false,
+      "existing_vertices_moved": 0,
+      "original_triangles_preserved": 116476,
+      "rgb_unchanged": true,
+      "new_triangles": 0,
+      "loops_filled": 0,
+      "invalid_boundary_components": 0,
+      "distance_bound_mm": 2.0,
+      "records": [
+        {
+          "boundary_vertices": 238,
+          "accepted": false,
+          "diameter_mm": 151.16505419097922,
+          "planarity_max_mm": 4.255230378435285,
+          "reason": "nonplanar_boundary_or_corner"
+        }
+      ],
+      "activation": {
+        "mode": "auto",
+        "triggered": true,
+        "activation_policy": "evaluate_every_open_boundary_independently",
+        "boundary_components": 1,
+        "boundary_edge_ratio": 0.001361299068253705,
+        "boundary_perimeter_mm": 391.0904324051529,
+        "perimeter_to_bbox_diagonal": 2.162520331415365,
+        "diameter_limit_mm": 0.0,
+        "note": "0 significa sin limite de diametro; cada parche debe superar evidencia, orientacion e intersecciones."
+      },
+      "upstream_guidance": {
+        "enabled": false,
+        "applied": false,
+        "estimated_points": 0,
+        "counts_as_observed_evidence": false,
+        "source": "ruta_local_omitida/completado_geometrico_estimado.npz",
+        "reason": "disabled_or_no_completion_file"
+      }
+    }
+  },
+  "schema_version": "1.5",
+  "version": "V1.8",
+  "method": "general_geometric_fidelity_topology_classified_self_intersection_and_coherent_interpolation_validation",
+  "object": "cubo1",
+  "quality": "warning",
+  "reject_reasons": [],
+  "warning_reasons": [
+    "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+  ],
+  "shape_specific_assumptions": false,
+  "geometry_fidelity": {
+    "coverage_gate_mm": 3.0,
+    "cloud_to_mesh_coverage": 0.9998071210893801,
+    "cloud_to_mesh_mm": {
+      "count": 51846,
+      "median": 0.39555390179157257,
+      "mean": 0.3955980455646237,
+      "p90": 0.5114532709121704,
+      "p95": 0.5752643495798111,
+      "max": 3.7098824977874756
+    },
+    "mesh_to_cloud_mm": {
+      "count": 100000,
+      "median": 0.5786619106627513,
+      "mean": 0.6122021366446929,
+      "p90": 0.8513232730993666,
+      "p95": 0.9576083797853854,
+      "max": 4.198962365519234
+    },
+    "mesh_to_cloud_thresholds": {
+      "mode": "adaptive_spacing",
+      "sampling_spacing_mm": 0.515667736530304,
+      "warning_absolute_mm": 2.0,
+      "reject_absolute_mm": 4.0,
+      "warning_spacing_factor": 2.5,
+      "reject_spacing_factor": 5.0,
+      "maximum_reject_mm": 6.0,
+      "effective_warning_mm": 2.0,
+      "effective_reject_mm": 4.0,
+      "sampling_spacing_source": "meshing_reference_spacing_mm"
+    },
+    "coherent_interpolation_validation": {
+      "enabled": false,
+      "coherent": false,
+      "mesh_to_cloud_decision": "accepted_within_warning_limit",
+      "mesh_to_cloud_p95_extent_ratio": 0.009270269594211835,
+      "reference_extent_mm": 103.2988706588745,
+      "thresholds": {
+        "minimum_coverage": 0.95,
+        "maximum_bbox_expansion_ratio": 1.12,
+        "minimum_largest_component_area_ratio": 0.97,
+        "maximum_boundary_edge_ratio": 0.05,
+        "maximum_mesh_cloud_p95_extent_ratio": 0.12
+      },
+      "criteria": {
+        "no_other_rejection": true,
+        "cloud_coverage": true,
+        "cloud_to_mesh_p90": true,
+        "strong_core_available": true,
+        "strong_core_coverage": true,
+        "strong_core_to_mesh_p90": true,
+        "bbox_expansion": true,
+        "dominant_connected_surface": true,
+        "limited_boundary": true,
+        "relative_interpolation_extent": true,
+        "manifold_and_orientable": true,
+        "no_true_or_ambiguous_intersections": true
+      },
+      "policy": "mesh_to_cloud_p90_never_rejects_by_itself_when_all_independent_coherence_checks_pass"
+    },
+    "cloud_bbox_extent_mm": [
+      109.75315475463867,
+      95.97539901733398,
+      106.35449981689453
+    ],
+    "mesh_bbox_extent_mm": [
+      107.88570647717822,
+      95.46454472590014,
+      106.51957025876209
+    ],
+    "mesh_to_cloud_bbox_extent_ratio_xyz": [
+      0.9829850150400208,
+      0.9946772371184247,
+      1.0015520776474127
+    ],
+    "maximum_bbox_expansion_ratio": 1.0015520776474127,
+    "strong_multiview_core": {
+      "mode": "pose_diverse_heldout_validated_evidence",
+      "legacy_raw_support_threshold": 5,
+      "criteria": {
+        "minimum_evidence_class": 3,
+        "minimum_independent_support": 2,
+        "minimum_angular_span_poses": 2,
+        "maximum_conflict_pose_ratio": 0.2,
+        "minimum_heldout_pass_ratio": 0.8
+      },
+      "minimum_points_required": 500,
+      "available": true,
+      "points": 35266,
+      "cloud_to_mesh_coverage": 0.9998582203822378,
+      "cloud_to_mesh_mm": {
+        "count": 35266,
+        "median": 0.3951701819896698,
+        "mean": 0.3909518896429224,
+        "p90": 0.48830217123031616,
+        "p95": 0.5441249459981918,
+        "max": 3.2569565773010254
+      }
+    },
+    "observation_envelope_check": {
+      "all_cloud_robust_extent_mm": [
+        103.2988706588745,
+        93.388840675354,
+        102.06853275299073
+      ],
+      "strong_core_robust_extent_mm": [
+        102.46435928344727,
+        93.05943870544434,
+        101.41746292114257
+      ],
+      "all_to_strong_extent_ratio_xyz": [
+        1.0081444063210188,
+        1.0035396943554786,
+        1.0064197014310485
+      ],
+      "maximum_expansion_ratio": 1.0081444063210188
+    }
+  },
+  "evidence_contract_validation": {
+    "available": true,
+    "required": true,
+    "surface_evidence_class": {
+      "count": 51846,
+      "median": 3.0,
+      "mean": 2.9304864406125835,
+      "p90": 3.0,
+      "p95": 3.0,
+      "max": 3.0
+    },
+    "independent_support_poses": {
+      "count": 51846,
+      "median": 5.0,
+      "mean": 5.5648073139682905,
+      "p90": 9.0,
+      "p95": 10.0,
+      "max": 12.0
+    },
+    "support_angular_span_poses": {
+      "count": 51846,
+      "median": 9.0,
+      "mean": 9.26366547081742,
+      "p90": 12.0,
+      "p95": 12.0,
+      "max": 12.0
+    },
+    "conflict_pose_ratio": {
+      "count": 51846,
+      "median": 0.0,
+      "mean": 0.053391430897374,
+      "p90": 0.20000000298023224,
+      "p95": 0.25,
+      "max": 0.3499999940395355
+    },
+    "heldout_pass_ratio": {
+      "count": 48798,
+      "median": 1.0,
+      "mean": 0.9245665850064135,
+      "p90": 1.0,
+      "p95": 1.0,
+      "max": 1.0
+    },
+    "evidence_strength": {
+      "count": 51846,
+      "median": 0.7343857884407043,
+      "mean": 0.6909078818701399,
+      "p90": 0.9044429361820221,
+      "p95": 0.9301804304122925,
+      "max": 0.988912045955658
+    },
+    "strong_core_mode": "pose_diverse_heldout_validated_evidence",
+    "strong_core_points": 35266,
+    "policy": "final_validation_uses_pose_diverse_evidence_not_raw_pose_count"
+  },
+  "raw_open3d_topology": {
+    "edge_manifold_allow_boundary": true,
+    "vertex_manifold": true,
+    "orientable": true,
+    "raw_self_intersecting": false,
+    "raw_watertight": false,
+    "non_manifold_vertex_count": 0
+  },
+  "intersection_validation": {
+    "source": "ruta_local_omitida/resumen_16_validacion_intersecciones.json",
+    "raw_open3d_intersection_pairs": 0,
+    "coincident_contact_pairs": 0,
+    "true_self_intersection_pairs": 0,
+    "ambiguous_intersection_pairs": 0,
+    "classification_counts": {},
+    "semantic_status": "no_true_self_intersections"
+  },
+  "components": {
+    "count": 1,
+    "largest_triangle_ratio": 1.0,
+    "largest_area_ratio": 1.0
+  },
+  "boundaries": {
+    "unique_edge_count": 303784,
+    "boundary_edge_count": 1226,
+    "boundary_edge_ratio": 0.004035762252126511,
+    "boundary_component_count": 1,
+    "total_boundary_perimeter_mm": 381.1964285519998,
+    "nonmanifold_edge_count_numpy": 0
+  },
+  "closure_status": "open_manifold_surface",
+  "surface_area_mm2": 42837.00235304089,
+  "volume_mm3_if_valid_closed_surface": null,
+  "support_views": {
+    "count": 51846,
+    "median": 10.0,
+    "mean": 10.184970875284497,
+    "p90": 16.0,
+    "p95": 18.0,
+    "max": 24.0
+  },
+  "independent_support_poses": {
+    "count": 51846,
+    "median": 5.0,
+    "mean": 5.5648073139682905,
+    "p90": 9.0,
+    "p95": 10.0,
+    "max": 12.0
+  },
+  "fusion_confidence": {
+    "count": 51846,
+    "median": 0.8884260356426239,
+    "mean": 0.8780947674439608,
+    "p90": 0.9043617844581604,
+    "p95": 0.9069356769323349,
+    "max": 0.9263213276863098
+  },
+  "policy": {
+    "raw_open3d_self_intersection_is_diagnostic": true,
+    "coincident_contacts_are_documented": true,
+    "coincident_contacts_block_geometric_fidelity": false,
+    "true_transverse_or_coplanar_intersections_block": true,
+    "ambiguous_intersections_block": true,
+    "watertight_required_for_general_geometric_validity": false,
+    "closed_embedded_surface_required_for_volume": true,
+    "strong_multiview_core_checked_independently": true,
+    "raw_pose_count_is_not_strong_core_evidence": true,
+    "weak_observation_envelope_is_shape_agnostic": true,
+    "coherent_connected_interpolation_is_not_rejected_by_mesh_cloud_p90_alone": true
+  },
+  "storage_compacted": true,
+  "storage_compaction_note": "Los artefactos intermedios por vista/pose fueron retirados después de completar el pipeline. Las métricas de este resumen se conservan; algunas rutas históricas dentro de 'outputs' pueden apuntar a archivos ya eliminados.",
+  "storage_report": "ruta_local_omitida/resumen_almacenamiento.json"
+}

@@ -1,4 +1,4 @@
-"""Medición de recursos por etapa; no cambia cálculos ni salidas científicas."""
+"""Registra tiempos y uso de recursos del equipo durante cada etapa."""
 import json
 import os
 import subprocess

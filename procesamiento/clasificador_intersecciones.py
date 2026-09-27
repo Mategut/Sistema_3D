@@ -1,21 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-clasificador_intersecciones.py
-
-Clasificador geométrico puro para pares de triángulos reportados por Open3D.
-
-Distingue:
-- topological_adjacency
-- coincident_vertex_contact
-- coincident_edge_contact
-- coplanar_overlap
-- transverse_intersection
-- unexplained_coplanar_contact
-- numerically_ambiguous
-
-No depende de Open3D.
-"""
+"""Clasifica intersecciones entre triángulos con tolerancias geométricas."""
 
 from __future__ import annotations
 import math
@@ -323,9 +308,7 @@ def classify_triangle_pair(
     parallel = abs(float(np.dot(uA, uB))) >= 1.0 - 1e-8
     plane_distance = max(abs(float(np.dot(p - A[0], uA))) for p in B)
 
-    # ------------------------------------------------------------------
     # Caso coplanar
-    # ------------------------------------------------------------------
     if parallel and plane_distance <= max(geometric_epsilon, 1e-8 * scale):
         A2 = _project_2d(A, uA)
         B2 = _project_2d(B, uA)
@@ -378,9 +361,7 @@ def classify_triangle_pair(
             "coplanar_overlap_area_projected": float(overlap_area),
         }
 
-    # ------------------------------------------------------------------
     # Caso no coplanar
-    # ------------------------------------------------------------------
     points = []
 
     for i in range(3):

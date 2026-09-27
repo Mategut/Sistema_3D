@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Las referencias se verifican por SHA-256 de sus bytes originales.
+# No normalizar ni convertir LF/CRLF al añadirlas o extraerlas con Git.
+sistema/** -text whitespace=cr-at-eol
+modelos/** -text
+resultados/** -text whitespace=cr-at-eol

@@ -1,0 +1,45 @@
+{
+  "campaign": "ubo3_20260919_131506",
+  "quality": "warning",
+  "warnings": [
+    "Superficie completada por estimacion: el cierre no valida exactitud dimensional."
+  ],
+  "reject_reasons": [],
+  "units": "mm",
+  "source_validation_sha256": "125d0d5c2c6b2c1ff82b89a0d1d4a3b8b3772506eb55497f8887863b706886dd",
+  "source_export_report_sha256": "5abd4cb70f0c2282caf526ba137a5dc712df5288afd3dffb4c3538cb5e752545",
+  "export_quality": "warning",
+  "origins": {
+    "modelo_final_original_mm.ply": {
+      "source": "trabajos/ubo3_20260919_131506/resultado_final/modelo_final_original_mm.ply",
+      "sha256": "6b017c25f20b6fbdc0b3b6c970898677f4b5d9c153451d6217decd5efaea7339"
+    },
+    "modelo_pre_pulido_mm.ply": {
+      "source": "trabajos/ubo3_20260919_131506/resultado_final/modelo_pre_pulido_mm.ply",
+      "sha256": "3d7f61c77fa87a45b0b465731749cf476d16fdec61cf1332d9e1b6edf5548002"
+    },
+    "preview_validacion.png": {
+      "source": "trabajos/ubo3_20260919_131506/resultado_final/preview_validacion.png",
+      "sha256": "50e23cf5b355e3605e31fed99736d59349d62ba0e47a6858473e1a739cfa5737"
+    },
+    "captura_izquierda.png": {
+      "source": "trabajos/ubo3_20260919_131506/capturas/S01/izquierda/OBJ01_UBO3_S01_V001_A0000_L.png",
+      "sha256": "0fd8918d285b5c8d6a78574271e1914d7725ebf36de252f199b60250aa6bfc25"
+    },
+    "captura_derecha.png": {
+      "source": "trabajos/ubo3_20260919_131506/capturas/S01/derecha/OBJ01_UBO3_S01_V001_A0000_R.png",
+      "sha256": "c901fc41bf721b1074774d2bf6ac47be9230f03f77c12dc30c819741f8bdd8ff"
+    }
+  },
+  "validation_transformation": "Solo rutas absolutas anonimizadas; métricas y advertencias conservadas.",
+  "scope": "Muestra histórica ilustrativa. No es una campaña completa ni una validación dimensional externa.",
+  "public_name": "cubo3",
+  "physical_reference_mm": {
+    "fondo": 94,
+    "ancho": 95,
+    "alto": 95
+  },
+  "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
+  "dimensional_comparison_performed": true,
+  "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+}

@@ -1,23 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-PASO 17 V1.8 — VALIDACIÓN FINAL GEOMÉTRICA + TOPOLÓGICA
-
-Criterios de validación:
-- conserva el diagnóstico raw de Open3D;
-- consume la clasificación explícita del paso 16 V1.4;
-- solo una intersección transversal/coplanar real o un caso ambiguo
-  bloquean la validación;
-- un contacto puntual coincidente queda documentado como warning,
-  no como auto-intersección física transversal.
-- el gate mesh->cloud se adapta al espaciado real de muestreo, pero conserva
-  un límite máximo absoluto de seguridad.
-- mesh->cloud conserva un umbral duro de seguridad: la continuidad o una
-  topología limpia no pueden sustituir evidencia observacional local.
-
-No se fuerza watertight.
-No se calcula volumen en una superficie abierta o con contactos coincidentes.
-"""
+"""Valida fidelidad a la nube, conectividad, bordes e intersecciones de la malla final."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -30,6 +13,7 @@ _configurar_recursos(__file__)
 
 import argparse
 import json
+from utilidades_referencias import sha256_file
 from collections import defaultdict
 from pathlib import Path
 
@@ -632,6 +616,7 @@ def main():
     cloud_path = cloud_dir / "nube_regularizada_general.npz"
     mesh_path = mesh_dir / "malla_final_topologica.ply"
     intersection_path = intersection_dir / "resumen_16_validacion_intersecciones.json"
+    validated_mesh_sha256 = sha256_file(mesh_path)
 
     if not cloud_path.is_file():
         raise FileNotFoundError(cloud_path)
@@ -893,9 +878,7 @@ def main():
     reject = []
     warning = []
 
-    # ------------------------------------------------------------------
     # Fidelidad geométrica
-    # ------------------------------------------------------------------
     if coverage < float(args.reject_coverage):
         reject.append(f"Cobertura insuficiente: {coverage:.2%}.")
     elif coverage < float(args.warning_coverage):
@@ -906,9 +889,7 @@ def main():
     elif c2m_stats["p90"] > float(args.warning_cloud_mesh_p90_mm):
         warning.append(f"P90 cloud->mesh: " f"{c2m_stats['p90']:.3f} mm.")
 
-    # La decisión mesh->cloud se difiere hasta comprobar coherencia global.
-    # Un P90 alto puede corresponder a una zona legítimamente interpolada:
-    # por sí solo no demuestra que la superficie sea falsa.
+    # Evaluar mesh->cloud junto con cobertura y coherencia global de la superficie.
     mesh_cloud_exceeds_reject = bool(m2c_stats["p90"] > reject_mesh_cloud_p90_mm)
     mesh_cloud_exceeds_warning = bool(m2c_stats["p90"] > warning_mesh_cloud_p90_mm)
 
@@ -917,9 +898,7 @@ def main():
     elif max_bbox_expansion > float(args.warning_bbox_expansion_ratio):
         warning.append("Expansión moderada de bounding box: " f"{max_bbox_expansion:.3f}.")
 
-    # Una malla puede reproducir fielmente una nube contaminada. Por eso se
-    # contrasta también con el núcleo respaldado por varias vistas y se mide
-    # cuánto amplían la envolvente las observaciones de menor soporte.
+    # Contrastar con el núcleo multivista para detectar expansión por observaciones débiles.
     if strong_core_available:
         if strong_coverage < float(args.reject_coverage):
             reject.append(
@@ -958,9 +937,7 @@ def main():
             "el núcleo de evidencia independiente/held-out configurado."
         )
 
-    # ------------------------------------------------------------------
     # Topología estructural
-    # ------------------------------------------------------------------
     if topo.get("edge_manifold_allow_boundary") is not True:
         reject.append("La malla no es edge-manifold.")
 
@@ -973,9 +950,7 @@ def main():
     if topo.get("non_manifold_vertex_count") not in (0, None):
         reject.append("Quedan vértices non-manifold.")
 
-    # ------------------------------------------------------------------
     # Intersecciones semánticas del paso 16 V1.4.
-    # ------------------------------------------------------------------
     true_intersections = int(intersection_info["true_self_intersection_pairs"])
     ambiguous = int(intersection_info["ambiguous_intersection_pairs"])
     contacts = int(intersection_info["coincident_contact_pairs"])
@@ -994,9 +969,7 @@ def main():
             "geométrico coincidente; no son cruces transversales."
         )
 
-    # ------------------------------------------------------------------
     # Fragmentación
-    # ------------------------------------------------------------------
     largest_area = components["largest_area_ratio"]
 
     if largest_area is not None and largest_area < float(args.reject_largest_component_area_ratio):
@@ -1008,9 +981,7 @@ def main():
             "Componentes secundarias relevantes: principal " f"{largest_area:.2%} del área."
         )
 
-    # ------------------------------------------------------------------
     # Aperturas
-    # ------------------------------------------------------------------
     boundary_ratio = float(boundaries["boundary_edge_ratio"])
 
     if boundary_ratio > float(args.reject_boundary_edge_ratio):
@@ -1020,12 +991,7 @@ def main():
     elif boundary_ratio > float(args.warning_boundary_edge_ratio):
         warning.append("Superficie abierta: " f"{boundary_ratio:.2%} de aristas de borde.")
 
-    # ------------------------------------------------------------------
-    # Coherencia de superficies interpoladas
-    # ------------------------------------------------------------------
-    # mesh->cloud mide distancia a muestras discretas, no falsedad geométrica.
-    # Por eso un P90 alto solo bloquea cuando también falla alguna evidencia
-    # independiente de continuidad, cobertura, envolvente o topología.
+    # Evaluar distancia malla-nube junto con continuidad, cobertura, envolvente y topología.
     if cloud_robust_extent is not None:
         reference_extent = float(np.max(cloud_robust_extent))
     else:
@@ -1134,6 +1100,7 @@ def main():
         ),
         "object": obj,
         "quality": quality,
+        "validated_mesh_sha256": validated_mesh_sha256,
         "reject_reasons": reject,
         "warning_reasons": warning,
         "shape_specific_assumptions": False,
@@ -1169,8 +1136,7 @@ def main():
                 },
                 "criteria": coherent_interpolation_criteria,
                 "policy": (
-                    "mesh_to_cloud_p90_never_rejects_by_itself_when_all_"
-                    "independent_coherence_checks_pass"
+                    "mesh_to_cloud_p90_above_reject_threshold_always_rejects"
                 ),
             },
             "cloud_bbox_extent_mm": (cloud_extent.astype(float).tolist()),
@@ -1256,7 +1222,7 @@ def main():
             "strong_multiview_core_checked_independently": True,
             "raw_pose_count_is_not_strong_core_evidence": True,
             "weak_observation_envelope_is_shape_agnostic": True,
-            "coherent_connected_interpolation_is_not_rejected_by_" "mesh_cloud_p90_alone": True,
+            "mesh_cloud_p90_reject_threshold_is_mandatory": True,
         },
     }
 
@@ -1264,6 +1230,8 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
 
     report_path = output / "resumen_17_validacion_modelo.json"
+    if sha256_file(mesh_path) != validated_mesh_sha256:
+        raise RuntimeError("La malla cambió durante su validación; repita el paso 17.")
     report_path.write_text(
         json.dumps(
             report,

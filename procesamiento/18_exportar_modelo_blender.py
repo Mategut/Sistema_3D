@@ -1,57 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""
-PASO 18 V1.4 — EXPORTACIÓN FINAL DEL MODELO PARA BLENDER
-
-Objetivo
---------
-Cerrar el pipeline científico después de paso 17 generando una carpeta
-resultado_final fácil de usar, sin modificar la geometría validada.
-
-Entradas
---------
-- Malla seleccionada por el paso 13, limpiada por el paso 14, pulida por el paso 15 y validada:
-    malla_final_topologica.ply
-- Validación final del paso 17 V1.4:
-    resumen_17_validacion_modelo.json
-
-Política
---------
-- quality=accepted  -> exportar
-- quality=warning   -> exportar y documentar advertencias
-- quality=rejected  -> NO exportar como modelo final
-
-Salidas
--------
-resultado_final/
-    modelo_final.obj                 # Blender-ready: metros, Z-up
-    modelo_final.mtl
-    modelo_final_metric_mm.obj       # coordenadas científicas originales, mm
-    modelo_final_original_mm.ply     # copia exacta del PLY validado
-    README_IMPORTAR_EN_BLENDER.txt
-    resumen_exportacion_18.json
-    preview_validacion.png           # si existe
-
-Además:
-reconstruccion/multisesion/18_exportacion_modelo/
-    resumen_18_exportacion_modelo.json
-
-Importante
-----------
-OBJ no define unidades formalmente. Para evitar ambigüedad:
-- modelo_final.obj se transforma a metros y a sistema Z-up de Blender.
-- modelo_final_metric_mm.obj conserva exactamente el marco científico
-  previo: coordenadas en milímetros y ejes originales.
-
-Transformación Blender:
-    X_blender =  X_camera * 0.001
-    Y_blender = -Z_camera * 0.001
-    Z_blender =  Y_camera * 0.001
-
-La matriz de rotación tiene determinante +1, por lo que preserva la
-orientación de las caras.
-"""
+"""Exporta modelos validados: OBJ en metros y Z-up para Blender; OBJ y PLY en mm
+con los ejes originales. Los resultados rechazados no se exportan como finales."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
@@ -67,6 +18,7 @@ import json
 import math
 import shutil
 import struct
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Tuple
@@ -196,6 +148,36 @@ def atomic_json(path: Path, payload: dict) -> None:
         encoding="utf-8",
     )
     tmp.replace(path)
+
+
+def recover_publication(root: Path, final_dir: Path) -> None:
+    """Recupera una transacción interrumpida, sin eliminar entregas ambiguas."""
+    journal = root / (final_dir.name + "_publicacion.json")
+    if not journal.exists():
+        return
+    state = json.loads(journal.read_text(encoding="utf-8"))
+    backup = (root / state["backup"]).resolve()
+    if backup.parent != (root / "registros_exportacion").resolve():
+        raise ValueError("Ruta de respaldo inválida en registro de publicación.")
+    if final_dir.exists():
+        report = final_dir / "resumen_exportacion_18.json"
+        current = sha256_file(report) if report.is_file() else None
+        if current != state["new_report_sha256"]:
+            if not backup.exists() and state["had_previous"]:
+                # Todavía no se había movido la entrega anterior.
+                journal.unlink()
+                return
+            raise RuntimeError("Publicación incompleta o ambigua; se conservan entrega y respaldo para revisión.")
+        manifest = json.loads(report.read_text(encoding="utf-8"))["files"]
+        for name, record in manifest.items():
+            path = final_dir / name
+            if Path(name).name != name or not path.is_file() or sha256_file(path) != record["sha256"]:
+                raise RuntimeError("La entrega publicada no supera la comprobación de integridad; se conserva el respaldo.")
+    elif backup.exists():
+        backup.replace(final_dir)
+    elif state["had_previous"]:
+        raise RuntimeError("Faltan entrega y respaldo registrados; se requiere revisión manual.")
+    journal.unlink()
 
 
 def read_ply_header(fh: BinaryIO) -> Tuple[str, List[PlyElement]]:
@@ -580,6 +562,7 @@ def main() -> int:
     args = parser().parse_args()
 
     root = Path(args.root).expanduser().resolve()
+    recover_publication(root, root / args.final_folder_name)
     obj = args.object.strip().lower()
 
     multi = root / "reconstruccion" / "multisesion"
@@ -611,6 +594,10 @@ def main() -> int:
 
     validation = json.loads(validation_path.read_text(encoding="utf-8"))
     quality = str(validation.get("quality", "unknown")).strip().lower()
+    if quality not in {"accepted", "warning"} or validation.get("reject_reasons") != []:
+        raise ValueError("La exportación exige quality=accepted/warning y reject_reasons=[].")
+    if validation.get("validated_mesh_sha256") != sha256_file(mesh_path):
+        raise ValueError("La malla no coincide con la validada o falta su huella. Vuelva a ejecutar el paso 17.")
     evidence_validation = validation.get("evidence_contract_validation", {})
     evidence_aware = bool(
         evidence_validation.get("available", False)
@@ -621,10 +608,6 @@ def main() -> int:
             "Paso 18 V1.4 no exporta como resultado final una validación que no "
             "acredite el contrato de evidencia pose-diversa de 11/12/17."
         )
-
-    if quality in {"rejected", "reject", "failed", "error"}:
-        print("paso 18 NO exporta un modelo final porque paso 17 " f"declaró quality={quality}.")
-        return 2
 
     mesh = read_triangle_ply(mesh_path)
     pre_polish_mesh = read_triangle_ply(pre_polish_mesh_path)
@@ -655,19 +638,15 @@ def main() -> int:
     source_max = np.max(mesh.vertices, axis=0)
     source_extent = source_max - source_min
 
-    # ------------------------------------------------------------
     # Exportación científica original: mm, ejes originales.
-    # ------------------------------------------------------------
     scientific_vertices = mesh.vertices.copy()
     scientific_normals = normals.copy()
 
-    # ------------------------------------------------------------
     # Exportación Blender:
     # Xb = X
     # Yb = -Z
     # Zb = Y
     # y mm -> m.
-    # ------------------------------------------------------------
     rotation = np.asarray(
         [
             [1.0, 0.0, 0.0],
@@ -687,9 +666,7 @@ def main() -> int:
     blender_vertices = (scientific_vertices @ rotation.T) * blender_scale
     blender_normals = normalize_normals(scientific_normals @ rotation.T)
 
-    # ------------------------------------------------------------
     # Crear salidas en temporal para evitar resultado_final parcial.
-    # ------------------------------------------------------------
     object_dir = root
     final_dir = object_dir / args.final_folder_name
     temp_final = object_dir / (args.final_folder_name + "_temporal_paso_18")
@@ -867,8 +844,9 @@ def main() -> int:
             "modelo_pre_pulido_metric_mm.obj y\n"
             "modelo_pre_pulido_mm.ply conservan la geometría\n"
             "antes de que el paso 15 V1.8 realizara el pulido final.\n"
-            "Estos archivos permiten diferenciar datos observados de la\n"
-            "geometría inferida para completar el modelo final.\n\n"
+            "Estos archivos permiten comparar los cambios del pulido.\n"
+            "Pueden contener superficies inferidas en etapas anteriores;\n"
+            "no representan exclusivamente geometría observada.\n\n"
             f"CALIDAD paso 17: {quality}\n"
             f"CIERRE: {validation.get('closure_status')}\n\n"
             "Un estado warning NO modifica ni invalida automáticamente la\n"
@@ -878,20 +856,40 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    # Recalcular hashes después del README/reporte.
+    # Un informe no puede contener la huella de sus propios bytes finales.
+    # Su integridad se registra externamente en el resumen de la etapa.
+    report["manifest_policy"] = "payload_only_excludes_export_report"
     report["files"] = {}
     for f in sorted(temp_final.iterdir()):
-        if f.is_file():
+        if f.is_file() and f != export_report_copy:
             report["files"][f.name] = {
                 "size_bytes": int(f.stat().st_size),
                 "sha256": sha256_file(f),
             }
     atomic_json(export_report_copy, report)
 
-    # Publicación atómica a nivel de carpeta.
-    if final_dir.exists():
-        shutil.rmtree(final_dir)
-    temp_final.replace(final_dir)
+    if sha256_file(ply_copy) != validation["validated_mesh_sha256"]:
+        raise ValueError("La malla cambió durante la exportación. Vuelva a ejecutar el paso 17.")
+
+    # Conservar la exportación anterior y recuperarla si falla la publicación.
+    backup = root / "registros_exportacion" / f"resultado_anterior_{time.time_ns()}"
+    journal = root / (final_dir.name + "_publicacion.json")
+    atomic_json(journal, {"backup": backup.relative_to(root).as_posix(),
+                          "had_previous": final_dir.exists(),
+                          "new_report_sha256": sha256_file(export_report_copy)})
+    moved = False
+    try:
+        if final_dir.exists():
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            final_dir.replace(backup)
+            moved = True
+        temp_final.replace(final_dir)
+    except OSError:
+        if moved and not final_dir.exists():
+            backup.replace(final_dir)
+            journal.unlink()
+        raise
+    recover_publication(root, final_dir)
 
     # Resumen del paso dentro de multisesion para el checkpoint.
     phase_dir = multi / args.output_name
@@ -904,6 +902,7 @@ def main() -> int:
     final_pre_polish_ply = final_dir / "modelo_pre_pulido_mm.ply"
 
     phase_report = dict(report)
+    phase_report["export_report_sha256"] = sha256_file(final_dir / export_report_copy.name)
     phase_report["result_directory"] = str(final_dir)
     phase_report["outputs"] = {
         "blender_obj": str(final_obj),

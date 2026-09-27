@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "source": "Medidas proporcionadas por el responsable del proyecto en la conversación",
+  "method": "Regla",
+  "precision": "Aproximada; resolución de la regla e incertidumbre no especificadas",
+  "units": "mm",
+  "objects": {
+    "cubo": {
+      "fondo": 94,
+      "ancho": 95,
+      "alto": 95
+    },
+    "cilindro": {
+      "diametro": 43,
+      "altura": 97
+    },
+    "piramide": {
+      "lado_base": 103,
+      "arista_lateral_hasta_punta": 100,
+      "altura_cara": 85
+    }
+  },
+  "scope": "Referencias físicas aproximadas; no constituyen mediciones metrológicas certificadas ni incertidumbres estimadas.",
+  "campaign_assignment": "Confirmada por el responsable: cilindros 1, 2 y 3; cubos 1, 2 y 3 (cubo3 corresponde a ubo3); pirámides 1, 3 y 4. Las referencias se aplican por tipo de objeto.",
+  "geometry_note": "Confirmado por el responsable: base triangular, lado 103 mm, arista lateral 100 mm y altura de cara 85 mm. Los 85 mm no son altura perpendicular al plano de base. La foto identifica segmentos; no se miden sus píxeles ni se impone regularidad."
+}

@@ -1,36 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-PASO 16 V1.5 — VALIDACIÓN GEOMÉTRICA DE AUTO-INTERSECCIONES
-
-No modifica la malla.
-
-Objetivo:
-clasificar los pares que Open3D reporta mediante
-TriangleMesh.get_self_intersecting_triangles() en:
-
-A) contactos geométricos coincidentes:
-   - contacto puntual;
-   - contacto por arista;
-   - adyacencia topológica.
-
-B) auto-intersecciones reales:
-   - cruce transversal;
-   - solape coplanar.
-
-C) ambiguos:
-   - casos numéricamente no resolubles de forma segura.
-
-Solo B o C bloquean paso 17.
-
-Requisitos metodológicos:
-- independiente de la forma del objeto;
-- sin cuboides/planos/Manhattan;
-- sin modificar poses;
-- sin mover puntos;
-- sin añadir/eliminar triángulos;
-- tolerancias derivadas del spacing real de la nube.
-"""
+"""Clasifica contactos coincidentes, cruces y casos ambiguos sin modificar la malla.
+Los cruces y casos ambiguos bloquean la validación posterior."""
 
 from __future__ import annotations
 from utilidades_progreso import operacion
