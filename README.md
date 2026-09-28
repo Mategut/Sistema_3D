@@ -4,11 +4,22 @@ Software de un proyecto de grado para reconstruir objetos mediante dos cámaras 
 
 Cada adquisición se organiza como una **campaña**, con sus capturas, referencias del montaje, resultados e informes de calidad. La configuración habitual utiliza tres sesiones de 25 posiciones: 75 pares estéreo.
 
+## Identificación del proyecto
+
+- **Autor:** Mateo Gutiérrez Mejía.
+- **Trabajo de grado:** *Aplicación de software en Python para reconstrucción tridimensional de bajo costo basada en visión estereoscópica con objeto rotatorio y dos cámaras web*.
+- **Institución:** Universidad Santo Tomás, Facultad de Ingeniería Electrónica, División de Ingenierías, Bogotá D.C.; Grupo de Estudio y Desarrollo en Robótica (GED).
+- **Director:** Billy Wladimir Toro Tovar, Ph.D. **Codirector:** Armando Mateus Rojas, M.Sc.
+- **Referencia documental:** avance de tesis de septiembre de 2026; no implica aprobación ni versión final del documento.
+- **Repositorio:** [Mategut/Sistema_3D](https://github.com/Mategut/Sistema_3D).
+
+La [guía de instalación](documentacion/instalacion_y_uso.md#montaje-de-referencia) resume el montaje y el equipo de cómputo. La tesis desarrolla la fundamentación y discusión académica. Los resultados publicados corresponden a las campañas existentes; la actualización documental no representa una nueva adquisición ni una nueva reconstrucción.
+
 ## Documentación
 
 | Guía | Contenido |
 | --- | --- |
-| [Instalación y uso](documentacion/instalacion_y_uso.md) | Entorno, montaje, captura, comandos y reanudación |
+| [Manual de instalación y uso](documentacion/instalacion_y_uso.md) | Equipo de referencia, montaje, calibración, recorrido por los botones, resultados y reanudación |
 | [Arquitectura y código](documentacion/arquitectura_y_codigo.md) | Responsabilidad de cada script y organización de módulos |
 | [Resultados y validación](documentacion/resultados_y_validacion.md) | Exportaciones, unidades, métricas y relleno |
 | [Rendimiento](documentacion/rendimiento.md) | Procesamiento en CPU y GPU, memoria y almacenamiento |

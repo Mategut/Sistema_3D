@@ -62,7 +62,9 @@ La muestra pública permite inspección; no contiene todas las capturas ni certi
 
 La entrega documental describe instalación, interfaz, arquitectura, parámetros, almacenamiento, resultados, integridad, reproducción y referencias del modelo.
 
-Se incluye una [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) con las referencias aproximadas aportadas. Continúan siendo datos externos necesarios: incertidumbre de medición para cuantificar exactitud y correspondencia individual de las caras y aristas de la pirámide; evidencia experimental adicional para acreditar generalización independiente; enlace o identidad upstream del ONNX para acreditar su procedencia exacta; nombre, título oficial, universidad y decisión de licencia para la citación y licencia del código propio. No se inventan esos datos ni se considera resuelta la validación científica por completar la documentación.
+Se incluye una [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) con las referencias aproximadas aportadas. La autoría, el título y la institución están documentados en el [README principal](../README.md#identificación-del-proyecto); el montaje y el equipo de cómputo declarado, en [instalación y uso](instalacion_y_uso.md#montaje-de-referencia). El autor identifica PINTO Model Zoo como distribuidor del ONNX, sin que se haya comprobado la igualdad binaria con una descarga upstream.
+
+Continúan pendientes la incertidumbre de las referencias físicas y correspondencia individual de segmentos, la evidencia adicional para acreditar generalización independiente, la identificación exacta del motor/controlador y la verificación del binario de origen. El equipo de cómputo ya está identificado en el manual. La decisión de licencia del código propio queda aplazada por indicación del autor. Las campañas publicadas no se han adquirido ni reconstruido de nuevo para esta actualización documental; el avance de tesis contiene resultados anteriores que deberán conciliarse con la selección publicada.
 
 ## Controles de importación y exportación
 

@@ -10,7 +10,9 @@ SHA-256: `ea67a517e61ff381b0b26beec72222f5ba4ef416a251d6e3e1d7224c6f7ba730`.
 
 ## Procedencia y alcance de lo conocido
 
-El responsable del proyecto indica que copió el modelo de GitHub y no recuerda el repositorio exacto. No se conservan URL de descarga, fecha de adquisición, commit, hash upstream, versiones del conversor ni comando de conversión. No se ha demostrado que este binario sea idéntico a una publicación upstream concreta. La huella anterior identifica exclusivamente el archivo local.
+El responsable identifica el método original como CREStereo de MEGVII Research y declara haber utilizado la conversión ONNX distribuida en [PINTO Model Zoo, 284_CREStereo](https://github.com/PINTO0309/PINTO_model_zoo/tree/main/284_CREStereo), con el nombre `crestereo_init_iter10_480x640.onnx`. Esta declaración actualiza la referencia de procedencia; no equivale a una comparación binaria con el archivo publicado por el distribuidor.
+
+PINTO ofrece un [script de descarga para la variante iter10](https://github.com/PINTO0309/PINTO_model_zoo/blob/main/284_CREStereo/download_iter10.sh). No se conservan la fecha de adquisición, el commit o paquete exacto descargado, el hash upstream, las versiones del conversor ni el comando de conversión utilizado. No se ha demostrado que este binario sea idéntico a una publicación upstream concreta. La huella anterior identifica exclusivamente el archivo local; el ONNX no se ha sustituido ni reconvertido al actualizar esta documentación.
 
 Referencias relacionadas, consultadas el 26 de septiembre de 2026:
 
@@ -32,7 +34,7 @@ Las entradas del modelo tienen 640 × 480, aunque la captura y los mapas de rect
 
 [LICENSE](LICENSE) es una copia íntegra de la licencia Apache-2.0 del repositorio original CREStereo; [NOTICE.md](NOTICE.md) documenta su alcance y fuente. No es una licencia concedida por el autor de Sistema 3D ni sustituye la comprobación pendiente de la procedencia del binario. No se atribuye MIT al ONNX.
 
-[CITATION.cff](CITATION.cff) y [referencias.bib](referencias.bib) citan el artículo del método. No representan la autoría de la tesis ni una versión certificada del exportador ONNX. La licencia del código propio y la citación de la tesis necesitan los datos y la decisión de su autor, que no se han proporcionado.
+[CITATION.cff](CITATION.cff) y [referencias.bib](referencias.bib) citan el artículo del método. No representan la autoría de la tesis ni una versión certificada del exportador ONNX. La identificación del proyecto propio está en el [README principal](../README.md#identificación-del-proyecto). La decisión de licencia del código propio queda aplazada por indicación del autor; esta actualización documental no añade ni modifica licencias.
 
 ## Limitaciones
 

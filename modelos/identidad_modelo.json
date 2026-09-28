@@ -40,6 +40,19 @@
       "type": "tensor(float)"
     }
   ],
+  "declared_provenance": {
+    "source": "Declaración del autor del proyecto",
+    "original_method": "CREStereo",
+    "original_organization": "MEGVII Research",
+    "original_repository": "https://github.com/megvii-research/CREStereo",
+    "onnx_distributor": "PINTO Model Zoo",
+    "onnx_distribution_repository": "https://github.com/PINTO0309/PINTO_model_zoo/tree/main/284_CREStereo",
+    "iter10_download_script": "https://github.com/PINTO0309/PINTO_model_zoo/blob/main/284_CREStereo/download_iter10.sh",
+    "declared_filename": "crestereo_init_iter10_480x640.onnx",
+    "upstream_binary_match_verified": false,
+    "acquisition_date": null,
+    "upstream_commit": null
+  },
   "exact_download_source_verified": false,
   "conversion_command_verified": false
 }

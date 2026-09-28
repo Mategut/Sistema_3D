@@ -6,11 +6,22 @@
 
 1. Prepare la calibración estéreo y el fondo vacío correspondientes al montaje.
 2. Pulse **Crear campaña de calibración** en Calibración, o **Calibrar plataforma** en Captura. Ambos preparan el mismo trabajo.
-3. Capture S01, S02 y S03 con el objeto de referencia y ejecute el procesamiento.
+3. Coloque un **cubo como objeto de referencia**, capture S01, S02 y S03 y ejecute el procesamiento.
 4. La ruta de calibración termina en los pasos 07, 08 y 09. Si sus controles se aprueban, la aplicación instala automáticamente la calibración y muestra **Calibración de plataforma instalada y lista para usar**.
 5. Cree una nueva campaña de objeto y reconstruya normalmente.
 
 No necesita escribir un protocolo, preparar un informe externo ni obtener el paso 17 de la campaña de calibración. El paso 17 pertenece a las reconstrucciones de objetos.
+
+## Cubo de referencia y colocación
+
+Utilice un cubo con caras planas y perpendiculares entre sí: el flujo de calibración aplica comprobaciones geométricas de cuboide.
+
+- Capture el fondo vacío antes de colocar el cubo.
+- Apoye una cara completa sobre la plataforma, de forma estable, y compruebe que el cubo permanezca dentro de la vista de ambas cámaras durante toda la vuelta.
+- Mantenga el cubo fijo respecto a la plataforma durante las tres sesiones; no lo levante ni lo reposicione entre ellas.
+- Mantenga fijas las cámaras y la iluminación. Evite superficies brillantes o transparentes que dificulten observar las caras.
+
+Una vez instalada la calibración aprobada por el paso 09, puede retirar el cubo y crear una nueva campaña para reconstruir otro objeto.
 
 ## Qué se comprueba y conserva
 
