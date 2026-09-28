@@ -16,13 +16,13 @@ La aplicación también puede generar `estructura_sistema.json`. Es un archivo l
 
 ## Candidata, referencia instalada y activación
 
-El paso 09 genera una candidata dentro de la campaña de calibración. Superar sus controles internos no implica aprobación independiente ni instalación automática en esta carpeta.
+El paso 09 genera la calibración dentro de la campaña. Si sus controles se aprueban, la aplicación la instala automáticamente en esta carpeta, comprueba su correspondencia estéreo y conserva un respaldo de la referencia anterior.
 
-La acción **Usar candidata para evaluación** permite instalarla para adquirir evidencia. Esa instalación se registra con estado `evaluation_only`. La acción **Activar con informe revisado** exige evidencia revisada y registra `active_independently_validated` en `estado_activacion_plataforma.json`, junto con las huellas correspondientes. Este archivo y las copias de evidencia se crean durante la promoción; pueden no existir en referencias históricas.
+La instalación habitual registra `active_step09_approved` en `estado_activacion_plataforma.json` con la huella correspondiente. **Instalar calibración guardada…** realiza la misma operación sobre un resultado existente. No necesita protocolo ni informe del paso 17. Los estados históricos `evaluation_only` y `active_independently_validated` siguen describiendo sus modalidades de evaluación y revisión; no se reetiquetan automáticamente.
 
 El nombre `calibracion_plataforma.json` indica la referencia instalada, pero por sí solo no demuestra aprobación independiente. Consulte los estados y la evidencia asociada. La validación estructural de los archivos tampoco certifica exactitud dimensional.
 
-El procedimiento completo está en la [guía de validación independiente](../documentacion/validacion_independiente_plataforma.md).
+El procedimiento completo está en la [guía de calibración](../documentacion/validacion_independiente_plataforma.md).
 
 ## Cuándo actualizar las referencias
 

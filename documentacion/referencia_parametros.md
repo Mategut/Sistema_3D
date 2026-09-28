@@ -1329,6 +1329,12 @@ Regenerar: `python herramientas/generar_referencia_parametros.py`.
 | `--expected-baseline-mm` | DEFAULT_EXPECTED_BASELINE_MM | — | False | Baseline físico aproximado del montaje. Usa 0 para desactivar la comprobación. |
 | `--baseline-tolerance-mm` | DEFAULT_BASELINE_TOLERANCE_MM | — | False | — |
 
+## [comparar_dimensiones.py](../herramientas/comparar_dimensiones.py)
+
+| Argumento | Valor declarado | Opciones | Obligatorio | Descripción del script |
+| --- | --- | --- | --- | --- |
+| `--results` | ROOT / 'resultados' | — | False | — |
+
 ## [preparar_resultados_publicos.py](../herramientas/preparar_resultados_publicos.py)
 
 | Argumento | Valor declarado | Opciones | Obligatorio | Descripción del script |
@@ -1341,7 +1347,7 @@ Regenerar: `python herramientas/generar_referencia_parametros.py`.
 | --- | --- | --- | --- | --- |
 | `mode` | sin valor explícito | ['evaluar', 'activar'] | False | — |
 | `--candidate-dir` | sin valor explícito | — | True | resultado_calibracion_plataforma de la campaña de calibración |
-| `--evidence` | sin valor explícito | — | False | Informe de revisión independiente; obligatorio para activar |
+| `--evidence` | sin valor explícito | — | False | Informe independiente opcional; sin él, activar utiliza los controles del paso 09 |
 
 ## [reparar_manifiestos_exportacion.py](../herramientas/reparar_manifiestos_exportacion.py)
 
@@ -1356,6 +1362,7 @@ Regenerar: `python herramientas/generar_referencia_parametros.py`.
 | `--quiet` | sin valor explícito | — | False | Reduce la salida en consola. |
 | `--json` |  | — | False | Guarda el reporte de verificación en JSON. |
 | `--no-install` | sin valor explícito | — | False | Solo verifica; no instala paquetes faltantes. |
+| `--startup` | sin valor explícito | — | False | Permite abrir la interfaz para reparar una calibración ausente o inválida. |
 
 ## [verificar_informe_calibracion.py](../herramientas/verificar_informe_calibracion.py)
 

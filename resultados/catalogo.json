@@ -39,7 +39,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "cilindro2_20260919_132519",
@@ -83,7 +84,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "cilindro3_20260919_132734",
@@ -125,7 +127,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "cubo1_20260919_130526",
@@ -170,7 +173,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "cubo2_20260919_131206",
@@ -215,7 +219,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "ubo3_20260919_131506",
@@ -260,7 +265,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "piramide1_20260920_183454",
@@ -305,7 +311,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "Piramide3_20260922_211146",
@@ -350,7 +357,8 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   },
   {
     "campaign": "piramide4_20260922_175555",
@@ -395,6 +403,7 @@
     },
     "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
     "dimensional_comparison_performed": true,
-    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+    "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+    "dimensional_comparison_status": "complete"
   }
 ]

@@ -4,7 +4,6 @@ Los procesos envían eventos a la cola; únicamente el hilo principal modifica T
 """
 from __future__ import annotations
 
-import json
 import math
 import os
 from pathlib import Path
@@ -14,11 +13,9 @@ import tempfile
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from procesamiento.utilidades_referencias import sha256_file
 from procesamiento.utilidades_estereo import validate_stereo_calibration
 
 CANDIDATE = "calibracion_plataforma_candidata.json"
-SUMMARY = "reconstruccion/multisesion/17_validacion_modelo/resumen_17_validacion_modelo.json"
 
 
 def install_stereo(source, stereo_dir, platform_dir, records_dir):
@@ -108,12 +105,10 @@ class CalibrationToolsMixin:
             button.pack(fill="x", pady=3)
             self._stereo_result_buttons.append(button)
         card(calibration, "2 · Calibración de plataforma",
-             "Genera una candidata, evalúala con campañas nuevas y revisa la evidencia antes de activarla.", [
+             "Crea la campaña, captura las sesiones y procesa. Si el paso 09 aprueba, la calibración se instala automáticamente.", [
                  ("Crear campaña de calibración", self.new_platform_calibration_job),
-                 ("Usar candidata para evaluación…", lambda: self.platform_action(False)),
-                 ("Preparar informe de revisión…", self.evidence_wizard),
-                 ("Activar con informe revisado…", lambda: self.platform_action(True)),
-                 ("Leer protocolo de validación", lambda: self.open_tool_path(self.install_root / "documentacion/validacion_independiente_plataforma.md")),
+                 ("Instalar calibración guardada…", lambda: self.platform_action(True)),
+                 ("Cómo calibrar la plataforma", lambda: self.open_tool_path(self.install_root / "documentacion/validacion_independiente_plataforma.md")),
              ])
         card(diagnostics, "Diagnóstico", "Las comprobaciones se ejecutan en segundo plano. Su salida queda disponible en el registro.", [
             ("Verificar dependencias", lambda: self.run_tool("verificar_dependencias.py", ["--no-install"])),
@@ -216,12 +211,7 @@ class CalibrationToolsMixin:
             messagebox.showerror("Candidata", f"Selecciona el archivo {CANDIDATE} de resultado_calibracion_plataforma.", parent=self.root)
             return
         args = ["activar" if activate else "evaluar", "--candidate-dir", str(candidate.parent)]
-        if activate:
-            evidence = filedialog.askopenfilename(parent=self.root, title="Informe de revisión independiente", filetypes=[("Informe JSON", "*.json")])
-            if not evidence:
-                return
-            args += ["--evidence", evidence]
-        note = ("Se verificará el informe y sus archivos antes de activar la calibración."
+        note = ("Se comprobarán la aprobación del paso 09, su auditoría y la correspondencia estéreo antes de instalar. No necesitas informes adicionales."
                 if activate else "La candidata quedará disponible para nuevas campañas de evaluación. Seguirá pendiente de validación independiente.")
         if messagebox.askyesno("Activar calibración" if activate else "Evaluar candidata", note + "\n\nLa referencia vigente se archivará. Los trabajos existentes conservan sus referencias congeladas.\n\n¿Continuar?", parent=self.root):
             self.run_tool("promover_calibracion_plataforma.py", args)
@@ -288,97 +278,3 @@ class CalibrationToolsMixin:
         if regional:
             args += ["--regional-dir", regional]
         self.run_tool("auditar_evidencia_lr.py", args)
-
-    def evidence_wizard(self):
-        """Recoge declaraciones explícitas; nunca infiere independencia experimental."""
-        if self._busy() or self._closing:
-            return
-        window = tk.Toplevel(self.root)
-        window.title("Preparar informe de revisión independiente")
-        window.transient(self.root)
-        window.grab_set()
-        frame = ttk.Frame(window, padding=14)
-        frame.pack(fill="both", expand=True)
-        frame.columnconfigure(1, weight=1)
-        variables = {key: tk.StringVar() for key in ("candidate", "protocol", "reviewer")}
-        for row, (key, label) in enumerate((("candidate", "Candidata JSON"), ("protocol", "Protocolo experimental"), ("reviewer", "Responsable de revisión"))):
-            ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
-            ttk.Entry(frame, textvariable=variables[key], width=52).grid(row=row, column=1, sticky="ew", padx=8)
-            if key != "reviewer":
-                def choose(k=key):
-                    path = filedialog.askopenfilename(parent=window, title="Selecciona " + k)
-                    if path:
-                        variables[k].set(path)
-                ttk.Button(frame, text="Elegir…", command=choose).grid(row=row, column=2)
-        fixed = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame, text="He revisado que no hubo ajustes de parámetros por objeto", variable=fixed).grid(row=3, column=0, columnspan=3, sticky="w", pady=8)
-        ttk.Label(frame, text="Añade al menos 3 campañas independientes y 2 geometrías no vistas.\nLas declaraciones requieren revisar el experimento y sus advertencias.").grid(row=4, column=0, columnspan=3, sticky="w")
-        records = []
-        listing = tk.Listbox(frame, height=6, width=90)
-        listing.grid(row=5, column=0, columnspan=3, sticky="ew", pady=8)
-        def add():
-            workspace = filedialog.askdirectory(parent=window, title="Campaña de reconstrucción independiente")
-            if not workspace:
-                return
-            dialog = tk.Toplevel(window)
-            dialog.title("Revisión de campaña")
-            dialog.transient(window)
-            dialog.grab_set()
-            content = ttk.Frame(dialog, padding=14)
-            content.pack()
-            ttk.Label(content, text=workspace, wraplength=500).pack()
-            geometry = tk.StringVar()
-            ttk.Label(content, text="Geometría del objeto (usa el mismo nombre para geometrías iguales)").pack(pady=(10, 0))
-            ttk.Entry(content, textvariable=geometry, width=50).pack(fill="x")
-            flags = {}
-            for key, label in (("independent_acquisition", "Capturas adquiridas independientemente"), ("unseen_geometry", "Geometría no utilizada al ajustar la calibración"), ("warnings_reviewed", "He revisado las advertencias del resultado")):
-                flags[key] = tk.BooleanVar(value=False)
-                ttk.Checkbutton(content, text=label, variable=flags[key]).pack(anchor="w", pady=4)
-            def accept():
-                try:
-                    summary = Path(workspace) / SUMMARY
-                    if not geometry.get().strip() or not flags["independent_acquisition"].get():
-                        raise ValueError("Identifica la geometría y confirma la adquisición independiente.")
-                    if any(record["workspace"] == str(Path(workspace).resolve()) for record in records):
-                        raise ValueError("Esta campaña ya está incluida.")
-                    record = {"workspace": str(Path(workspace).resolve()), "geometry": geometry.get().strip(), "validation_sha256": sha256_file(summary), **{key: var.get() for key, var in flags.items()}}
-                    records.append(record)
-                    listing.insert("end", f"{Path(workspace).name} · {record['geometry']} · no vista: {record['unseen_geometry']}")
-                    dialog.destroy()
-                    window.grab_set()
-                except (OSError, ValueError) as exc:
-                    messagebox.showerror("Campaña", str(exc), parent=dialog)
-            def cancel():
-                dialog.destroy()
-                window.grab_set()
-            dialog.protocol("WM_DELETE_WINDOW", cancel)
-            ttk.Button(content, text="Añadir campaña revisada", command=accept).pack(fill="x", pady=8)
-        def remove():
-            selection = listing.curselection()
-            if selection:
-                records.pop(selection[0])
-                listing.delete(selection[0])
-        def save():
-            try:
-                candidate = Path(variables["candidate"].get()).resolve()
-                protocol = Path(variables["protocol"].get()).resolve()
-                reviewer = variables["reviewer"].get().strip()
-                if candidate.name != CANDIDATE or not reviewer or not fixed.get() or len(records) < 3:
-                    raise ValueError("Selecciona la candidata, identifica al responsable, revisa los parámetros y añade al menos 3 campañas.")
-                report = {"schema_version": 1, "calibration_sha256": sha256_file(candidate), "reviewer": reviewer, "fixed_parameters_reviewed": True, "protocol_file": str(protocol), "protocol_sha256": sha256_file(protocol), "campaigns": records}
-                destination = filedialog.asksaveasfilename(parent=window, title="Guardar informe para verificar", defaultextension=".json", initialfile="revision_independiente.json", filetypes=[("JSON", "*.json")])
-                if not destination:
-                    return
-                target = Path(destination).resolve()
-                protected = [candidate, protocol, *(Path(record["workspace"]) / SUMMARY for record in records)]
-                if target in protected or self.system_dir.resolve() in target.parents:
-                    raise ValueError("Guarda el informe en un archivo nuevo, fuera de los recursos activos y de las evidencias seleccionadas.")
-                # Hashing campaigns can take time: validate in a cancellable subprocess.
-                Path(destination).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-                window.destroy()
-                self.run_tool("verificar_informe_calibracion.py", ["--candidate", str(candidate), "--evidence", destination])
-            except (OSError, ValueError) as exc:
-                messagebox.showerror("Informe", str(exc), parent=window)
-        ttk.Button(frame, text="Añadir campaña…", command=add).grid(row=6, column=0, sticky="ew")
-        ttk.Button(frame, text="Quitar seleccionada", command=remove).grid(row=6, column=1, sticky="ew", padx=8)
-        ttk.Button(frame, text="Guardar y verificar informe", command=save).grid(row=6, column=2, sticky="ew")

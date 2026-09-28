@@ -40,5 +40,6 @@
   },
   "physical_reference_method": "Regla; valores aproximados, incertidumbre no especificada.",
   "dimensional_comparison_performed": true,
-  "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
+  "dimensional_comparison_scope": "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json",
+  "dimensional_comparison_status": "complete"
 }

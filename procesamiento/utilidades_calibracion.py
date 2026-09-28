@@ -1,4 +1,4 @@
-"""Promoción explícita de calibraciones respaldadas por revisión independiente.
+"""Instalación de calibraciones aprobadas por el paso 09 o revisión independiente.
 
 Los JSON geométricos permanecen inmutables: su estado de activación y la
 evidencia revisada se guardan aparte para conservar las huellas de campañas.
@@ -113,8 +113,9 @@ def validate_promotion_evidence(candidate: Path, evidence_path: Path) -> dict:
 
 def promote_platform_calibration(local_output: Path, evidence_path: Path | None,
                                  system_dir: Path, records_dir: Path, *,
-                                 evaluation_only: bool = False) -> Path:
-    """Publica una candidata revisada, con copia de evidencia y recuperación ante fallo."""
+                                 evaluation_only: bool = False,
+                                 step09_approved: bool = False) -> Path:
+    """Instala tras controles del paso 09; la revisión independiente es otro modo."""
     local_output, system_dir, records_dir = map(
         lambda p: Path(p).resolve(), (local_output, system_dir, records_dir)
     )
@@ -122,7 +123,15 @@ def promote_platform_calibration(local_output: Path, evidence_path: Path | None,
     calibration = _read(candidate)
     if calibration.get("candidate_quality_passed") is not True:
         raise ValueError("La candidata no supera los controles de calibración.")
-    if evaluation_only:
+    if step09_approved and (evaluation_only or evidence_path is not None):
+        raise ValueError("La instalación por paso 09 no admite otros modos de activación.")
+    if step09_approved:
+        activation = {
+            "schema_version": 1, "status": "active_step09_approved",
+            "calibration_sha256": sha256_file(candidate),
+            "scope": "Calibración operativa aprobada por los controles del paso 09. No acredita validación experimental independiente.",
+        }
+    elif evaluation_only:
         activation = {
             "schema_version": 1, "status": "evaluation_only",
             "calibration_sha256": sha256_file(candidate),
@@ -149,7 +158,7 @@ def promote_platform_calibration(local_output: Path, evidence_path: Path | None,
     try:
         shutil.copytree(local_output, staged)
         shutil.copy2(candidate, staged / "calibracion_plataforma.json")
-        if not evaluation_only:
+        if not evaluation_only and not step09_approved:
             shutil.copy2(evidence_path, staged / "validacion_independiente.json")
             shutil.copy2(activation["protocol_source"], staged / "protocolo_validacion_independiente.txt")
             if sha256_file(staged / "validacion_independiente.json") != activation["evidence_sha256"]:

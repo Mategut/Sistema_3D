@@ -5,7 +5,7 @@
 1. Instale el entorno según [instalación y uso](instalacion_y_uso.md). Ejecute la verificación de dependencias y revise el resultado completo.
 2. Compruebe el montaje de cámaras y plataforma, los índices de cámara y el puerto serie. El firmware corresponde a 2055 pasos distribuidos entre 25 posiciones.
 3. Prepare o importe una calibración estéreo correspondiente a la geometría física actual. Verifique estéreo y capture fondo vacío después de estabilizar enfoque, exposición e iluminación.
-4. Genere una candidata de plataforma. Su instalación para evaluación y su activación revisada son acciones distintas; siga [validación independiente](validacion_independiente_plataforma.md).
+4. Capture y procese la campaña de calibración de plataforma. Al aprobar el paso 09, la aplicación instala el resultado con respaldo: siga la [guía de calibración](validacion_independiente_plataforma.md).
 5. Cree una campaña por objeto, capture las tres sesiones y procese. Mantenga las referencias congeladas; modificar recursos globales no cambia las referencias de un trabajo existente.
 6. Consulte calidad, advertencias, cierre y soporte observacional antes de usar los modelos. Abra los archivos de `resultado_final/` y compruebe las unidades de importación.
 
@@ -62,7 +62,7 @@ La muestra pública permite inspección; no contiene todas las capturas ni certi
 
 La entrega documental describe instalación, interfaz, arquitectura, parámetros, almacenamiento, resultados, integridad, reproducción y referencias del modelo.
 
-Se incluye una [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) con las referencias aproximadas aportadas. Continúan siendo datos externos necesarios: incertidumbre de medición para cuantificar exactitud y correspondencia individual de las caras y aristas de la pirámide; evidencia revisada para activar una candidata; enlace o identidad upstream del ONNX para acreditar su procedencia exacta; nombre, título oficial, universidad y decisión de licencia para la citación y licencia del código propio. No se inventan esos datos ni se considera resuelta la validación científica por completar la documentación.
+Se incluye una [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) con las referencias aproximadas aportadas. Continúan siendo datos externos necesarios: incertidumbre de medición para cuantificar exactitud y correspondencia individual de las caras y aristas de la pirámide; evidencia experimental adicional para acreditar generalización independiente; enlace o identidad upstream del ONNX para acreditar su procedencia exacta; nombre, título oficial, universidad y decisión de licencia para la citación y licencia del código propio. No se inventan esos datos ni se considera resuelta la validación científica por completar la documentación.
 
 ## Controles de importación y exportación
 

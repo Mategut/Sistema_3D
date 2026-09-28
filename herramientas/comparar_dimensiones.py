@@ -21,6 +21,10 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def display(value, signed=False):
+    return "No disponible" if value is None else format(value, "+.2f" if signed else ".2f")
+
+
 def dimensions(vertices, kind):
     """Eje Y vertical del sistema; orientación de base estimada sin referencias reales."""
     y = vertices[:, 1]
@@ -108,15 +112,17 @@ def main(argv=None):
                 raise ValueError(f"Malla inválida: {path}")
             values, diagnostics = dimensions(vertices, kind)
             runs.append({"campaign": name, "variant": variant, "source": path.relative_to(root).as_posix(), "sha256": sha(path), "dimensions_mm": values, "diagnostics": diagnostics})
-            for dimension, value in values.items():
+            for dimension in physical["objects"][kind]:
+                value = values.get(dimension)
                 reference = float(physical["objects"][kind][dimension])
-                difference = value - reference
-                rows.append({"campaign": name, "object": kind, "variant": variant, "dimension": dimension, "reference_mm": reference, "reconstructed_mm": value, "difference_mm": difference, "absolute_difference_mm": abs(difference), "difference_percent": 100 * difference / reference})
+                difference = value - reference if value is not None else None
+                rows.append({"campaign": name, "object": kind, "variant": variant, "dimension": dimension, "reference_mm": reference, "reconstructed_mm": value, "difference_mm": difference, "absolute_difference_mm": abs(difference) if difference is not None else None, "difference_percent": 100 * difference / reference if difference is not None else None, "status": "measured" if value is not None else "not_available", "reason": "" if value is not None else diagnostics.get("reason", "Magnitud no disponible")})
     aggregate = []
     for kind, dimension in sorted({(r["object"], r["dimension"]) for r in rows}):
-        selected = [r for r in rows if r["object"] == kind and r["dimension"] == dimension and r["variant"] == "final"]
+        expected = [r for r in rows if r["object"] == kind and r["dimension"] == dimension and r["variant"] == "final"]
+        selected = [r for r in expected if r["reconstructed_mm"] is not None]
         values = np.array([r["reconstructed_mm"] for r in selected])
-        aggregate.append({"object": kind, "dimension": dimension, "campaigns": len(selected), "mean_mm": float(values.mean()), "sample_std_mm": float(values.std(ddof=1)) if len(values) > 1 else None, "mean_absolute_difference_mm": float(np.mean([r["absolute_difference_mm"] for r in selected]))})
+        aggregate.append({"object": kind, "dimension": dimension, "campaigns": len(selected), "expected_campaigns": len(expected), "mean_mm": float(values.mean()) if len(values) else None, "sample_std_mm": float(values.std(ddof=1)) if len(values) > 1 else None, "mean_absolute_difference_mm": float(np.mean([r["absolute_difference_mm"] for r in selected])) if selected else None})
     with (root / "comparacion_dimensional.csv").open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -126,17 +132,20 @@ def main(argv=None):
     lines = ["# Comparación dimensional exploratoria", "", "Referencias aproximadas tomadas con regla. Los cálculos usan las mallas publicadas sin modificarlas, con idéntico método por geometría y sin ajustar parámetros a las dimensiones reales. Las columnas de discrepancia no son una certificación de exactitud.", "", "## Método y alcance", "", "- Altura de cubo y cilindro: extensión sobre Y, eje vertical del sistema calibrado. Requiere objeto apoyado y alineado con el montaje; no equivale a ajustar un plano de base independiente. El JSON incluye también la extensión entre percentiles 0.5–99.5 como diagnóstico de extremos, sin sustituir la medida principal.", "- Cubo: rectángulo envolvente de área mínima en XZ, corrigiendo el giro horizontal. Lado menor se compara con fondo y mayor con ancho; esa asignación por orden no identifica físicamente las caras. Inclinación y puntos extremos pueden aumentar las dimensiones.", "- Cilindro: ajuste circular robusto en XZ sobre los vértices situados entre el 20 % y el 80 % de la altura. Se guarda el residual radial P95. El ajuste supone eje aproximadamente paralelo a Y y la densidad de vértices influye en la ponderación.", "- Pirámide triangular: plano por SVD en la banda extrema de 2 mm con mayor área horizontal; esquinas por envolvente convexa simplificada al 4 % del perímetro; punta promediada en la banda extrema opuesta. Se guardan los puntos, los tres lados, aristas y alturas de cara, y se comparan sus medias con las referencias aproximadas. No se supone regularidad ni correspondencia individual de caras. Redondeo y banda de punta pueden subestimar medidas. La altura perpendicular al plano y la extensión Y son diagnósticos sin referencia física; los 85 mm corresponden a altura de cara. La fotografía solo identifica segmentos, no aporta medidas por píxeles.", "- Diferencia = reconstruido − referencia. Porcentaje = 100 × diferencia / referencia. La desviación estándar muestral de las tres campañas describe variación de resultados, no incertidumbre de la regla ni independencia experimental acreditada.", "", "## Mallas finales", "", "| Campaña | Magnitud | Regla (mm) | Reconstrucción (mm) | Diferencia (mm) | Diferencia (%) |", "| --- | --- | ---: | ---: | ---: | ---: |"]
     for r in rows:
         if r["variant"] == "final":
-            lines.append(f"| {r['campaign']} | {r['dimension']} | {r['reference_mm']:.1f} | {r['reconstructed_mm']:.2f} | {r['difference_mm']:+.2f} | {r['difference_percent']:+.2f} |")
-    lines += ["", "## Variación de las tres campañas", "", "| Objeto | Magnitud | Media (mm) | Desviación estándar (mm) | Discrepancia absoluta media (mm) |", "| --- | --- | ---: | ---: | ---: |"]
+            lines.append(f"| {r['campaign']} | {r['dimension']} | {r['reference_mm']:.1f} | {display(r['reconstructed_mm'])} | {display(r['difference_mm'], True)} | {display(r['difference_percent'], True)} |")
+    lines += ["", "Las medidas ausentes se muestran como **No disponible** y no participan en las estadísticas. La desviación estándar requiere al menos dos campañas válidas. CSV y JSON conservan el motivo de cada ausencia.", "", "## Variación entre campañas", "", "| Objeto | Magnitud | Campañas válidas/esperadas | Media (mm) | Desviación estándar (mm) | Discrepancia absoluta media (mm) |", "| --- | --- | ---: | ---: | ---: | ---: |"]
     for r in aggregate:
-        lines.append(f"| {r['object']} | {r['dimension']} | {r['mean_mm']:.2f} | {r['sample_std_mm']:.2f} | {r['mean_absolute_difference_mm']:.2f} |")
+        lines.append(f"| {r['object']} | {r['dimension']} | {r['campaigns']}/{r['expected_campaigns']} | {display(r['mean_mm'])} | {display(r['sample_std_mm'])} | {display(r['mean_absolute_difference_mm'])} |")
     lines += ["", "El [CSV](comparacion_dimensional.csv) incluye todas las medidas de las mallas finales y previas al pulido. El [JSON](comparacion_dimensional.json) conserva métodos, diagnósticos y huellas. El modelo previo al pulido puede contener relleno anterior: esta comparación no separa observación de inferencia.", "", "Reproducir: `python herramientas/comparar_dimensiones.py`. No actualiza el estado de aceptación ni activa calibraciones. Las tablas son resultados numéricos del repositorio; su discusión y conclusiones corresponden al documento de tesis."]
     (root / "comparacion_dimensional.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     # Vincular la comparación sin alterar los informes históricos del paso 17.
     catalog = json.loads((root / "catalogo.json").read_text(encoding="utf-8"))
     for record in catalog:
         record["physical_reference_mm"] = physical["objects"][record["public_name"].rstrip("0123456789")]
-        record["dimensional_comparison_performed"] = True
+        campaign_rows = [row for row in rows if row["campaign"] == record["public_name"]]
+        measured = sum(row["reconstructed_mm"] is not None for row in campaign_rows)
+        record["dimensional_comparison_performed"] = measured > 0
+        record["dimensional_comparison_status"] = "complete" if measured == len(campaign_rows) and measured else "partial" if measured else "not_available"
         record["dimensional_comparison_scope"] = "Exploratoria; magnitudes y limitaciones en comparacion_dimensional.json"
         (root / record["public_name"] / "procedencia.json").write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         path = root / record["public_name"] / "README.md"

@@ -24,6 +24,17 @@ def validate_stereo_calibration(directory):
                 array = maps[key]
                 if array.shape != (1080, 1920) or array.dtype not in (np.float32, np.float64) or not np.isfinite(array).all():
                     raise ValueError(f"Mapa {key} incompatible o no finito.")
+            for prefix in ("map1", "map2"):
+                x, y = maps[prefix + "x"], maps[prefix + "y"]
+                valid = (x >= 0) & (x <= 1919) & (y >= 0) & (y <= 1079)
+                if not np.any(valid):
+                    raise ValueError(f"{prefix}: ningún píxel remite al interior de la imagen.")
+                points = np.column_stack((x[valid], y[valid]))[::64].astype(np.float64)
+                if len(points) < 3:
+                    raise ValueError(f"{prefix}: soporte insuficiente para rectificación bidimensional.")
+                spread = np.linalg.eigvalsh(np.cov(points, rowvar=False))
+                if spread[0] <= max(1e-8, spread[-1] * 1e-10):
+                    raise ValueError(f"{prefix}: mapa degenerado, colapsado en un punto o una línea.")
         fs = cv2.FileStorage(str(directory / "stereo_initial.yaml"), cv2.FILE_STORAGE_READ)
         try:
             if not fs.isOpened():

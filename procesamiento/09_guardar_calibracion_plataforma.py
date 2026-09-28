@@ -746,6 +746,7 @@ def main():
             "Cambiar el sentido físico de giro sin actualizar direction_sign.",
         ],
         "promotion_requirements": {
+            "scope": "optional_independent_review_not_required_for_step09_installation",
             "minimum_independent_campaigns": 3,
             "minimum_distinct_unseen_geometries": 2,
             "same_frozen_calibration_required": True,

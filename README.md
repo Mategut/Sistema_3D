@@ -48,7 +48,7 @@ Después:
 
 `VERIFICAR_SISTEMA.bat` intenta instalar las dependencias faltantes. La opción `--no-install` permite comprobarlas sin instalar. El lanzador busca preferentemente el entorno Conda `tesis`; para usar el intérprete activo puede ejecutar `python Sistema_3D.py`.
 
-La interfaz organiza las acciones en **Captura**, **Calibración** y **Herramientas**. Permite crear y verificar la calibración estéreo, evaluar candidatas de plataforma, preparar su informe independiente y activarlas con evidencia revisada sin abrir PowerShell. Incluye diagnósticos, registros y selección de motor y almacenamiento. Consulte el [flujo de calibración en la interfaz](documentacion/instalacion_y_uso.md#calibraciones-desde-la-interfaz).
+La interfaz organiza las acciones en **Captura**, **Calibración** y **Herramientas**. Permite crear y verificar la calibración estéreo e instalar automáticamente la calibración de plataforma al aprobar el paso 09, sin informes externos ni PowerShell. Incluye diagnósticos, registros y selección de motor y almacenamiento. Consulte el [flujo de calibración en la interfaz](documentacion/instalacion_y_uso.md#calibraciones-desde-la-interfaz).
 
 ## Organización
 
@@ -101,4 +101,4 @@ La superficie puede incorporar regiones estimadas y conservar la base inferior a
 
 El modo predeterminado `reducido` conserva capturas, referencias, resultados finales, informes y evidencia geométrica de validación y relleno; retira otros intermedios pesados al finalizar. El modo `completo` conserva también los productos de cada etapa.
 
-La calibración de plataforma nueva queda como candidata. Su instalación para evaluación y su activación con evidencia revisada son operaciones explícitas: [validación independiente de plataforma](documentacion/validacion_independiente_plataforma.md).
+Al terminar correctamente el paso 09 desde la aplicación, se instala la calibración de plataforma y se respalda la anterior. Consulte el [flujo de calibración de plataforma](documentacion/validacion_independiente_plataforma.md).

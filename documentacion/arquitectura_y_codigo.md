@@ -23,7 +23,7 @@ La ruta normal usa la calibración de plataforma existente. La ruta de calibraci
 | Archivo | Responsabilidad |
 | --- | --- |
 | [Sistema_3D.py](../Sistema_3D.py) | Interfaz, cámaras, comunicación serie, campañas y lanzamiento del procesamiento |
-| [interfaz_herramientas.py](../interfaz_herramientas.py) | Pestañas de calibración y diagnóstico, formularios, procesos en segundo plano e importación con respaldo |
+| [interfaz_herramientas.py](../interfaz_herramientas.py) | Pestañas de calibración y diagnóstico, procesos en segundo plano e instalación de resultados guardados con respaldo |
 | [INICIAR_SISTEMA_3D.bat](../INICIAR_SISTEMA_3D.bat) | Selección del entorno y arranque de la aplicación |
 | [VERIFICAR_SISTEMA.bat](../VERIFICAR_SISTEMA.bat) | Verificación del entorno y calibración disponible |
 | [Firmware](../firmware/control_plataforma_2055_pasos/control_plataforma_2055_pasos.ino) | Movimientos, contadores y protocolo de la plataforma |
@@ -40,7 +40,7 @@ Se utilizan al preparar o modificar el montaje, y durante la evaluación de una 
 | --- | --- |
 | [calibrar_estereo_checkerboard.py](../herramientas/calibrar_estereo_checkerboard.py) | Captura del patrón y calibración estéreo |
 | [verificar_calibracion_estereo.py](../herramientas/verificar_calibracion_estereo.py) | Comprobación de los recursos de calibración |
-| [promover_calibracion_plataforma.py](../herramientas/promover_calibracion_plataforma.py) | Instalación explícita para evaluación o activación con revisión independiente |
+| [promover_calibracion_plataforma.py](../herramientas/promover_calibracion_plataforma.py) | Instalación de una calibración aprobada por el paso 09; revisión independiente opcional por consola |
 | [verificar_informe_calibracion.py](../herramientas/verificar_informe_calibracion.py) | Verificación independiente del informe sin activar ni sustituir referencias |
 
 ### Diagnóstico del entorno y de la evidencia
@@ -106,7 +106,7 @@ Los nombres de los archivos enlazan a su implementación. Cada etapa tiene argum
 | [utilidades_multisesion.py](../procesamiento/utilidades_multisesion.py) | Organización y lectura de datos entre sesiones |
 | [utilidades_progreso.py](../procesamiento/utilidades_progreso.py) | Comunicación de avance |
 | [utilidades_referencias.py](../procesamiento/utilidades_referencias.py) | Copia, resolución y trazabilidad de referencias de campaña |
-| [utilidades_calibracion.py](../procesamiento/utilidades_calibracion.py) | Verificación de evidencia independiente y promoción con respaldo y recuperación |
+| [utilidades_calibracion.py](../procesamiento/utilidades_calibracion.py) | Instalación automática desde la aplicación tras aprobar el paso 09, con respaldo y recuperación; revisión independiente opcional por consola |
 | [utilidades_estereo.py](../procesamiento/utilidades_estereo.py) | Validación estructural compartida de informes, mapas y matrices estéreo antes de instalar o procesar referencias |
 | [utilidades_rendimiento.py](../procesamiento/utilidades_rendimiento.py) | Recursos de CPU, procesos, memoria compartida y límites de concurrencia |
 | [utilidades_telemetria.py](../procesamiento/utilidades_telemetria.py) | Medición de tiempos y recursos durante la ejecución |

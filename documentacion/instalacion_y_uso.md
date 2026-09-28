@@ -56,7 +56,7 @@ En **Calibración**:
 2. En la ventana del tablero, **espacio** guarda un par, **Q** termina la captura y calcula, y **R** reinicia los pares de esa captura. **Parar**, en la ventana principal, cancela la operación. Los resultados se guardan en una carpeta nueva dentro de `trabajos/`.
 3. **Importar calibración estéreo** instala el resultado seleccionado tras revisar su reporte. Conserva las referencias anteriores en `registros/` e invalida la plataforma anterior. **Verificar estéreo y fondo** comprueba los recursos activos sin modificarlos.
 4. **Crear campaña de calibración** prepara la plataforma; continúe con los controles de captura y procesamiento de la pestaña Captura.
-5. **Usar candidata para evaluación**, **Preparar informe de revisión** y **Activar con informe revisado** completan el [flujo de validación independiente](validacion_independiente_plataforma.md) sin PowerShell.
+5. Al aprobar el paso 09, la aplicación instala automáticamente la calibración y respalda la anterior. **Instalar calibración guardada…** permite instalar un resultado existente con los mismos controles. No se solicita protocolo ni informe adicional: consulte el [flujo de calibración](validacion_independiente_plataforma.md).
 
 En **Herramientas** puede verificar dependencias sin instalar paquetes, auditar archivos `*_lr_state.npy`, consultar el registro y seleccionar motor (`auto`, `cuda`, `directml`, `cpu`) y conservación (`reducido`, `completo`). Los motores explícitos deben estar disponibles. El modo completo conserva los intermedios necesarios para auditorías detalladas; seleccionar completo después de una compactación no recupera archivos borrados: debe volver a procesar para generarlos.
 
@@ -75,7 +75,7 @@ python herramientas/calibrar_estereo_checkerboard.py --help
 python herramientas/verificar_calibracion_estereo.py
 ```
 
-La calibración de plataforma requiere un objeto de referencia y verificaciones geométricas; no equivale a reconstruir cualquier objeto. En el flujo de la aplicación, el paso 09 guarda primero el resultado en `resultado_calibracion_plataforma/` de la campaña. Completar el paso 09 genera una candidata y conserva la referencia activa anterior. Para instalarla para evaluación o activarla con evidencia revisada, siga el [procedimiento de validación independiente](validacion_independiente_plataforma.md).
+La calibración de plataforma requiere un objeto de referencia y verificaciones geométricas; no equivale a reconstruir cualquier objeto. En el flujo de la aplicación, el paso 09 guarda primero el resultado en `resultado_calibracion_plataforma/` de la campaña. Si el paso 09 aprueba sus controles, la aplicación instala automáticamente el resultado y conserva un respaldo de la referencia anterior. No requiere protocolo ni informe del paso 17. Consulte el [flujo de calibración](validacion_independiente_plataforma.md).
 
 ## Captura
 

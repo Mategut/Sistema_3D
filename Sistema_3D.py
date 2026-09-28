@@ -714,15 +714,15 @@ class CaptureApp(CalibrationToolsMixin):
                 self._pipeline_progress.stopped - self._pipeline_progress.started
             )
             if self.job_mode == "calibrar-plataforma":
-                self.status_var.set("Calibración candidata generada; validación independiente pendiente.")
+                self.status_var.set("Calibración de plataforma instalada y lista para usar.")
                 self.progress_var.set(
-                    f"Tiempo total: {elapsed} · La referencia del sistema se conserva."
+                    f"Tiempo total: {elapsed} · Referencia actualizada; respaldo anterior conservado."
                 )
                 messagebox.showinfo(
-                    "Calibración candidata",
-                    f"Candidata guardada:\n{message.get('platform_calibration_candidate')}\n\n"
-                    "Abre la pestaña Calibración para evaluar la candidata, preparar "
-                    "el informe independiente y activarla con evidencia revisada.",
+                    "Calibración completada",
+                    f"Calibración instalada:\n{message.get('platform_calibration_installed')}\n\n"
+                    "El paso 09 superó sus controles. Ya puedes crear un nuevo objeto y reconstruirlo. "
+                    "La calibración anterior se conserva en registros.",
                     parent=self.root,
                 )
             else:
@@ -1059,12 +1059,12 @@ class CaptureApp(CalibrationToolsMixin):
         """Devuelve el firmware de referencia del montaje si está disponible."""
         return self.install_root / "firmware" / "control_plataforma_2055_pasos" / "control_plataforma_2055_pasos.ino"
 
-    def _promote_platform_calibration_from_job(self, local_output: Path, evidence_path: Path) -> Path:
-        """Activa únicamente una candidata con informe independiente verificado."""
+    def _promote_platform_calibration_from_job(self, local_output: Path) -> Path:
+        """Instala el resultado aprobado del paso 09 y respalda la referencia anterior."""
         from procesamiento.utilidades_calibracion import promote_platform_calibration
 
         return promote_platform_calibration(
-            local_output, evidence_path, self.system_dir, self.records_dir
+            local_output, None, self.system_dir, self.records_dir, step09_approved=True
         )
 
     def _capture_reference_config(self):
@@ -1190,16 +1190,20 @@ class CaptureApp(CalibrationToolsMixin):
             self.stereo_status_var.set("✗ no instalada / no aceptada")
         platform_label = "✗ aún no calibrada"
         if platform_ok:
-            platform_label = "Candidata operativa · validación pendiente"
+            platform_label = "✓ disponible · referencia del montaje"
             try:
                 from procesamiento.utilidades_referencias import sha256_file
                 activation = json.loads(
                     (self.platform_dir / "estado_activacion_plataforma.json").read_text(encoding="utf-8")
                 )
                 if (isinstance(activation, dict)
-                        and activation.get("status") == "active_independently_validated"
                         and activation.get("calibration_sha256") == sha256_file(self._platform_calibration_path())):
-                    platform_label = "✓ activa · revisión independiente registrada"
+                    if activation.get("status") == "active_independently_validated":
+                        platform_label = "✓ activa · revisión independiente registrada"
+                    elif activation.get("status") == "active_step09_approved":
+                        platform_label = "✓ lista · paso 09 aprobado"
+                    elif activation.get("status") == "evaluation_only":
+                        platform_label = "✓ disponible para evaluación"
             except (OSError, ValueError, TypeError):
                 pass
         self.platform_status_var.set(platform_label)
@@ -1865,11 +1869,13 @@ class CaptureApp(CalibrationToolsMixin):
 
             if self.job_mode == "calibrar-plataforma":
                 local_calibration = self.root_dir / "resultado_calibracion_plataforma"
-                # El éxito del paso 09 acredita una candidata, no su generalización.
+                # Instalar solo después del éxito del pipeline y de verificar el paso 09.
+                installed = self._promote_platform_calibration_from_job(local_calibration)
+                result["platform_calibration_installed"] = str(installed)
                 result["platform_calibration_candidate"] = str(
                     local_calibration / "calibracion_plataforma_candidata.json"
                 )
-                result["platform_calibration_status"] = "pending_independent_validation"
+                result["platform_calibration_status"] = "active_step09_approved"
                 result["platform_calibration_campaign_copy"] = str(local_calibration)
 
             else:
