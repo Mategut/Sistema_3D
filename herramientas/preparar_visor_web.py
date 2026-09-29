@@ -18,6 +18,7 @@ def main():
     if output.exists():
         shutil.rmtree(output)
     shutil.copytree(ROOT / "visor", output)
+    shutil.copy2(ROOT / "LICENSE", output / "LICENSE")
     results = output / "resultados"
     results.mkdir()
     for name in ("catalogo.json", "comparacion_dimensional.json"):

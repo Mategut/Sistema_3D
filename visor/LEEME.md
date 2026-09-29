@@ -32,6 +32,6 @@ Los siguientes cambios en el visor o en resultados publican de nuevo automática
 
 ## Dependencia del visor
 
-Three.js **r180 / 0.180.0**, distribuido localmente en `vendor/` desde el repositorio oficial https://github.com/mrdoob/three.js/tree/r180. Incluye `three.module.js`, `three.core.js`, `OrbitControls.js`, `PLYLoader.js` y su licencia MIT en `vendor/LICENSE`. No depende de un CDN en tiempo de ejecución. Esta atribución corresponde a la biblioteca, no establece una licencia para el proyecto de tesis.
+Three.js **r180 / 0.180.0**, distribuido localmente en `vendor/` desde el repositorio oficial https://github.com/mrdoob/three.js/tree/r180. Incluye `three.module.js`, `three.core.js`, `OrbitControls.js`, `PLYLoader.js` y su licencia MIT en `vendor/LICENSE`. No depende de un CDN en tiempo de ejecución. Esta atribución corresponde a la biblioteca. El código propio del visor y su documentación se distribuyen bajo la [licencia MIT del proyecto](../LICENSE); las licencias y avisos de Three.js se conservan por separado.
 
 El catálogo y las métricas se leen directamente de los JSON existentes. Para añadir campañas, actualizar primero la publicación científica en `resultados/` y luego regenerar el sitio.

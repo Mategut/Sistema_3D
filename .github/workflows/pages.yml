@@ -2,7 +2,7 @@ name: Publicar visor 3D
 on:
   push:
     branches: [main]
-    paths: ['visor/**', 'resultados/**', 'herramientas/preparar_visor_web.py', '.github/workflows/pages.yml']
+    paths: ['visor/**', 'resultados/**', 'LICENSE', 'herramientas/preparar_visor_web.py', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:
   contents: read

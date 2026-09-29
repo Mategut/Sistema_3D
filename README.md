@@ -119,3 +119,11 @@ La superficie puede incorporar regiones estimadas y conservar la base inferior a
 El modo predeterminado `reducido` conserva capturas, referencias, resultados finales, informes y evidencia geométrica de validación y relleno; retira otros intermedios pesados al finalizar. El modo `completo` conserva también los productos de cada etapa.
 
 Al terminar correctamente el paso 09 desde la aplicación, se instala la calibración de plataforma y se respalda la anterior. Consulte el [flujo de calibración de plataforma](documentacion/validacion_independiente_plataforma.md).
+
+## Licencia
+
+El código propio de Sistema 3D y su documentación de software se distribuyen bajo la [licencia MIT](LICENSE), con copyright © 2026 Mateo Gutiérrez Mejía. Permite utilizar, modificar y redistribuir el software, incluso comercialmente, conservando el aviso de autoría y la licencia. Se proporciona sin garantía.
+
+Los componentes de terceros conservan sus licencias y atribuciones: consulte los [avisos de CREStereo y del modelo ONNX](modelos/NOTICE.md) y la [licencia de Three.js](visor/vendor/LICENSE). La licencia MIT del proyecto no sustituye esas condiciones ni atribuye MIT al modelo ONNX.
+
+Esta licencia se refiere al software y su documentación asociada; no concede una licencia sobre el documento académico de tesis, logotipos institucionales, capturas, conjuntos de datos o modelos 3D de resultados. Su disponibilidad pública no implica que se les aplique MIT.

@@ -34,7 +34,7 @@ Las entradas del modelo tienen 640 × 480, aunque la captura y los mapas de rect
 
 [LICENSE](LICENSE) es una copia íntegra de la licencia Apache-2.0 del repositorio original CREStereo; [NOTICE.md](NOTICE.md) documenta su alcance y fuente. No es una licencia concedida por el autor de Sistema 3D ni sustituye la comprobación pendiente de la procedencia del binario. No se atribuye MIT al ONNX.
 
-[CITATION.cff](CITATION.cff) y [referencias.bib](referencias.bib) citan el artículo del método. No representan la autoría de la tesis ni una versión certificada del exportador ONNX. La identificación del proyecto propio está en el [README principal](../README.md#identificación-del-proyecto). La decisión de licencia del código propio queda aplazada por indicación del autor; esta actualización documental no añade ni modifica licencias.
+[CITATION.cff](CITATION.cff) y [referencias.bib](referencias.bib) citan el artículo del método. No representan la autoría de la tesis ni una versión certificada del exportador ONNX. La identificación del proyecto propio está en el [README principal](../README.md#identificación-del-proyecto). El código propio de Sistema 3D y su documentación de software se distribuyen bajo la [licencia MIT](../LICENSE); esta licencia no se aplica al ONNX ni reemplaza sus condiciones upstream.
 
 ## Limitaciones
 
