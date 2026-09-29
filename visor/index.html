@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sistema 3D · Resultados interactivos</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+<header><a href="https://github.com/Mategut/Sistema_3D">Sistema 3D ↗</a><span>Universidad Santo Tomás · Ingeniería Electrónica</span></header>
+<main>
+  <p class="eyebrow">GALERÍA DE RECONSTRUCCIÓN ESTEREOSCÓPICA</p>
+  <h1>Explora los resultados<br>desde cualquier ángulo.</h1>
+  <p class="intro">Nueve campañas históricas. Modelos originales en milímetros, con sus imágenes y evidencia de validación.</p>
+  <div class="layout">
+    <aside><h2>Campañas</h2><nav id="campaigns" aria-label="Seleccionar campaña"></nav><p class="note">Los estados describen controles internos del software, no una certificación de exactitud dimensional.</p></aside>
+    <section class="workspace" aria-label="Modelo interactivo">
+      <div class="heading"><h2 id="title">Cargando catálogo…</h2><span id="quality" class="badge"></span></div>
+      <div class="toolbar">
+        <label>Modelo <select id="variant"><option value="final">Final</option><option value="pre_pulido">Antes del pulido</option></select></label>
+        <label>Vista <select id="mode"><option value="surface">Superficie</option><option value="wire">Triángulos</option><option value="points">Vértices de la malla</option></select></label>
+        <button id="reset">Centrar</button><button id="rotate" aria-pressed="false">Giro automático</button>
+      </div>
+      <div id="stage" tabindex="0" aria-label="Visor 3D. Flechas para girar, más y menos para acercar o alejar; cero para centrar."></div>
+      <p id="status" role="status" aria-live="polite">Preparando visor…</p>
+      <p class="hint">Arrastra para girar · Rueda o pellizco para acercar · Botón derecho para desplazar · Teclado: flechas, +, − y 0</p>
+      <p id="mesh-info" class="note"></p>
+      <div class="links"><a id="download" download>Descargar PLY mostrado</a><a id="report">Informe JSON</a><a id="source">Procedencia y archivos ↗</a></div>
+    </section>
+  </div>
+  <section class="evidence"><h2>Evidencia de la campaña</h2><p id="warnings" class="notice"></p><p>La versión anterior al pulido también puede contener superficies estimadas. La vista de vértices muestra puntos de la malla, no la nube observada original.</p>
+    <h3>Fidelidad interna del resultado final</h3><div id="metrics" class="metrics"></div><p class="note">Las distancias nube–malla evalúan coherencia interna; no equivalen al error respecto al objeto físico. Estas métricas corresponden al resultado final aunque selecciones la malla previa.</p>
+    <h3>Comparación dimensional del modelo seleccionado</h3><p>Referencias aproximadas tomadas con regla, sin incertidumbre especificada. En la pirámide, 85 mm corresponden a la altura de cara, no a la altura perpendicular.</p>
+    <div class="table-wrap"><table><thead><tr><th>Magnitud</th><th>Referencia (mm)</th><th>Malla (mm)</th><th>Diferencia (mm)</th></tr></thead><tbody id="dimensions"></tbody></table></div>
+    <p><a href="https://github.com/Mategut/Sistema_3D/blob/main/resultados/comparacion_dimensional.md">Consultar métodos y limitaciones de las medidas ↗</a></p>
+    <div class="images"><figure><img id="left" alt="Captura original de la cámara izquierda" loading="lazy"><figcaption>Cámara izquierda</figcaption></figure><figure><img id="right" alt="Captura original de la cámara derecha" loading="lazy"><figcaption>Cámara derecha</figcaption></figure></div>
+    <details><summary>Ver diagnóstico original del resultado</summary><img id="preview" alt="Gráfica histórica de validación de la campaña" loading="lazy"></details>
+  </section>
+</main>
+<footer>Mateo Gutiérrez Mejía · Proyecto de grado · <a href="https://github.com/Mategut/Sistema_3D">Código y documentación</a></footer>
+<noscript>Activa JavaScript para explorar los modelos. Los archivos siguen disponibles en el repositorio.</noscript>
+<script type="module">import('./app.js').catch(error => { document.querySelector('#status').textContent = 'No se pudo iniciar el visor. Comprueba WebGL y recarga la página. Puedes consultar los archivos en el repositorio.'; console.error(error); });</script>
+</body></html>
