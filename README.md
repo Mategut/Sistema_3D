@@ -8,7 +8,7 @@ Cada adquisición se organiza como una **campaña**, con sus capturas, referenci
 
 [**Abrir la galería interactiva de resultados**](https://mategut.github.io/Sistema_3D/)
 
-Permite girar y ampliar las nueve reconstrucciones, alternar entre la malla final y la anterior al pulido, consultar métricas y descargar los PLY originales. La página estará disponible después de activar y desplegar GitHub Pages; las instrucciones de publicación y vista previa local están en la [guía del visor](visor/LEEME.md).
+Permite girar y ampliar las nueve reconstrucciones, alternar entre la malla final y la anterior al pulido, consultar métricas y descargar los PLY originales. La galería está publicada en GitHub Pages y puede consultarse sin instalar la aplicación. Los controles y la interpretación de los resultados se explican en la [guía del visor](visor/LEEME.md).
 
 ## Identificación del proyecto
 
