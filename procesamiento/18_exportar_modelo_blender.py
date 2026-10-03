@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Tuple
 
 import numpy as np
+from version_sistema import PRODUCT_VERSION
 
 PLY_SCALARS = {
     "char": ("b", 1),
@@ -737,6 +738,7 @@ def main() -> int:
     blender_max = np.max(blender_vertices, axis=0)
 
     report = {
+        "product_version": PRODUCT_VERSION,
         "schema_version": "1.0",
         "step": "18",
         "method": "lossless_mesh_export_obj_plus_blender_coordinate_conversion",

@@ -10,9 +10,9 @@ SHA-256: `ea67a517e61ff381b0b26beec72222f5ba4ef416a251d6e3e1d7224c6f7ba730`.
 
 ## Procedencia y alcance de lo conocido
 
-El responsable identifica el método original como CREStereo de MEGVII Research y declara haber utilizado la conversión ONNX distribuida en [PINTO Model Zoo, 284_CREStereo](https://github.com/PINTO0309/PINTO_model_zoo/tree/main/284_CREStereo), con el nombre `crestereo_init_iter10_480x640.onnx`. Esta declaración actualiza la referencia de procedencia; no equivale a una comparación binaria con el archivo publicado por el distribuidor.
+El proyecto utiliza CREStereo de MEGVII Research mediante la conversión ONNX distribuida en [PINTO Model Zoo, 284_CREStereo](https://github.com/PINTO0309/PINTO_model_zoo/tree/main/284_CREStereo), con el nombre `crestereo_init_iter10_480x640.onnx`. La identificación del distribuidor no equivale a una comparación binaria con el archivo upstream.
 
-PINTO ofrece un [script de descarga para la variante iter10](https://github.com/PINTO0309/PINTO_model_zoo/blob/main/284_CREStereo/download_iter10.sh). No se conservan la fecha de adquisición, el commit o paquete exacto descargado, el hash upstream, las versiones del conversor ni el comando de conversión utilizado. No se ha demostrado que este binario sea idéntico a una publicación upstream concreta. La huella anterior identifica exclusivamente el archivo local; el ONNX no se ha sustituido ni reconvertido al actualizar esta documentación.
+PINTO ofrece un [script de descarga para la variante iter10](https://github.com/PINTO0309/PINTO_model_zoo/blob/main/284_CREStereo/download_iter10.sh). La trazabilidad de esta entrega identifica el binario local por nombre, tamaño y SHA-256. El registro de procedencia no incluye fecha de adquisición, commit o paquete exacto descargado, hash upstream, versiones del conversor ni comando de conversión. Por ello, la identificación del archivo no acredita igualdad binaria con una publicación upstream concreta. La entrega conserva el ONNX utilizado, sin sustitución ni reconversión.
 
 Referencias relacionadas, consultadas el 26 de septiembre de 2026:
 
@@ -32,9 +32,13 @@ Las entradas del modelo tienen 640 × 480, aunque la captura y los mapas de rect
 
 ## Licencia y citación
 
-[LICENSE](LICENSE) es una copia íntegra de la licencia Apache-2.0 del repositorio original CREStereo; [NOTICE.md](NOTICE.md) documenta su alcance y fuente. No es una licencia concedida por el autor de Sistema 3D ni sustituye la comprobación pendiente de la procedencia del binario. No se atribuye MIT al ONNX.
+[LICENSE](LICENSE) es una copia íntegra de la licencia Apache-2.0 del repositorio original CREStereo; [NOTICE.md](NOTICE.md) documenta su alcance y fuente. Las condiciones del modelo corresponden a sus fuentes de terceros; la licencia propia de Sistema 3D no las reemplaza ni acredita identidad binaria upstream. El ONNX no se distribuye bajo la licencia MIT del proyecto.
 
 [CITATION.cff](CITATION.cff) y [referencias.bib](referencias.bib) citan el artículo del método. No representan la autoría de la tesis ni una versión certificada del exportador ONNX. La identificación del proyecto propio está en el [README principal](../README.md#identificación-del-proyecto). El código propio de Sistema 3D y su documentación de software se distribuyen bajo la [licencia MIT](../LICENSE); esta licencia no se aplica al ONNX ni reemplaza sus condiciones upstream.
+
+## Registro del entorno y del binario
+
+El [registro del entorno de referencia](../documentacion/entorno_referencia.json) incorpora las distribuciones Python instaladas y recalcula tamaño y SHA-256 del ONNX local. Puede actualizarse para otra instalación mediante `python herramientas/registrar_entorno.py --output registros/entorno_actual.json`. Este registro permite identificar el archivo y el entorno actuales; no reconstruye la fecha de descarga, el commit upstream ni las herramientas de conversión desconocidas. Las instrucciones y el alcance están en el [manual de instalación](../documentacion/instalacion_y_uso.md#registro-del-entorno-de-referencia).
 
 ## Limitaciones
 

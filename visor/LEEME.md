@@ -2,7 +2,7 @@
 
 [**Abrir el visor interactivo**](https://mategut.github.io/Sistema_3D/)
 
-El visor permite consultar las nueve campañas publicadas del proyecto Sistema 3D desde el navegador, sin instalar la aplicación de reconstrucción. Su contenido y publicación son administrados por Mateo Gutiérrez Mejía, responsable del repositorio oficial. Los visitantes pueden explorar y descargar los resultados; la página no ofrece funciones para subir archivos ni modificar las campañas publicadas.
+El visor permite consultar las nueve campañas publicadas del proyecto Sistema 3D desde el navegador, sin instalar la aplicación de reconstrucción. El contenido publicado corresponde a la selección oficial de resultados del repositorio. Los visitantes pueden explorar y descargar los resultados; la página no ofrece funciones para subir archivos ni modificar las campañas publicadas.
 
 ## Cómo utilizarlo
 
@@ -26,7 +26,7 @@ El visor requiere un navegador moderno con WebGL2. Carga un modelo a la vez; el 
 
 ## Mantenimiento del sitio oficial
 
-El autor administra las actualizaciones del visor y de los resultados en el repositorio oficial. GitHub Pages aloja la página; los visitantes no necesitan activar servicios ni ejecutar comandos.
+Las actualizaciones del sitio se gestionan desde el repositorio oficial. GitHub Pages aloja la página; los visitantes no necesitan activar servicios ni ejecutar comandos.
 
 El flujo [Publicar visor 3D](../.github/workflows/pages.yml) prepara y despliega el sitio cuando se suben cambios pertinentes a `main`. Utiliza [preparar_visor_web.py](../herramientas/preparar_visor_web.py) para reunir el visor y los resultados públicos en `_site/`, una carpeta generada que no se incorpora al repositorio. Las campañas de trabajo y el modelo ONNX no forman parte del sitio publicado.
 

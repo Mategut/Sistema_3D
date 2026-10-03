@@ -36,7 +36,7 @@ from procesamiento.utilidades_referencias import (
     validate_campaign_references,
 )
 
-PRODUCT_VERSION = "3.1.0"
+from procesamiento.version_sistema import PRODUCT_VERSION
 APP_TITLE = "Sistema Integrado de Construcción 3D"
 IMAGE_EXT = "png"
 

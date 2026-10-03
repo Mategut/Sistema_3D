@@ -16,10 +16,11 @@ Permite girar y ampliar las nueve reconstrucciones, alternar entre la malla fina
 - **Trabajo de grado:** *Aplicación de software en Python para reconstrucción tridimensional de bajo costo basada en visión estereoscópica con objeto rotatorio y dos cámaras web*.
 - **Institución:** Universidad Santo Tomás, Facultad de Ingeniería Electrónica, División de Ingenierías, Bogotá D.C.; Grupo de Estudio y Desarrollo en Robótica (GED).
 - **Director:** Billy Wladimir Toro Tovar, Ph.D. **Codirector:** Armando Mateus Rojas, M.Sc.
-- **Referencia documental:** avance de tesis de septiembre de 2026; no implica aprobación ni versión final del documento.
 - **Repositorio:** [Mategut/Sistema_3D](https://github.com/Mategut/Sistema_3D).
 
-La [guía de instalación](documentacion/instalacion_y_uso.md#montaje-de-referencia) resume el montaje y el equipo de cómputo. La tesis desarrolla la fundamentación y discusión académica. Los resultados publicados corresponden a las campañas existentes; la actualización documental no representa una nueva adquisición ni una nueva reconstrucción.
+Este repositorio constituye la entrega de software y evidencia del proyecto: incluye el código, el firmware, las referencias del montaje, el modelo de profundidad, los manuales y nueve campañas documentadas de cubo, cilindro y pirámide. Los modelos publicados conservan las métricas y los estados de calidad registrados en sus ejecuciones. El documento académico de tesis desarrolla la fundamentación y la discusión de los resultados y no forma parte de este paquete.
+
+La [guía de instalación](documentacion/instalacion_y_uso.md#montaje-de-referencia) incluye los esquemas del banco, el cableado Arduino–ULN2003–28BYJ-48 y el equipo de cómputo. El alcance experimental y las limitaciones de la evidencia se describen en [Resultados y validación](documentacion/resultados_y_validacion.md).
 
 ## Documentación
 
@@ -33,6 +34,10 @@ La [guía de instalación](documentacion/instalacion_y_uso.md#montaje-de-referen
 | [Referencia de parámetros](documentacion/referencia_parametros.md) | Argumentos y valores declarados por etapa |
 | [Resultados seleccionados](resultados/README.md) | Nueve campañas con modelos, imágenes, métricas y advertencias |
 | [Modelo y atribuciones](modelos/README.md) | Identidad del ONNX, procedencia conocida, licencia upstream y citación |
+
+## Versión del software
+
+La versión de esta entrega es **3.2.1**. Su fuente única es [version_sistema.py](procesamiento/version_sistema.py); la interfaz, el coordinador y los informes de calibración y exportación generados por esta versión utilizan esa constante. Las versiones de esquema y de métodos tienen significado independiente. Los informes históricos conservan la versión con la que fueron generados.
 
 ## Requisitos
 

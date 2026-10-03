@@ -217,8 +217,8 @@
       "size_bytes": 1128
     },
     "medidas_fisicas.md": {
-      "sha256": "cf24f46b9c99ca003dbefc39e7a5aecc5cba1e86318aa0cfc8cb30f339c9926b",
-      "size_bytes": 2528
+      "sha256": "1dd43e437ab8a851b2374ca034f23e3dbf11b8f7c2d95e9748b73eb7a4945c8e",
+      "size_bytes": 2404
     },
     "piramide1/captura_derecha.png": {
       "sha256": "932f19d571ad595e341755bcc4306c5afdb86506815b0c5f45b59d9257976d58",
@@ -317,8 +317,8 @@
       "size_bytes": 12901
     },
     "README.md": {
-      "sha256": "c1007c6c762c5b25fa0dc04855c2305e408769ba208cca5865f4a388b27e715d",
-      "size_bytes": 2522
+      "sha256": "3a8cf522a0aeac87df4edb1af33eb1aeab5cd3f9a773d42b9ef82ab7f6e7129e",
+      "size_bytes": 2556
     }
   }
 }

@@ -43,6 +43,6 @@ python herramientas/promover_calibracion_plataforma.py activar --candidate-dir "
 
 Cierre la aplicación si utiliza la instalación desde consola y ábrala de nuevo después.
 
-## Revisión científica adicional
+## Modalidades de aprobación
 
-La evaluación con adquisiciones independientes es una actividad experimental adicional, no un requisito del flujo habitual. Las herramientas de consola conservan compatibilidad con informes de revisión mediante `--evidence` y con el modo `evaluar`. Solo la revisión de evidencia independiente registra `active_independently_validated`; no se atribuye ese estado a la instalación automática del paso 09.
+La instalación automática utiliza la aprobación operativa del paso 09 y registra `active_step09_approved`. Las herramientas de consola también admiten informes de revisión mediante `--evidence` y el modo `evaluar`. El estado `active_independently_validated` identifica la modalidad con evidencia independiente; no describe la instalación automática ni constituye un requisito para utilizar el flujo habitual.

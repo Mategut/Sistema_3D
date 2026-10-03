@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
+from version_sistema import PRODUCT_VERSION
 
 STEPS_PER_REVOLUTION = 2055
 POSES_PER_REVOLUTION = 25
@@ -665,6 +666,7 @@ def main():
 
     calibration = {
         "schema_version": 1,
+        "product_version": PRODUCT_VERSION,
         "calibration_type": "turntable_axis_line_mechanical_pose_model",
         "status": (
             "candidate_ready_for_independent_validation"

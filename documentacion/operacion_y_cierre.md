@@ -48,7 +48,7 @@ El informe `resumen_exportacion_18.json` registra hashes de los archivos de carg
 
 La reparación histórica se ejecuta con `python herramientas/reparar_manifiestos_exportacion.py`. Comprueba primero las huellas existentes de la carga útil; si encuentra diferencias no las encubre recalculándolas. Conserva los informes anteriores en `registros/reparacion_manifiestos_*/` y corrige únicamente el manifiesto y su resumen asociado. No modifica mallas ni métricas. Los checkpoints no se falsifican para declararlos vigentes; el coordinador los vuelve a comprobar al reanudar.
 
-## Contenido para GitHub
+## Contenido de la entrega
 
 - Código, firmware, configuración y documentación del proyecto.
 - `modelos/`: ONNX, identidad técnica, referencias, licencia upstream y aclaración de procedencia.
@@ -58,13 +58,13 @@ La reparación histórica se ejecuta con `python herramientas/reparar_manifiesto
 
 La muestra pública permite inspección; no contiene todas las capturas ni certifica reproducción numérica completa. El script de selección usa campañas identificadas explícitamente y exige una carpeta de salida nueva. Las huellas de `resultados/MANIFEST.json` excluyen el propio manifiesto. No convierta finales de línea ni edite archivos publicados sin regenerar ese manifiesto.
 
-## Alcance del cierre
+## Alcance de la entrega
 
-La entrega documental describe instalación, interfaz, arquitectura, parámetros, almacenamiento, resultados, integridad, reproducción y referencias del modelo.
+La entrega reúne el software, el firmware, las referencias del montaje y la evidencia de nueve campañas de cubo, cilindro y pirámide. La documentación describe instalación, interfaz, arquitectura, parámetros, almacenamiento, resultados, integridad, reproducción y referencias del modelo. Los estados de aceptación describen los controles internos registrados en cada ejecución, no una certificación metrológica.
 
-Se incluye una [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) con las referencias aproximadas aportadas. La autoría, el título y la institución están documentados en el [README principal](../README.md#identificación-del-proyecto); el montaje y el equipo de cómputo declarado, en [instalación y uso](instalacion_y_uso.md#montaje-de-referencia). El autor identifica PINTO Model Zoo como distribuidor del ONNX, sin que se haya comprobado la igualdad binaria con una descarga upstream.
+Se incluye una [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) con las referencias físicas aproximadas tomadas con regla. La autoría, el título y la institución están documentados en el [README principal](../README.md#identificación-del-proyecto); el montaje y el equipo de cómputo de referencia, en [instalación y uso](instalacion_y_uso.md#montaje-de-referencia). La conversión ONNX utilizada procede de PINTO Model Zoo, sin que se haya comprobado la igualdad binaria con una descarga upstream.
 
-Continúan pendientes la incertidumbre de las referencias físicas y correspondencia individual de segmentos, la evidencia adicional para acreditar generalización independiente, la identificación exacta del motor/controlador y la verificación del binario de origen. El equipo de cómputo ya está identificado en el manual. El código propio y su documentación de software se publican bajo [licencia MIT](../LICENSE), con el alcance y las excepciones de terceros descritos en el [README](../README.md#licencia). Las campañas publicadas no se han adquirido ni reconstruido de nuevo para esta actualización documental; el avance de tesis contiene resultados anteriores que deberán conciliarse con la selección publicada.
+El alcance experimental se limita a los tres tipos de objeto de la muestra publicada; sus resultados no acreditan generalización a otras geometrías o montajes. Las referencias físicas son aproximadas, con incertidumbre sin cuantificar y sin correspondencia individual entre todos los segmentos medidos y reconstruidos. La identificación del modelo acredita el archivo local, sin una comparación binaria upstream. El manual identifica el equipo de cómputo de referencia. El código propio y su documentación de software se publican bajo [licencia MIT](../LICENSE), con el alcance y las excepciones de terceros descritos en el [README](../README.md#licencia). Los resultados publicados corresponden a las ejecuciones históricas identificadas en el catálogo y sus archivos de procedencia.
 
 ## Controles de importación y exportación
 

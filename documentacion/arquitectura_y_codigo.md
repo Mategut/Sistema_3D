@@ -49,6 +49,7 @@ Se utilizan al preparar o modificar el montaje, y durante la evaluación de una 
 
 | Herramienta | Responsabilidad |
 | --- | --- |
+| [registrar_entorno.py](../herramientas/registrar_entorno.py) | Registro del entorno Python, sistema, controlador NVIDIA e identidad del ONNX sin instalar paquetes ni ejecutar inferencia |
 | [verificar_dependencias.py](../herramientas/verificar_dependencias.py) | Dependencias, proveedores y referencias estéreo; puede instalar paquetes faltantes. `--no-install` limita la acción a la comprobación. |
 | [auditar_evidencia_lr.py](../herramientas/auditar_evidencia_lr.py) | Auditoría de evidencia y consistencia izquierda–derecha de una campaña |
 
@@ -100,6 +101,7 @@ Los nombres de los archivos enlazan a su implementación. Cada etapa tiene argum
 
 | Módulo | Uso |
 | --- | --- |
+| [version_sistema.py](../procesamiento/version_sistema.py) | Versión central del producto utilizada por la interfaz, el coordinador y los registros de calibración, exportación y entorno |
 | [clasificador_intersecciones.py](../procesamiento/clasificador_intersecciones.py) | Clasificación geométrica compartida de intersecciones |
 | [utilidades_almacenamiento.py](../procesamiento/utilidades_almacenamiento.py) | Conservación y retirada de productos según modo de almacenamiento |
 | [utilidades_mascaras.py](../procesamiento/utilidades_mascaras.py) | Operaciones compartidas sobre máscaras |

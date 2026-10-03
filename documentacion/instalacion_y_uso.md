@@ -39,9 +39,21 @@ Los BAT buscan preferentemente el entorno `tesis` en ubicaciones habituales de C
 python Sistema_3D.py
 ```
 
+### Registro del entorno de referencia
+
+[entorno_referencia.json](entorno_referencia.json) conserva la versión de Python, el sistema operativo, las distribuciones Python instaladas —incluidas dependencias transitivas—, la identificación del controlador NVIDIA y la huella del ONNX en el entorno disponible al registrar esta entrega. Es un registro del entorno actual, no del utilizado necesariamente en las campañas históricas ni un archivo de instalación bloqueada. No incluye paquetes exclusivos de Conda ni identifica todas las bibliotecas del sistema; el registro no identifica las versiones de las bibliotecas CUDA/cuDNN cargadas durante la inferencia. La consulta del controlador no prueba que funcione la inferencia GPU.
+
+Para registrar otra instalación, ejecute con su intérprete:
+
+```powershell
+python herramientas/registrar_entorno.py --output registros/entorno_actual.json
+```
+
+La herramienta no instala dependencias ni ejecuta el modelo. `requirements.txt` sigue siendo la entrada de instalación.
+
 ## Montaje de referencia
 
-Resumen del documento *Referencia_montaje_actualizada_2026.pdf* (septiembre de 2026), del avance de tesis y de las aclaraciones del autor. Las dimensiones constructivas son aproximadas; no sustituyen las matrices de calibración utilizadas por cada campaña.
+El banco de captura utiliza el montaje descrito a continuación. Las dimensiones constructivas son aproximadas; la geometría de procesamiento se obtiene de la calibración estéreo y de plataforma correspondiente a cada campaña.
 
 | Elemento | Referencia del montaje |
 | --- | --- |
@@ -53,19 +65,51 @@ Resumen del documento *Referencia_montaje_actualizada_2026.pdf* (septiembre de 2
 | Estructura | Base de 30 × 50 cm y espesor aproximado de 0,5 cm; giratoria de 18 cm de diámetro y altura de 4–6 cm |
 | Cerramiento | Fondo y cubierta de 30 × 30 cm; paneles laterales de 30 × 20 cm; rigidización posterior del soporte de 30 × 10 cm |
 | Iluminación | LED interior fijo; superficies uniformes, preferiblemente mates |
-| Patrón de calibración | Tablero de 6 × 8 esquinas internas y cuadros de 23 mm, según el informe conservado |
+| Patrón de calibración | Tablero de 6 × 8 esquinas internas y cuadros de 23 mm; referencia registrada en `calibration_report.json` |
 | Control de giro | Arduino Uno; 2055 pasos por vuelta y 25 posiciones |
-| Motor y controlador de potencia | Motor paso a paso; referencias exactas de motor y controlador pendientes de identificación |
-| Alimentación declarada | 5 V tomados del Arduino, según el autor; corriente disponible, conexión exacta y requisitos del controlador no documentados |
+| Motor paso a paso | 28BYJ-48 unipolar |
+| Controlador de potencia | Módulo ULN2003 |
+| Alimentación | 5 V del Arduino al terminal positivo de alimentación del ULN2003; masa común entre Arduino y controlador |
 | Secuencia de adquisición | Rotar, detener, estabilizar aproximadamente 1 segundo y capturar |
 
-La alimentación indicada describe el montaje comunicado, no una especificación eléctrica suficiente para reproducir el cableado. Para repetirlo se necesitan la referencia y conexiones del controlador y los requisitos del motor; el código de los pines no define por sí solo esas conexiones.
+### Parámetros manuales de las cámaras
 
-Las campañas publicadas son las adquisiciones existentes, según confirmó el autor. Este resumen del montaje no modifica sus referencias congeladas ni acredita por sí solo la configuración física exacta de cada adquisición histórica.
+Las dos cámaras se configuran manualmente mediante el software de Logitech. Los parámetros ópticos disponibles se mantienen fijos durante cada sesión; la aplicación de Python solicita la resolución de captura, pero no impone ni registra automáticamente estos ajustes externos. La configuración de referencia se utiliza con y sin entrada de luz natural frontal; mantener los parámetros fijos evita cambios automáticos de exposición o color, aunque no elimina el efecto de la iluminación sobre las imágenes y la reconstrucción.
 
-### Equipo de cómputo declarado
+Cada usuario puede ajustar manualmente los controles disponibles para sus condiciones de iluminación antes de adquirir la campaña. Para documentar una adquisición propia, conserve una captura de pantalla o anote los valores utilizados junto a la campaña. El paquete publicado no contiene un registro numérico de esos ajustes externos. Si cambia la iluminación o los ajustes que afectan a la apariencia del fondo, vuelva a capturar el fondo vacío correspondiente.
 
-| Componente | Información disponible |
+### Esquemas del montaje
+
+![Vistas superior, frontal y lateral del montaje estereoscópico](imagenes/esquemas_montaje.png)
+
+Esquemas redibujados de la disposición del banco a partir de *Referencia_montaje_actualizada_2026.pdf* (septiembre de 2026). Representan la configuración geométrica de referencia; no están estrictamente a escala. La vista superior sitúa el centro de la giratoria en (15, 40) cm sobre la base de 30 × 50 cm. También se incluye la [versión vectorial SVG](imagenes/esquemas_montaje.svg).
+
+### Conexión de Arduino, ULN2003 y motor
+
+![Conexiones del banco de captura y de la plataforma](../firmware/imagenes/conexiones_plataforma.png)
+
+El [diagrama en SVG](../firmware/imagenes/conexiones_plataforma.svg) y la [guía del firmware](../firmware/README.md) muestran las conexiones del montaje. Los colores del diagrama identifican señales; no describen el color físico de los cables.
+
+El cableado de control compatible con el firmware incluido utiliza las cuatro entradas del módulo ULN2003:
+
+| Arduino Uno | Módulo ULN2003 |
+| --- | --- |
+| D8 | IN1 |
+| D9 | IN2 |
+| D10 | IN3 |
+| D11 | IN4 |
+| 5 V | Terminal positivo de alimentación (+ / VCC) |
+| GND | Terminal negativo de alimentación (− / GND) |
+
+El conector de cinco hilos del 28BYJ-48 se conecta al conector de motor del ULN2003. El motor se acciona a través del controlador, no desde los pines digitales directamente.
+
+El firmware instancia `Stepper(..., 8, 10, 9, 11)`: ese orden corresponde a la secuencia de bobinas IN1, IN3, IN2, IN4. No significa que las conexiones IN2 e IN3 deban intercambiarse. Los pines digitales están verificados en el código; los terminales de alimentación se describen para el montaje a 5 V y no se deducen del firmware.
+
+Cada campaña conserva sus propias referencias de calibración. Para reproducir una adquisición, deben utilizarse las referencias correspondientes al montaje con el que se capturó.
+
+### Equipo de cómputo de referencia
+
+| Componente | Configuración |
 | --- | --- |
 | Equipo | Computador portátil |
 | Sistema operativo | Windows 11 |
@@ -73,7 +117,7 @@ Las campañas publicadas son las adquisiciones existentes, según confirmó el a
 | GPU | NVIDIA GeForce RTX 4050 Laptop GPU |
 | Memoria RAM | 16 GB DDR5 |
 
-Configuración confirmada por el autor. Describe el equipo de referencia; no establece requisitos mínimos ni acredita qué proveedor de inferencia utilizó cada ejecución: consulte sus registros. La disponibilidad de CUDA depende también del entorno instalado. Las dependencias de Python están en `requirements.txt`.
+Esta configuración corresponde al equipo de desarrollo. El proveedor de inferencia utilizado en cada ejecución se registra en sus informes. La disponibilidad de CUDA depende también del entorno instalado. Las dependencias de Python están en `requirements.txt`.
 
 ## Plataforma y firmware
 

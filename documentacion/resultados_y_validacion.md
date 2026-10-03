@@ -2,13 +2,15 @@
 
 [Volver al README](../README.md)
 
-## Muestra incluida para publicación
+## Muestra publicada
 
-[resultados/](../resultados/README.md) contiene nueve campañas seleccionadas por el responsable: cilindros 1, 2 y 3; cubos 1, 2 y 3; pirámides 1, 3 y 4. El cubo 3 procede de `ubo3_20260919_131506`, nombre original con error de escritura. Incluye PLY final y previo al pulido, un par de imágenes por campaña, preview, métricas y procedencia. Conserva la calidad histórica declarada y no representa una nueva validación con el código actual. Los 75 pares originales por campaña no se duplican en el paquete público.
+[resultados/](../resultados/README.md) contiene nueve campañas seleccionadas: cilindros 1, 2 y 3; cubos 1, 2 y 3; pirámides 1, 3 y 4. El cubo 3 procede de `ubo3_20260919_131506`, nombre original con error de escritura. Incluye PLY final y previo al pulido, un par de imágenes por campaña, preview, métricas y procedencia. La calidad y las métricas corresponden a las ejecuciones identificadas en la procedencia de cada campaña. Los 75 pares originales por campaña no se duplican en el paquete público.
 
 La selección pesa aproximadamente 165 MB. `MANIFEST.json` permite comprobar sus archivos y excluye su propia huella. Los JSON públicos omiten rutas absolutas personales; las métricas y advertencias no se cambian. La [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) aplica las [referencias aproximadas con regla](medidas_fisicas.md) a las nueve campañas, tanto a la malla final como a la previa al pulido. Explica los métodos y sus limitaciones; para la pirámide triangular compara estimaciones de lados de base, aristas y alturas de cara, conservando los puntos identificados y sin atribuir correspondencia individual con las caras físicas. Los 85 mm son altura de cara, no altura perpendicular.
 
-Las exportaciones nuevas excluyen `resumen_exportacion_18.json` de su propio listado de archivos; su SHA-256 se guarda externamente en el resumen de la etapa 18. La [guía de operación](operacion_y_cierre.md) describe reparación histórica, respaldos y recuperación.
+Las exportaciones generadas por esta versión excluyen `resumen_exportacion_18.json` de su propio listado de archivos; su SHA-256 se guarda externamente en el resumen de la etapa 18. La [guía de operación](operacion_y_cierre.md) describe reparación histórica, respaldos y recuperación.
+
+La [guía de medición dimensional](revision_medicion_dimensional.md) describe los descriptores utilizados y su sensibilidad. Distingue las discrepancias observadas de sus posibles causas, sin modificar las mallas ni las medidas publicadas.
 
 ## De la observación a la superficie
 
@@ -71,7 +73,7 @@ Las extensiones de una caja alineada con los ejes no son necesariamente las aris
 
 ## Evidencia conservada en modo reducido
 
-Las ejecuciones nuevas conservan, además de `resultado_final/`:
+Las ejecuciones de esta versión conservan, además de `resultado_final/`:
 
 - Paso 12: `nube_regularizada_general.npz`, referencia de la validación final.
 - Paso 13: `malla_observacional_antes_relleno.ply` cuando se realiza un intento de relleno, `malla_final_seleccionada.ply` y `procedencia_estimada.npz` cuando hay caras estimadas.
@@ -81,4 +83,4 @@ Las ejecuciones nuevas conservan, además de `resultado_final/`:
 
 La exportación prepulido corresponde al paso 14: puede contener relleno previo del paso 13. Para separar el efecto del relleno y el del pulido hay que usar ambas comparaciones.
 
-La compactación registra los archivos retirados por etapa en `documentacion/resumen_almacenamiento.json` sin reescribir los informes científicos. Las campañas compactadas anteriormente no recuperan evidencia eliminada: necesitan una nueva reconstrucción para generarla.
+La compactación registra los archivos retirados por etapa en `documentacion/resumen_almacenamiento.json` sin reescribir los informes científicos. La evidencia retirada en compactaciones históricas no forma parte de sus productos conservados; cambiar el modo de almacenamiento no restaura esos archivos.

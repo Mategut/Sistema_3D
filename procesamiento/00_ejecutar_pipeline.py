@@ -26,6 +26,7 @@ from utilidades_multisesion import discover_sessions
 from utilidades_referencias import resolve_campaign_references
 from utilidades_estereo import validate_stereo_calibration
 from utilidades_almacenamiento import compact_reconstruction, print_compaction_report
+from version_sistema import PRODUCT_VERSION
 
 DEPTH = "02_estimacion_profundidad"
 SIL = "03_mascara_objeto"
@@ -39,7 +40,7 @@ STATE_SCHEMA = 4
 def parser():
     """Construye las opciones de línea de comandos de este paso."""
     p = argparse.ArgumentParser(
-        description="Sistema 3D V3.2.1: aislado, reanudable y con detenciones controladas."
+        description=f"Sistema 3D V{PRODUCT_VERSION}: aislado, reanudable y con detenciones controladas."
     )
     p.add_argument("mode", choices=["calibrar-plataforma", "reconstruir"])
     p.add_argument("--workspace", required=True, help="Raíz de ESTA campaña/capturas.")
@@ -410,6 +411,7 @@ class CheckpointManager:
         self.force_from_here = True
 
     def save(self):
+        self.state["product_version"] = PRODUCT_VERSION
         self.state["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         atomic_write_json(self.state_path, self.state)
 
