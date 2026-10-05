@@ -48,3 +48,7 @@ El modo se selecciona con `--storage-mode`. Conservar todos los intermedios aume
 Los registros incluyen tiempos por etapa. Los archivos de `registros/rendimiento/` añaden muestreos de CPU, memoria y GPU cuando están disponibles; parte de las mediciones corresponde al equipo completo.
 
 El tiempo depende de la cantidad de vistas y puntos, la complejidad geométrica y las operaciones de reconstrucción. Para comparar rendimiento, utilice la misma campaña, referencias y configuración, distinguiendo una ejecución completa de una reanudación.
+
+## Evidencia de la implementación
+
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.

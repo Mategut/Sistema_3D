@@ -82,7 +82,7 @@ def parser():
             "stereo_initial.yaml; si se proporciona este valor debe coincidir."
         ),
     )
-    p.add_argument("--mount-reference-distance-mm", type=float, default=400.0)
+    p.add_argument("--mount-reference-distance-mm", type=float, default=350.0, help="Distancia nominal desde el punto medio estereo al eje: 400 mm desde el borde menos 50 mm de retranqueo de camaras.")
     p.add_argument("--mount-reference-sigma-mm", type=float, default=30.0)
 
     # Gates para aceptar que V3.2 es suficientemente estable como CANDIDATA.

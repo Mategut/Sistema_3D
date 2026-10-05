@@ -309,7 +309,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Compatibilidad: si se proporciona, debe coincidir con stereo_initial.yaml.",
     )
-    p.add_argument("--mount-midpoint-axis-distance-mm", type=float, default=400.0)
+    p.add_argument("--mount-midpoint-axis-distance-mm", type=float, default=350.0, help="Distancia nominal desde el punto medio estereo al eje: 400 mm desde el borde menos 50 mm de retranqueo de camaras.")
     p.add_argument("--mount-distance-sigma-mm", type=float, default=30.0)
     p.add_argument("--mount-symmetry-sigma-mm", type=float, default=25.0)
     p.add_argument("--mount-axis-baseline-sigma-deg", type=float, default=6.0)

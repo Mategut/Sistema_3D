@@ -529,7 +529,7 @@ Regenerar: `python herramientas/generar_referencia_parametros.py`.
 | `--auto-ba-mount-prior-equivalent-points` | 300.0 | — | False | — |
 | `--auto-ba-center-prior-equivalent-points` | 75.0 | — | False | — |
 | `--stereo-baseline-mm` | None | — | False | Compatibilidad: si se proporciona, debe coincidir con stereo_initial.yaml. |
-| `--mount-midpoint-axis-distance-mm` | 400.0 | — | False | — |
+| `--mount-midpoint-axis-distance-mm` | 350.0 | — | False | Distancia nominal desde el punto medio estereo al eje: 400 mm desde el borde menos 50 mm de retranqueo de camaras. |
 | `--mount-distance-sigma-mm` | 30.0 | — | False | — |
 | `--mount-symmetry-sigma-mm` | 25.0 | — | False | — |
 | `--mount-axis-baseline-sigma-deg` | 6.0 | — | False | — |
@@ -646,7 +646,7 @@ Regenerar: `python herramientas/generar_referencia_parametros.py`.
 | `--output-dir` | sin valor explícito | — | True | Directorio persistente donde guardar la calibración de plataforma. |
 | `--stereo-calibration-dir` | sin valor explícito | — | True | Calibración estéreo vigente; no se buscan calibraciones históricas. |
 | `--baseline-mm` | None | — | False | Compatibilidad manual únicamente. La baseline se lee siempre de stereo_initial.yaml; si se proporciona este valor debe coincidir. |
-| `--mount-reference-distance-mm` | 400.0 | — | False | — |
+| `--mount-reference-distance-mm` | 350.0 | — | False | Distancia nominal desde el punto medio estereo al eje: 400 mm desde el borde menos 50 mm de retranqueo de camaras. |
 | `--mount-reference-sigma-mm` | 30.0 | — | False | — |
 | `--minimum-primary-surface-accepted-ratio` | 0.95 | — | False | — |
 | `--maximum-primary-point-plane-rmse-median-mm` | 2.5 | — | False | — |
@@ -1348,6 +1348,12 @@ Regenerar: `python herramientas/generar_referencia_parametros.py`.
 | `mode` | sin valor explícito | ['evaluar', 'activar'] | False | — |
 | `--candidate-dir` | sin valor explícito | — | True | resultado_calibracion_plataforma de la campaña de calibración |
 | `--evidence` | sin valor explícito | — | False | Informe independiente opcional; sin él, activar utiliza los controles del paso 09 |
+
+## [registrar_entorno.py](../herramientas/registrar_entorno.py)
+
+| Argumento | Valor declarado | Opciones | Obligatorio | Descripción del script |
+| --- | --- | --- | --- | --- |
+| `--output` | sin valor explícito | — | False | JSON de destino; sin esta opción imprime el registro. |
 
 ## [reparar_manifiestos_exportacion.py](../herramientas/reparar_manifiestos_exportacion.py)
 

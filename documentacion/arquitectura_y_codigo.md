@@ -146,3 +146,7 @@ El firmware se guarda en `firmware/control_plataforma_2055_pasos/`, con el mismo
 La [guía de sistema](../sistema/README.md) describe las referencias globales, sus estados y las condiciones para actualizarlas.
 
 `resultados/` contiene exclusivamente una muestra pública de nueve campañas históricas. Sus archivos y los recursos de `modelos/` y `sistema/` mantienen sus bytes al pasar por Git. Las herramientas de preparación y reparación se ejecutan explícitamente: la aplicación no modifica automáticamente los ejemplos publicados ni los informes históricos.
+
+## Evidencia de la implementación
+
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.

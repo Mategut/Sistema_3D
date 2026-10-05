@@ -79,3 +79,7 @@ Al reemplazar `resultado_final`, el paso 18 conserva la entrega previa en `regis
 La validación estructural estéreo también se ejecuta antes de procesar, desde interfaz y coordinador, sobre las referencias efectivamente utilizadas por la campaña. Una referencia histórica inválida se bloquea; no se sustituye automáticamente.
 
 La exportación registra el reemplazo en `resultado_final_publicacion.json`. Antes de otra exportación, restaura el respaldo si falta la entrega, o verifica el manifiesto de la nueva entrega si ya fue publicada. Si encuentra una situación ambigua conserva los archivos y solicita revisión. Una interrupción antes de terminar la exportación puede exigir repetir el paso 18 para completar su resumen.
+
+## Evidencia de la implementación
+
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.

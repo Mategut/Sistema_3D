@@ -84,3 +84,7 @@ Las ejecuciones de esta versión conservan, además de `resultado_final/`:
 La exportación prepulido corresponde al paso 14: puede contener relleno previo del paso 13. Para separar el efecto del relleno y el del pulido hay que usar ambas comparaciones.
 
 La compactación registra los archivos retirados por etapa en `documentacion/resumen_almacenamiento.json` sin reescribir los informes científicos. La evidencia retirada en compactaciones históricas no forma parte de sus productos conservados; cambiar el modo de almacenamiento no restaura esos archivos.
+
+## Evidencia de la implementación
+
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.

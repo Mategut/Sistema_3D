@@ -60,7 +60,7 @@ El banco de captura utiliza el montaje descrito a continuación. Las dimensiones
 | Cámaras | Dos Logitech Brio 100, sobre una plataforma común rígida, sin convergencia intencional |
 | Captura | 1920 × 1080 píxeles; tres sesiones de 25 pares por campaña |
 | Separación nominal entre centros ópticos | Aproximadamente 7,7 cm; el informe estéreo incluido estima 77,592 mm |
-| Distancia de captura | Aproximadamente 40 cm desde las cámaras al centro de la giratoria |
+| Distancia de captura | Aproximadamente 35 cm desde las cámaras al centro; 40 cm desde el borde frontal, con unos 5 cm de retranqueo de cámaras |
 | Altura del centro óptico | Aproximadamente 18 cm respecto a la base |
 | Estructura | Base de 30 × 50 cm y espesor aproximado de 0,5 cm; giratoria de 18 cm de diámetro y altura de 4–6 cm |
 | Cerramiento | Fondo y cubierta de 30 × 30 cm; paneles laterales de 30 × 20 cm; rigidización posterior del soporte de 30 × 10 cm |
@@ -80,15 +80,15 @@ Cada usuario puede ajustar manualmente los controles disponibles para sus condic
 
 ### Esquemas del montaje
 
-![Vistas superior, frontal y lateral del montaje estereoscópico](imagenes/esquemas_montaje.png)
+![Vistas general, superior y lateral del montaje estereoscópico](imagenes/esquemas_montaje.png)
 
-Esquemas redibujados de la disposición del banco a partir de *Referencia_montaje_actualizada_2026.pdf* (septiembre de 2026). Representan la configuración geométrica de referencia; no están estrictamente a escala. La vista superior sitúa el centro de la giratoria en (15, 40) cm sobre la base de 30 × 50 cm. También se incluye la [versión vectorial SVG](imagenes/esquemas_montaje.svg).
+Esquema elaborado a partir de las fotografías del montaje real y de sus dimensiones nominales documentadas. Incluye vistas general, superior y lateral; las cotas son aproximadas y el dibujo no está a escala.
 
 ### Conexión de Arduino, ULN2003 y motor
 
 ![Conexiones del banco de captura y de la plataforma](../firmware/imagenes/conexiones_plataforma.png)
 
-El [diagrama en SVG](../firmware/imagenes/conexiones_plataforma.svg) y la [guía del firmware](../firmware/README.md) muestran las conexiones del montaje. Los colores del diagrama identifican señales; no describen el color físico de los cables.
+El diagrama y la [guía del firmware](../firmware/README.md) muestran las conexiones funcionales del montaje. Los terminales se identifican mediante sus etiquetas; su posición gráfica no reproduce la distribución física de las placas. Los colores ilustrativos no describen el color real de los cables.
 
 El cableado de control compatible con el firmware incluido utiliza las cuatro entradas del módulo ULN2003:
 
@@ -257,3 +257,5 @@ El modo reducido puede retirar intermedios necesarios para reutilizar etapas. Se
 `auto` permite CPU si no queda disponible aceleración. `cuda` exige una sesión CUDA y bloquea una degradación silenciosa a CPU. Para exigir CUDA usando directamente el paso 02 también existe `--require-cuda`.
 
 Los recursos de `sistema/` y `modelos/` se conservan byte a byte mediante `.gitattributes`; no convierta manualmente sus saltos de línea porque forman parte de las huellas de integridad.
+
+El [recorrido visual y la evidencia de implementación](implementacion_y_evidencia.md) incluye las tres pestañas, fotografías del montaje y diagnósticos conservados.

@@ -27,6 +27,7 @@ La [guía de instalación](documentacion/instalacion_y_uso.md#montaje-de-referen
 | Guía | Contenido |
 | --- | --- |
 | [Manual de instalación y uso](documentacion/instalacion_y_uso.md) | Equipo de referencia, montaje, calibración, recorrido por los botones, resultados y reanudación |
+| [Implementación y evidencia](documentacion/implementacion_y_evidencia.md) | Interfaz, montaje real, etapas, parámetros, registro y rendimiento histórico |
 | [Arquitectura y código](documentacion/arquitectura_y_codigo.md) | Responsabilidad de cada script y organización de módulos |
 | [Resultados y validación](documentacion/resultados_y_validacion.md) | Exportaciones, unidades, métricas y relleno |
 | [Rendimiento](documentacion/rendimiento.md) | Procesamiento en CPU y GPU, memoria y almacenamiento |

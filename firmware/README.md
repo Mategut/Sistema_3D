@@ -4,7 +4,7 @@ El [programa del Arduino Uno](control_plataforma_2055_pasos/control_plataforma_2
 
 ![Diagrama de conexiones](imagenes/conexiones_plataforma.png)
 
-[Diagrama vectorial SVG](imagenes/conexiones_plataforma.svg).
+Diagrama funcional: los terminales se identifican por sus etiquetas; la posición gráfica no reproduce la distribución física de las placas y los colores son ilustrativos.
 
 | Arduino Uno | ULN2003 |
 | --- | --- |
