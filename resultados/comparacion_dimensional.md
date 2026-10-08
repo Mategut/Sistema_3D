@@ -1,6 +1,6 @@
 # Comparación dimensional exploratoria
 
-Referencias aproximadas tomadas con regla. Los cálculos usan las mallas publicadas sin modificarlas, con idéntico método por geometría y sin ajustar parámetros a las dimensiones reales. Las columnas de discrepancia no son una certificación de exactitud.
+La comparación contrasta las mallas publicadas con las referencias aproximadas tomadas con regla. La geometría se conserva y se aplica el mismo método a cada tipo de objeto, sin ajustar los parámetros a sus dimensiones reales. Las discrepancias describen las diferencias obtenidas con ese procedimiento; no certifican la exactitud del sistema.
 
 ## Método y alcance
 
@@ -39,7 +39,7 @@ Referencias aproximadas tomadas con regla. Los cálculos usan las mallas publica
 | piramide4 | arista_lateral_hasta_punta | 100.0 | 95.16 | -4.84 | -4.84 |
 | piramide4 | altura_cara | 85.0 | 81.14 | -3.86 | -4.55 |
 
-Las medidas ausentes se muestran como **No disponible** y no participan en las estadísticas. La desviación estándar requiere al menos dos campañas válidas. CSV y JSON conservan el motivo de cada ausencia.
+Cuando falta una medida, la tabla indica **No disponible** y la excluye de las estadísticas. Para calcular la desviación estándar se necesitan al menos dos campañas válidas. El motivo de cada ausencia queda registrado en CSV y JSON.
 
 ## Variación entre campañas
 

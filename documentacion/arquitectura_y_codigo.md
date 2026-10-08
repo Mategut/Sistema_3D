@@ -4,7 +4,7 @@
 
 ## Arquitectura
 
-La interfaz adquiere las imágenes y prepara la campaña. El coordinador lanza las etapas como procesos, comprueba sus productos y mantiene los checkpoints. Las primeras etapas trabajan por sesión; el consenso y las etapas geométricas producen resultados en `reconstruccion/multisesion/`.
+La interfaz gestiona la captura y organiza los archivos de cada campaña. El coordinador toma esas entradas, ejecuta las etapas y comprueba sus productos; también guarda los checkpoints necesarios para reanudar el procesamiento. Las sesiones se procesan primero por separado. El consenso y las operaciones geométricas integran después sus resultados en `reconstruccion/multisesion/`.
 
 ```text
 Capturas + referencias de campaña
@@ -16,7 +16,7 @@ Capturas + referencias de campaña
                └─ Reconstrucción: 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18
 ```
 
-La ruta normal usa la calibración de plataforma existente. La ruta de calibración estima y valida esa referencia; incluye supuestos geométricos propios del objeto de referencia.
+La reconstrucción utiliza la calibración de plataforma disponible. Esa referencia se obtiene mediante una ruta de estimación y validación cuyos controles dependen de los supuestos geométricos del objeto de referencia.
 
 ## Aplicación
 
@@ -30,7 +30,7 @@ La ruta normal usa la calibración de plataforma existente. La ruta de calibraci
 
 ## Herramientas por finalidad
 
-Los archivos permanecen en `herramientas/`. Esta agrupación indica cuándo utilizarlos; no cambia sus rutas ni el orden del procesamiento. La captura y reconstrucción habituales se realizan desde la aplicación.
+Las utilidades de `herramientas/` permiten preparar el montaje, consultar diagnósticos y gestionar la publicación. Se agrupan según su finalidad; para capturar y reconstruir un objeto, siga el recorrido de la aplicación.
 
 ### Calibración y verificación del montaje
 
@@ -55,7 +55,7 @@ Se utilizan al preparar o modificar el montaje, y durante la evaluación de una 
 
 ### Preparación de resultados y documentación
 
-Se ejecutan explícitamente para preparar la publicación o actualizar sus documentos; no son etapas de adquisición ni reconstrucción.
+Estas herramientas preparan los resultados públicos y sus documentos. Se ejecutan por separado del proceso de captura y reconstrucción.
 
 | Herramienta | Responsabilidad |
 | --- | --- |
@@ -73,7 +73,7 @@ Operación excepcional para exportaciones antiguas afectadas por la autorreferen
 
 ## Etapas
 
-Los nombres de los archivos enlazan a su implementación. Cada etapa tiene argumentos propios; el coordinador construye las invocaciones compatibles entre sí. Para ejecuciones normales, utilice el coordinador o la interfaz.
+La tabla enlaza el código de cada etapa y resume sus productos. El coordinador combina los argumentos necesarios para ejecutar el flujo completo, que puede iniciarse desde la interfaz o desde el propio coordinador.
 
 | Paso y script | Función y producto principal |
 | --- | --- |
@@ -149,4 +149,4 @@ La [guía de sistema](../sistema/README.md) describe las referencias globales, s
 
 ## Evidencia de la implementación
 
-La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) relaciona esta arquitectura con las capturas de la interfaz, los controles geométricos y los productos conservados de las etapas.

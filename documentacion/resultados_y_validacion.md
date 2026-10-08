@@ -4,9 +4,11 @@
 
 ## Muestra publicada
 
-[resultados/](../resultados/README.md) contiene nueve campañas seleccionadas: cilindros 1, 2 y 3; cubos 1, 2 y 3; pirámides 1, 3 y 4. El cubo 3 procede de `ubo3_20260919_131506`, nombre original con error de escritura. Incluye PLY final y previo al pulido, un par de imágenes por campaña, preview, métricas y procedencia. La calidad y las métricas corresponden a las ejecuciones identificadas en la procedencia de cada campaña. Los 75 pares originales por campaña no se duplican en el paquete público.
+[resultados/](../resultados/README.md) contiene nueve campañas seleccionadas: cilindros 1, 2 y 3; cubos 1, 2 y 3; pirámides 1, 3 y 4. El cubo 3 procede de `ubo3_20260919_131506`, nombre original con error de escritura. Cada campaña incluye los PLY final y previo al pulido, un par de imágenes, una vista de validación, métricas y procedencia. La calidad y las métricas corresponden a las ejecuciones identificadas en la procedencia de cada campaña. Los 75 pares originales por campaña no se duplican en el paquete público.
 
-La selección pesa aproximadamente 165 MB. `MANIFEST.json` permite comprobar sus archivos y excluye su propia huella. Los JSON públicos omiten rutas absolutas personales; las métricas y advertencias no se cambian. La [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) aplica las [referencias aproximadas con regla](medidas_fisicas.md) a las nueve campañas, tanto a la malla final como a la previa al pulido. Explica los métodos y sus limitaciones; para la pirámide triangular compara estimaciones de lados de base, aristas y alturas de cara, conservando los puntos identificados y sin atribuir correspondencia individual con las caras físicas. Los 85 mm son altura de cara, no altura perpendicular.
+La selección ocupa aproximadamente 165 MB. `MANIFEST.json` registra las huellas de sus archivos, salvo la del propio manifiesto. Los JSON públicos omiten las rutas absolutas personales y mantienen las métricas y advertencias originales.
+
+La [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) contrasta las nueve campañas con las [referencias aproximadas con regla](medidas_fisicas.md), usando tanto la malla final como la anterior al pulido. En la pirámide triangular se estiman los lados de base, las aristas y las alturas de cara, y se conservan los puntos utilizados. Estas estimaciones no identifican individualmente cada cara física. La referencia de 85 mm corresponde a la altura de cara, no a la altura perpendicular.
 
 Las exportaciones generadas por esta versión excluyen `resumen_exportacion_18.json` de su propio listado de archivos; su SHA-256 se guarda externamente en el resumen de la etapa 18. La [guía de operación](operacion_y_cierre.md) describe reparación histórica, respaldos y recuperación.
 
@@ -14,7 +16,7 @@ La [guía de medición dimensional](revision_medicion_dimensional.md) describe l
 
 ## De la observación a la superficie
 
-La profundidad inicial, la profundidad consensuada, la nube fusionada y la malla representan productos diferentes. El filtrado puede descartar observaciones y la reconstrucción de superficie puede interpolar zonas sin mediciones.
+La profundidad inicial se depura mediante el consenso y se integra en una nube, a partir de la cual se reconstruye la malla. Estas operaciones transforman la evidencia de distintas maneras: el filtrado puede retirar observaciones, mientras que la estimación de superficie puede interpolar regiones sin mediciones.
 
 ## Archivos de exportación
 
@@ -53,13 +55,13 @@ El estado general de una etapa y la aceptación de un candidato de relleno son d
 - **Bordes abiertos:** contornos sin cierre. Un contorno de base puede ser intencional; los laterales requieren revisión.
 - **Intersecciones:** deben interpretarse con la clasificación de 16, que distingue contactos y cruces reales.
 
-Ninguna métrica aislada garantiza dimensiones correctas. Una superficie puede aproximarse bien a una nube que ya contiene un sesgo de profundidad o registro.
+Interprete la proximidad entre nube y malla junto con el contraste dimensional. Una superficie puede ajustarse bien a una nube que ya contiene un sesgo de profundidad o de registro.
 
 ## Relleno y tapa inferior
 
 El paso 13 evalúa reconstrucciones de superficie y operaciones de completado. Cuando se acepta el candidato de paredes continuas, puede aparecer `selected_method = continuous_walls_open_base`. La base inferior se puede mantener abierta.
 
-La aplicación del relleno depende de su fidelidad a los puntos observados y de los controles topológicos. Si el candidato no los cumple, se conserva la superficie anterior. El estado general de la etapa no indica por sí solo si se aplicó un relleno.
+El relleno se acepta cuando supera los controles de fidelidad a los puntos observados y de topología; en caso contrario, se conserva la superficie anterior. Para saber si se aplicó, consulte la decisión sobre el candidato, además del estado general de la etapa.
 
 ## Comparar dimensiones
 
@@ -87,4 +89,4 @@ La compactación registra los archivos retirados por etapa en `documentacion/res
 
 ## Evidencia de la implementación
 
-La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) documenta los controles geométricos, los parámetros utilizados y los productos conservados, con imágenes de la interfaz y del procesamiento.

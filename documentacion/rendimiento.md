@@ -4,7 +4,7 @@
 
 ## Distribución del procesamiento
 
-El sistema combina inferencia en GPU con procesamiento paralelo en CPU. La estrategia depende de la etapa y del volumen de datos disponible.
+La GPU puede ejecutar la estimación de profundidad; las demás etapas realizan trabajo en CPU. La distribución de tareas varía según la operación y el volumen de datos.
 
 | Recurso | Trabajo principal |
 | --- | --- |
@@ -13,11 +13,11 @@ El sistema combina inferencia en GPU con procesamiento paralelo en CPU. La estra
 | Memoria RAM | Imágenes, mapas de profundidad, nubes y estructuras de consulta |
 | Disco | Capturas, referencias, productos intermedios y modelos finales |
 
-La ejecución aprovecha tareas independientes por vistas o bloques. La concurrencia se ajusta a la CPU, la memoria disponible y la cantidad de trabajo. Las fases secuenciales y las transferencias de datos hacen que la utilización de CPU y GPU varíe durante la reconstrucción.
+Las tareas independientes se distribuyen por vistas o bloques, con una concurrencia ajustada a la CPU, la memoria disponible y la cantidad de trabajo. Otras fases se ejecutan en secuencia y requieren transferencias de datos. Por eso, el uso de CPU y GPU varía durante la reconstrucción.
 
 ## Aceleración de profundidad
 
-El proveedor `auto` selecciona un proveedor disponible y permite ejecución por CPU cuando no hay aceleración compatible. El proveedor `cuda` solicita explícitamente la GPU NVIDIA. La configuración del entorno se describe en [Instalación y uso](instalacion_y_uso.md).
+La opción `auto` selecciona un proveedor disponible y permite ejecutar en CPU cuando no hay aceleración compatible. El proveedor `cuda` solicita explícitamente la GPU NVIDIA. La configuración del entorno se describe en [Instalación y uso](instalacion_y_uso.md).
 
 Las operaciones geométricas de Open3D dependen de la implementación disponible; la aceleración de la inferencia no implica que todas las etapas se ejecuten en GPU.
 
@@ -32,7 +32,7 @@ La configuración automática es suficiente para el uso habitual. Las siguientes
 | `SISTEMA3D_BLAS_THREADS` | Hilos internos de las bibliotecas numéricas; predeterminado: 1 por proceso |
 | `SISTEMA3D_WORKER_RESERVE_MB` | Reserva adicional de memoria considerada por trabajador |
 
-Cada etapa conserva sus límites de concurrencia y memoria. El paso 04 dispone además de su propia configuración de trabajadores. El límite de hilos internos evita que cada proceso cree un grupo completo de hilos y sobrecargue el equipo.
+Cada etapa conserva sus límites de concurrencia y memoria. El paso 04 dispone además de su propia configuración de trabajadores. Limitar los hilos internos evita que los procesos compitan por todos los recursos del equipo.
 
 ## Almacenamiento
 
@@ -47,8 +47,8 @@ El modo se selecciona con `--storage-mode`. Conservar todos los intermedios aume
 
 Los registros incluyen tiempos por etapa. Los archivos de `registros/rendimiento/` añaden muestreos de CPU, memoria y GPU cuando están disponibles; parte de las mediciones corresponde al equipo completo.
 
-El tiempo depende de la cantidad de vistas y puntos, la complejidad geométrica y las operaciones de reconstrucción. Para comparar rendimiento, utilice la misma campaña, referencias y configuración, distinguiendo una ejecución completa de una reanudación.
+El tiempo de ejecución depende de la cantidad de vistas y puntos, la complejidad geométrica y las operaciones de reconstrucción. Para comparar rendimiento, mantenga la campaña, las referencias y la configuración, e identifique si se ejecutó todo el procesamiento o se reutilizaron etapas al reanudar.
 
 ## Evidencia de la implementación
 
-La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) presenta los tiempos por etapa de una ejecución histórica y distingue sus intervalos internos y externos, junto con las fuentes de telemetría.

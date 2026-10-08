@@ -2,7 +2,7 @@
 
 [Volver al README](../README.md)
 
-Este manual reúne la preparación del equipo y el uso habitual de la aplicación. Una campaña es la carpeta de trabajo de una adquisición: conserva capturas, referencias del montaje y resultados.
+Este manual describe la preparación del equipo y el uso de la aplicación. El trabajo se organiza por campañas: cada carpeta conserva las capturas de una adquisición, sus referencias del montaje y sus resultados.
 
 ## Cómo utilizar este manual
 
@@ -41,7 +41,9 @@ python Sistema_3D.py
 
 ### Registro del entorno de referencia
 
-[entorno_referencia.json](entorno_referencia.json) conserva la versión de Python, el sistema operativo, las distribuciones Python instaladas —incluidas dependencias transitivas—, la identificación del controlador NVIDIA y la huella del ONNX en el entorno disponible al registrar esta entrega. Es un registro del entorno actual, no del utilizado necesariamente en las campañas históricas ni un archivo de instalación bloqueada. No incluye paquetes exclusivos de Conda ni identifica todas las bibliotecas del sistema; el registro no identifica las versiones de las bibliotecas CUDA/cuDNN cargadas durante la inferencia. La consulta del controlador no prueba que funcione la inferencia GPU.
+[entorno_referencia.json](entorno_referencia.json) identifica Python, el sistema operativo, las distribuciones Python instaladas —incluidas las dependencias transitivas—, el controlador NVIDIA y la huella del ONNX al preparar esta entrega. Describe el entorno de esta entrega. Las campañas históricas pudieron utilizar otra configuración, y el registro no basta para fijar una instalación completa.
+
+El registro no incluye los paquetes exclusivos de Conda, todas las bibliotecas del sistema ni las versiones de CUDA/cuDNN cargadas durante la inferencia. Identificar el controlador NVIDIA tampoco confirma que la inferencia en GPU funcione.
 
 Para registrar otra instalación, ejecute con su intérprete:
 
@@ -53,7 +55,7 @@ La herramienta no instala dependencias ni ejecuta el modelo. `requirements.txt` 
 
 ## Montaje de referencia
 
-El banco de captura utiliza el montaje descrito a continuación. Las dimensiones constructivas son aproximadas; la geometría de procesamiento se obtiene de la calibración estéreo y de plataforma correspondiente a cada campaña.
+La tabla resume el montaje de referencia y sus dimensiones constructivas aproximadas. El procesamiento utiliza la geometría obtenida de las calibraciones estéreo y de plataforma de cada campaña.
 
 | Elemento | Referencia del montaje |
 | --- | --- |
@@ -74,9 +76,11 @@ El banco de captura utiliza el montaje descrito a continuación. Las dimensiones
 
 ### Parámetros manuales de las cámaras
 
-Las dos cámaras se configuran manualmente mediante el software de Logitech. Los parámetros ópticos disponibles se mantienen fijos durante cada sesión; la aplicación de Python solicita la resolución de captura, pero no impone ni registra automáticamente estos ajustes externos. La configuración de referencia se utiliza con y sin entrada de luz natural frontal; mantener los parámetros fijos evita cambios automáticos de exposición o color, aunque no elimina el efecto de la iluminación sobre las imágenes y la reconstrucción.
+Ajuste ambas cámaras en el software de Logitech y mantenga esa configuración durante cada sesión. La aplicación de Python solicita la resolución de captura, pero no modifica ni registra esos controles externos.
 
-Cada usuario puede ajustar manualmente los controles disponibles para sus condiciones de iluminación antes de adquirir la campaña. Para documentar una adquisición propia, conserve una captura de pantalla o anote los valores utilizados junto a la campaña. El paquete publicado no contiene un registro numérico de esos ajustes externos. Si cambia la iluminación o los ajustes que afectan a la apariencia del fondo, vuelva a capturar el fondo vacío correspondiente.
+La configuración de referencia se utiliza con y sin luz natural frontal. Los parámetros fijos evitan cambios automáticos de exposición o color. Aun así, las variaciones de iluminación del entorno pueden afectar las imágenes y la reconstrucción.
+
+Antes de capturar una campaña, ajuste los controles a las condiciones de iluminación y guarde sus valores o una captura de pantalla junto al trabajo. Los resultados publicados no incluyen un registro numérico de estos ajustes. Si cambia la iluminación o la apariencia del fondo, capture de nuevo el fondo vacío.
 
 ### Esquemas del montaje
 
@@ -117,7 +121,7 @@ Cada campaña conserva sus propias referencias de calibración. Para reproducir 
 | GPU | NVIDIA GeForce RTX 4050 Laptop GPU |
 | Memoria RAM | 16 GB DDR5 |
 
-Esta configuración corresponde al equipo de desarrollo. El proveedor de inferencia utilizado en cada ejecución se registra en sus informes. La disponibilidad de CUDA depende también del entorno instalado. Las dependencias de Python están en `requirements.txt`.
+La tabla identifica el equipo de desarrollo. Los informes de cada ejecución registran el proveedor de inferencia utilizado, cuya disponibilidad depende también del entorno instalado. Las dependencias de Python se recogen en `requirements.txt`.
 
 ## Plataforma y firmware
 
@@ -148,7 +152,7 @@ En **Calibración**:
 4. **Crear campaña de calibración** prepara la plataforma; continúe con los controles de captura y procesamiento de la pestaña Captura.
 5. Al aprobar el paso 09, la aplicación instala automáticamente la calibración y respalda la anterior. **Instalar calibración guardada…** permite instalar un resultado existente con los mismos controles. No se solicita protocolo ni informe adicional: consulte el [flujo de calibración](validacion_independiente_plataforma.md).
 
-En **Herramientas** puede verificar dependencias sin instalar paquetes, auditar archivos `*_lr_state.npy`, consultar el registro y seleccionar motor (`auto`, `cuda`, `directml`, `cpu`) y conservación (`reducido`, `completo`). Los motores explícitos deben estar disponibles. El modo completo conserva los intermedios necesarios para auditorías detalladas; seleccionar completo después de una compactación no recupera archivos borrados: debe volver a procesar para generarlos.
+En **Herramientas** puede verificar dependencias sin instalar paquetes, auditar archivos `*_lr_state.npy`, consultar el registro y seleccionar motor (`auto`, `cuda`, `directml`, `cpu`) y conservación (`reducido`, `completo`). Los motores explícitos deben estar disponibles. El modo completo conserva los intermedios necesarios para auditorías detalladas. Si ya se compactó el trabajo, cambiar a este modo exige volver a procesar para generar los archivos retirados.
 
 Las herramientas se ejecutan en segundo plano, admiten **Parar** y guardan un registro completo en `registros/`. El visor muestra los últimos 100 000 caracteres. Un error de comprobación aparece como error de operación, con su diagnóstico en el registro. Terminar el cálculo del tablero no significa que su calidad haya sido aceptada: revise `calibration_report.json` antes de importarlo.
 
@@ -165,7 +169,7 @@ python herramientas/calibrar_estereo_checkerboard.py --help
 python herramientas/verificar_calibracion_estereo.py
 ```
 
-La calibración de plataforma requiere un cubo como objeto de referencia y verificaciones geométricas; no equivale a reconstruir cualquier objeto. En el flujo de la aplicación, el paso 09 guarda primero el resultado en `resultado_calibracion_plataforma/` de la campaña. Si el paso 09 aprueba sus controles, la aplicación instala automáticamente el resultado y conserva un respaldo de la referencia anterior. No requiere protocolo ni informe del paso 17. Consulte el [flujo de calibración](validacion_independiente_plataforma.md).
+Para calibrar la plataforma, utilice un cubo de referencia: los controles geométricos están diseñados para ese objeto. El paso 09 guarda el resultado en `resultado_calibracion_plataforma/` de la campaña y, si aprueba los controles, la aplicación lo instala y respalda la referencia anterior. Todo el procedimiento se completa desde la interfaz, sin un protocolo externo ni un informe del paso 17. Consulte el [flujo de calibración](validacion_independiente_plataforma.md).
 
 ## Reconstruir un objeto paso a paso
 
@@ -195,7 +199,7 @@ Para calibrar la plataforma, use **Calibrar plataforma** en Captura o **Crear ca
 | Diagnóstico de una operación | `registros/` y visor de registro de Herramientas |
 | Ejemplos publicados | [resultados/](../resultados/README.md) |
 
-Los ejemplos publicados contienen una selección de productos; no incluyen todos los pares originales para repetir la adquisición completa. Para procesar capturas propias ya existentes, pulse **Reabrir trabajo** y seleccione la carpeta de la campaña dentro de `trabajos/`, no una subcarpeta de imágenes ni la raíz del repositorio.
+Los ejemplos publicados reúnen una selección de productos. Para repetir el procesamiento completo se necesitan todos los pares originales, que no se incluyen en esa selección. Para procesar capturas propias ya existentes, pulse **Reabrir trabajo** y seleccione la carpeta de la campaña dentro de `trabajos/`, no una subcarpeta de imágenes ni la raíz del repositorio.
 
 ## Captura
 
@@ -244,7 +248,7 @@ Para calibración, cambie el modo a `calibrar-plataforma` y sustituya el argumen
 
 ## Reanudación
 
-Los checkpoints están en `reconstruccion/estado_pipeline/checkpoints.json`. Dependen del código, argumentos, entradas y productos esperados. Una etapa ausente, rechazada u obsoleta debe recalcularse.
+Los checkpoints de `reconstruccion/estado_pipeline/checkpoints.json` relacionan el código y los argumentos con las entradas y los productos esperados. Al reanudar, el coordinador recalcula las etapas ausentes, rechazadas u obsoletas.
 
 Sin `--resume`, el coordinador prepara una ejecución nueva limpiando resultados de procesamiento. Conserve una copia de la campaña para comparar configuraciones manteniendo ambos resultados.
 

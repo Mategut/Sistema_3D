@@ -1,6 +1,6 @@
 # Control de la plataforma
 
-El [programa del Arduino Uno](control_plataforma_2055_pasos/control_plataforma_2055_pasos.ino) acciona un motor 28BYJ-48 unipolar mediante un módulo ULN2003. El computador se comunica con Arduino por USB a 115200 baudios; las dos cámaras tienen conexiones USB al computador.
+El [firmware del Arduino Uno](control_plataforma_2055_pasos/control_plataforma_2055_pasos.ino) controla la plataforma mediante un motor 28BYJ-48 unipolar y un módulo ULN2003. Arduino se comunica con el computador por USB a 115200 baudios. Las dos cámaras utilizan sus propias conexiones USB al mismo equipo.
 
 ![Diagrama de conexiones](imagenes/conexiones_plataforma.png)
 
@@ -15,8 +15,8 @@ Diagrama funcional: los terminales se identifican por sus etiquetas; la posició
 | 5 V | + / VCC |
 | GND | − / GND |
 
-El conector de cinco hilos del motor se enchufa al conector de motor del módulo. La alimentación mostrada corresponde al montaje a 5 V desde Arduino, con masa común. El diagrama representa conexiones funcionales de los módulos: no asigna colores ni un orden de cables al conector del motor.
+Conecte el cable de cinco hilos del motor al conector del módulo ULN2003. En este montaje, Arduino suministra 5 V y comparte masa con el controlador. El diagrama identifica las conexiones por sus etiquetas; los colores dibujados no indican un orden ni colores reales para los hilos del motor.
 
 `Stepper(..., 8, 10, 9, 11)` establece el orden de accionamiento IN1, IN3, IN2, IN4. El cableado físico sigue la tabla, sin intercambiar IN2 e IN3. La biblioteca utiliza 2048 pasos para temporización; el recorrido calibrado es de 2055 pasos por vuelta. La secuencia de 25 movimientos es `[82, 82, 83, 82, 82]` repetida cinco veces.
 
-La adquisición realiza 24 avances `NEXT`; `CLOSE` completa los 82 pasos restantes. `RESET` reinicia contadores sin mover la plataforma. No hay sensor de origen y `STOP` libera bobinas después del movimiento bloqueante en curso. Consulte el [manual de operación](../documentacion/instalacion_y_uso.md#plataforma-y-firmware) y la [recuperación de trabajos](../documentacion/operacion_y_cierre.md).
+Durante la adquisición se realizan 24 avances `NEXT` y `CLOSE` completa los 82 pasos restantes. Como el montaje no dispone de sensor de origen, `RESET` reinicia los contadores sin modificar la posición física. `STOP` libera las bobinas una vez concluido el movimiento bloqueante en curso. Consulte el [manual de operación](../documentacion/instalacion_y_uso.md#plataforma-y-firmware) y la [recuperación de trabajos](../documentacion/operacion_y_cierre.md).

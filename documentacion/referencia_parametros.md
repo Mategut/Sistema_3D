@@ -1,6 +1,6 @@
 # Referencia de parámetros declarados
 
-Generada desde los `add_argument` de los scripts. Los valores son los declarados en código; el coordinador puede pasar otros valores explícitos. Para conocer una ejecución use sus informes y checkpoints. `sin valor explícito` no equivale necesariamente a `None`: argparse puede derivar un valor de la acción. Las expresiones se muestran sin ejecutarlas.
+Esta referencia reúne los argumentos declarados mediante `add_argument` en los scripts. El coordinador puede sustituir sus valores al ejecutar una etapa; los informes y checkpoints de cada campaña permiten consultar los valores utilizados. La indicación `sin valor explícito` no equivale necesariamente a `None`: argparse puede obtener el valor de la acción. Las expresiones se transcriben sin ejecutarlas.
 
 Regenerar: `python herramientas/generar_referencia_parametros.py`.
 

@@ -33,8 +33,8 @@
       "size_bytes": 2163
     },
     "cilindro1/README.md": {
-      "sha256": "fe195f40197d5dd2b9d5b4b20d0da842543250f46e008bb9de24fb29806c1935",
-      "size_bytes": 750
+      "sha256": "28837ad01c45a8c7d7755df2a298f2e256ac520e6146c1356539f4458d53ec05",
+      "size_bytes": 889
     },
     "cilindro1/validacion_17.json": {
       "sha256": "5fe1f97730c7c83a029330568096c7451878873c75fe65a43f5b415dd1164365",
@@ -65,8 +65,8 @@
       "size_bytes": 2253
     },
     "cilindro2/README.md": {
-      "sha256": "1600c69417207acc5ce88e86cd0ef23c567f6c7d2dc38a5115fb480f173bcc77",
-      "size_bytes": 794
+      "sha256": "7448a6f81d184cece46019490203d4d143faf8d9b28681a336a32407c40c9d7a",
+      "size_bytes": 925
     },
     "cilindro2/validacion_17.json": {
       "sha256": "f7a5a7f8e5e15db9382676d1842a54e4bd87f3a357915d7b8388fce54ba8bde8",
@@ -97,8 +97,8 @@
       "size_bytes": 2163
     },
     "cilindro3/README.md": {
-      "sha256": "d439a90630ac511771ab00e5e7ee2647ce7a776983203e1dbb8c5a7880dc2105",
-      "size_bytes": 750
+      "sha256": "5659fa76b8901adc12f9b0cda4d5b2ba12fcca540b8f4fef0ed4f13a96971413",
+      "size_bytes": 889
     },
     "cilindro3/validacion_17.json": {
       "sha256": "5947bacd1e5a4ae76de0e5e31c2647392075702f565ea5d546dcd11c6996380f",
@@ -113,8 +113,8 @@
       "size_bytes": 45634
     },
     "comparacion_dimensional.md": {
-      "sha256": "038e85a0da38beccfa191eba69b3f992b15d20334fcc7ac2b98f43d12798d842",
-      "size_bytes": 5011
+      "sha256": "0b9033976d4e1a506162cd42293253999560b4c9933a5d92864d0a71aa1a4979",
+      "size_bytes": 5068
     },
     "cubo1/captura_derecha.png": {
       "sha256": "307d57ea8cd91da1396662855ce7e06d40611ecc53b4f08ea29301274b80d927",
@@ -141,8 +141,8 @@
       "size_bytes": 2230
     },
     "cubo1/README.md": {
-      "sha256": "67df7b1f41b4cf8d273ee84d96d8e1d95b43a68dc80a6c259fd7c18ca514c5cc",
-      "size_bytes": 786
+      "sha256": "87d279ca3f57467bccca048abd14bfcd8cffeb7976b74f2bced3f8017f3e78a9",
+      "size_bytes": 917
     },
     "cubo1/validacion_17.json": {
       "sha256": "238cf40e843eaca4afc2209b10dc3c2cb6e9755af725351a58f7b69cbb396a83",
@@ -173,8 +173,8 @@
       "size_bytes": 2230
     },
     "cubo2/README.md": {
-      "sha256": "b322f6160d428c882fa923c90cbac76216188eb3235f747b1d9e355ff40ab9f2",
-      "size_bytes": 786
+      "sha256": "ecc3a06bd2302a06a7c06ce897927ad521fc78934ddc74fad27f07bb03e421f6",
+      "size_bytes": 917
     },
     "cubo2/validacion_17.json": {
       "sha256": "91a9077a3af3671a680d1ba0bd48d2e3258f47eca192e5354c92baf048aac292",
@@ -205,8 +205,8 @@
       "size_bytes": 2222
     },
     "cubo3/README.md": {
-      "sha256": "1c2e0fdbeb4eaf8c76611753e4692a0ffd881975d90d5c3abcc7186e1681a5f5",
-      "size_bytes": 785
+      "sha256": "fe6b4174e9c687127189f158e9e2e8b0cb515ad29c4b526f048afc76e88ccf82",
+      "size_bytes": 916
     },
     "cubo3/validacion_17.json": {
       "sha256": "35bc8805f6bc1fd41551a71eb6eed6a32c7671252c84d0743cd5f2ed7e80a87f",
@@ -217,8 +217,8 @@
       "size_bytes": 1128
     },
     "medidas_fisicas.md": {
-      "sha256": "1dd43e437ab8a851b2374ca034f23e3dbf11b8f7c2d95e9748b73eb7a4945c8e",
-      "size_bytes": 2404
+      "sha256": "dbfd21aa27dab831fa3ca789fffddf8d0f423bb9c3367c75cfd51426b19eae31",
+      "size_bytes": 2380
     },
     "piramide1/captura_derecha.png": {
       "sha256": "932f19d571ad595e341755bcc4306c5afdb86506815b0c5f45b59d9257976d58",
@@ -245,8 +245,8 @@
       "size_bytes": 2300
     },
     "piramide1/README.md": {
-      "sha256": "e942a8511cb09f866e438d218ccd378cd33500a480c7115e4701e05e7e4b5a42",
-      "size_bytes": 794
+      "sha256": "cc039d138381a71aac876c9b00be0d4fbbb5364f4f7e7d8e0a67f344cce40ffe",
+      "size_bytes": 926
     },
     "piramide1/validacion_17.json": {
       "sha256": "5b40599d787aa96a58d52421caacc16490b7779c5309245f1247d9d8b53e4f62",
@@ -277,8 +277,8 @@
       "size_bytes": 2300
     },
     "piramide3/README.md": {
-      "sha256": "be22cacd1a2da37580e963a43ef855974d7d080aeb269a2e6bf4eff3df5fb840",
-      "size_bytes": 794
+      "sha256": "d9223e4f60c4231b1848f281763af72665247232383825df4187e31fe3f177ce",
+      "size_bytes": 926
     },
     "piramide3/validacion_17.json": {
       "sha256": "5d7df9728390457f1c3189bc2df222bbc807bdceb3a9a6d861404d6f50bfad12",
@@ -309,16 +309,16 @@
       "size_bytes": 2300
     },
     "piramide4/README.md": {
-      "sha256": "f79c09f3ce84b209c4ef8ba0dc5f5d816ca40a1a433813a88cad0ce4195e30a1",
-      "size_bytes": 794
+      "sha256": "4136e381b1b975de3cdbce9498fd68280b1d0c0382ee35d7cb753024a18e039a",
+      "size_bytes": 926
     },
     "piramide4/validacion_17.json": {
       "sha256": "81cfe697949be42f38fe104df276f7464be903d8c36d7093a2daae7fd0ecaad6",
       "size_bytes": 12901
     },
     "README.md": {
-      "sha256": "3a8cf522a0aeac87df4edb1af33eb1aeab5cd3f9a773d42b9ef82ab7f6e7129e",
-      "size_bytes": 2556
+      "sha256": "a1d6a30052cbc66b9ed559de1323ab64edc92c8b2a1786fffcffb8212a28e641",
+      "size_bytes": 2661
     }
   }
 }

@@ -1,6 +1,6 @@
 # Resultados seleccionados
 
-La selección publicada comprende cilindros 1, 2 y 3; cubos 1, 2 y 3; pirámides 1, 3 y 4. Se mantienen las calidades y advertencias históricas. `cubo3` corresponde a la carpeta original `ubo3_20260919_131506`, cuyo nombre se escribió sin la C. Las campañas originales no se renombran.
+La selección reúne cilindros 1, 2 y 3; cubos 1, 2 y 3; y pirámides 1, 3 y 4, con las métricas, los estados de calidad y las advertencias de sus ejecuciones originales. El nombre público `cubo3` corresponde a la carpeta `ubo3_20260919_131506`, cuyo identificador omitió la letra C. Los archivos de procedencia conservan ese nombre para mantener el vínculo con la fuente.
 
 - [cilindro1](cilindro1/README.md): `cilindro1_20260919_132249`
 - [cilindro2](cilindro2/README.md): `cilindro2_20260919_132519`
@@ -16,9 +16,9 @@ Consulte las [medidas físicas aproximadas](medidas_fisicas.md) y su [registro J
 
 ## Uso y reproducción
 
-Abra los PLY con un visor compatible. Sus coordenadas están en milímetros: para trabajar en metros aplique escala 0.001. Las imágenes son evidencia ilustrativa, no las 75 parejas de una campaña. Las mallas no se simplificaron ni se recalcularon al preparar este paquete.
+Abra los PLY con un visor compatible. Las coordenadas están en milímetros; si necesita metros, aplique una escala de 0.001. Cada campaña incluye un par de imágenes seleccionado de una adquisición de 75 pares. Las mallas mantienen la geometría original, sin simplificación ni recálculo.
 
-Para repetir el procesamiento se necesitan las capturas completas S01/S02/S03, sus referencias congeladas y el modelo correspondiente, que permanecen en trabajos y no se duplican aquí. Abra la campaña original desde la aplicación y procese con conservación completa; un cambio de código puede modificar los resultados. Este paquete permite inspección de los resultados publicados, no reproducción numérica completa por sí solo.
+Para repetir el procesamiento se necesitan las capturas completas S01/S02/S03, sus referencias congeladas y el modelo correspondiente, que permanecen en trabajos y no se duplican aquí. Abra la campaña original desde la aplicación y procese con conservación completa; un cambio de código puede modificar los resultados. El paquete permite inspeccionar los resultados publicados. La reproducción numérica completa requiere las entradas que se indican arriba.
 
 Para volver a generar esta selección local: `python herramientas/preparar_resultados_publicos.py --output resultados_nuevos`. Consulte `procedencia.json` en cada ejemplo y `catalogo.json`. Las rutas personales se omiten de los informes publicados; por ello sus huellas difieren de los originales. Las referencias físicas de la comparación están documentadas en [medidas_fisicas.md](medidas_fisicas.md).
 

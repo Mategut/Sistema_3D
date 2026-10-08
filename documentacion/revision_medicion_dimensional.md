@@ -2,7 +2,7 @@
 
 [Resultados y validación](resultados_y_validacion.md) · [Comparación publicada](../resultados/comparacion_dimensional.md)
 
-El [script de comparación](../herramientas/comparar_dimensiones.py) utiliza coordenadas en milímetros, sin reescalar las mallas a las medidas físicas. Las diferencias se calculan como reconstrucción menos referencia y el porcentaje se divide entre la referencia. La referencia de 85 mm de la pirámide corresponde a la altura de cara, no a la altura perpendicular al plano de base. Este documento describe el método utilizado y la interpretación de las discrepancias de la muestra publicada.
+El [script de comparación](../herramientas/comparar_dimensiones.py) utiliza coordenadas en milímetros, sin reescalar las mallas a las medidas físicas. La diferencia se calcula restando la referencia a la dimensión reconstruida; para expresarla en porcentaje, se divide entre la referencia. La referencia de 85 mm de la pirámide corresponde a la altura de cara, no a la altura perpendicular al plano de base. Este documento describe el método utilizado y la interpretación de las discrepancias de la muestra publicada.
 
 ## Sensibilidad de las estimaciones
 
@@ -14,7 +14,7 @@ El [script de comparación](../herramientas/comparar_dimensiones.py) utiliza coo
 
 ## Diagnósticos de las mallas publicadas
 
-Los diagnósticos de las mallas finales permiten comparar la altura por extremos con la extensión entre percentiles 0,5–99,5, a partir de los registros incluidos en la entrega:
+Los registros incluidos permiten contrastar dos descriptores de las mallas finales: la altura por extremos y la extensión entre percentiles 0,5–99,5.
 
 | Campaña | Altura por extremos (mm) | Extensión entre percentiles (mm) | Diferencia entre métodos (mm) |
 | --- | ---: | ---: | ---: |
@@ -25,12 +25,12 @@ Los diagnósticos de las mallas finales permiten comparar la altura por extremos
 | cubo2 | 95,848 | 95,816 | 0,032 |
 | cubo3 | 95,977 | 95,470 | 0,507 |
 
-Fuente: `diagnostics.height_robust_005_995_mm` y `dimensions_mm` del [JSON publicado](../resultados/comparacion_dimensional.json). La extensión entre percentiles elimina parte de los extremos por definición; no sustituye la altura física ni demuestra que dichos extremos sean erróneos. La tabla muestra sensibilidad especialmente apreciable en las alturas de cilindro.
+Fuente: `diagnostics.height_robust_005_995_mm` y `dimensions_mm` del [JSON publicado](../resultados/comparacion_dimensional.json). La extensión entre percentiles excluye parte de los extremos por definición. Esa exclusión no demuestra que los extremos sean erróneos ni convierte el descriptor en una altura física. En la tabla, la sensibilidad resulta especialmente apreciable en los cilindros.
 
 Los diámetros de cilindro publicados se obtuvieron mediante ajuste robusto, no mediante una caja envolvente. Por ello, las diferencias positivas de diámetro no pueden atribuirse simplemente a que se eligió el punto más lejano. Los diagnósticos publicados no separan cuantitativamente los efectos de calibración, captura, reconstrucción, estimación de superficie y referencia física.
 
 ## Alcance de la comparación
 
-La comparación caracteriza las discrepancias de las nueve campañas publicadas respecto de referencias aproximadas tomadas con regla. La sensibilidad de los descriptores geométricos puede contribuir a esas diferencias, pero los datos disponibles no permiten atribuirles una causa única o principal ni cuantificar la incertidumbre de la medición física.
+La comparación cuantifica las diferencias de las nueve campañas respecto a las referencias aproximadas tomadas con regla. El descriptor geométrico puede influir en las discrepancias. Los datos disponibles, sin embargo, no permiten aislar una causa principal ni cuantificar la incertidumbre de la medición física.
 
 Las referencias físicas de la pirámide describen segmentos individuales; los descriptores de la malla corresponden a medias de tres lados, aristas y alturas de cara. Esta diferencia de definición forma parte de las limitaciones de la comparación. La altura de cara es el segmento sobre la cara desde la punta perpendicularmente al lado de base; las medidas físicas proceden de la regla, no de longitudes en píxeles de una fotografía en perspectiva.

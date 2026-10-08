@@ -1,6 +1,6 @@
 # Referencias físicas aproximadas
 
-Referencias físicas tomadas con regla. Son medidas aproximadas; no se dispone de un registro de resolución del instrumento, repeticiones ni incertidumbre. El registro legible por programas está en [medidas_fisicas.json](medidas_fisicas.json).
+Las referencias físicas se midieron con regla. Se consideran aproximadas porque no se registraron la resolución del instrumento, mediciones repetidas ni una estimación de incertidumbre. El archivo [medidas_fisicas.json](medidas_fisicas.json) recoge los mismos valores para su consulta mediante programas.
 
 | Objeto | Magnitud | Medida aproximada | Referencia en mm |
 | --- | --- | --- | --- |
@@ -15,12 +15,12 @@ Referencias físicas tomadas con regla. Son medidas aproximadas; no se dispone d
 
 ## Criterio para la comparación
 
-Las diferencias respecto de estas referencias se presentan como discrepancias con medidas aproximadas, sin atribuirles una precisión superior a la de la regla. El registro no incluye una incertidumbre cuantificada ni una tolerancia instrumental, por lo que no se asigna un margen como ±1 mm.
+Las diferencias se expresan como discrepancias respecto a las referencias aproximadas tomadas con regla. Sin incertidumbre cuantificada ni tolerancia instrumental registrada, no se asigna un margen como ±1 mm.
 
 La comparación identifica el archivo utilizado, sus unidades y el procedimiento geométrico: altura y base del cubo, altura y diámetro del cilindro, o lados de base, aristas laterales y alturas de cara de la pirámide. Las extensiones de una caja envolvente alineada con los ejes de coordenadas dependen de la orientación y no equivalen automáticamente a esas dimensiones físicas.
 
-Las tres dimensiones de la pirámide se registran independientemente. No se supone una pirámide regular ni se reemplaza una medida con una deducción de las otras. Los segmentos fueron identificados como lado de base, arista lateral y altura de cara. La comparación promedia los segmentos estimados de la malla, sin atribuir correspondencia individual a cada cara física.
+En la pirámide se registraron por separado el lado de base, la arista lateral y la altura de cara. Cada medida se conserva por separado, sin deducirla de las otras ni suponer regularidad del objeto. La comparación utiliza el promedio de los segmentos estimados en la malla; no establece una correspondencia individual con cada cara física.
 
 La selección publicada incluye cilindros 1, 2 y 3; cubos 1, 2 y 3; y pirámides 1, 3 y 4. El nombre público `cubo3` corresponde a `ubo3_20260919_131506`, un error de escritura en el nombre original. Se conservan los nombres originales en la procedencia. Las medidas se asocian por tipo de objeto a esas campañas.
 
-La medida de 8,5 cm corresponde a la altura de una cara, desde la punta hasta el lado opuesto de esa cara. No es la altura perpendicular al plano de base. Las longitudes proceden de medidas con regla, no de píxeles de una fotografía. El lado de base de referencia es de 10,3 cm.
+Los 8,5 cm corresponden a la altura de cara: el segmento desde la punta, perpendicular al lado opuesto dentro de esa cara. Esta medida difiere de la altura perpendicular al plano de base. Las longitudes se midieron con regla; la perspectiva de una fotografía no se utiliza para calcularlas. El lado de base de referencia mide 10,3 cm.

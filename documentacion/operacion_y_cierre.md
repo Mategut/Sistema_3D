@@ -16,15 +16,15 @@
 | Esquinas internas y lado del cuadro | Formulario estéreo | Deben coincidir con el tablero físico; un lado incorrecto afecta la escala métrica. |
 | Separación aproximada y tolerancia | Formulario estéreo | Control de coherencia del montaje; no reemplaza la estimación ni una medición del patrón. |
 | Cámaras, resolución y fondo | Captura y referencias | El montaje utiliza 1920 × 1080. Si cambia la geometría, recalibre; si cambia el fondo o iluminación, actualice su captura. |
-| Motor de inferencia | Herramientas, `--provider` | `auto` permite fallback; los motores explícitos exigen disponibilidad. El proveedor visible no garantiza bibliotecas CUDA operativas. |
+| Motor de inferencia | Herramientas, `--provider` | `auto` permite recurrir a otro proveedor disponible; los motores explícitos exigen disponibilidad. El proveedor visible no garantiza bibliotecas CUDA operativas. |
 | Conservación | Herramientas, `--storage-mode` | `completo` conserva diagnóstico intermedio; `reducido` conserva los productos científicos definidos. No recupera archivos previamente eliminados. |
-| Máscaras, consistencia LR y soporte | Pasos 02–06 | Determinan qué observaciones sustentan la geometría. No ajuste estos filtros por objeto para mejorar artificialmente una evaluación independiente. |
+| Máscaras, consistencia LR y soporte | Pasos 02–06 | Determinan qué observaciones sustentan la geometría. Para una evaluación independiente, conserve criterios comunes entre objetos; ajustarlos a cada resultado altera la comparación. |
 | Registro y fusión | Pasos 08/10–12 | Afectan alineamiento y densidad. Diferencie error de registro de error de superficie. |
 | Completado y pulido | Pasos 13–15 | Pueden inferir superficie. El modelo final y el previo al pulido no equivalen automáticamente a observaciones directas. |
 | Cobertura y distancias | Paso 17 | Cobertura: radio declarado 3 mm, advertencia 0.95, rechazo 0.85. P90 nube→malla: 2.5/4.5 mm. P90 malla→nube: 2.0/4.0 mm, con adaptación activada y techo de rechazo 6 mm. Consulte los umbrales efectivos del informe. |
 | Exportación | Paso 18 | Hereda calidad; una exportación con warning debe conservar las advertencias. OBJ Blender usa metros; OBJ científico y PLY usan milímetros. |
 
-La [referencia completa de argumentos](referencia_parametros.md) se genera del código. Incluye valores declarados, opciones y ayuda por etapa. La línea de comandos del coordinador y los informes de la ejecución tienen prioridad sobre cualquier valor por defecto aislado.
+La [referencia completa de argumentos](referencia_parametros.md) se genera del código. Incluye valores declarados, opciones y ayuda por etapa. Para interpretar una ejecución, consulte primero los argumentos del coordinador y sus informes: un valor predeterminado aislado puede haber sido sustituido.
 
 ## Fallos y recuperación
 
@@ -32,21 +32,21 @@ La [referencia completa de argumentos](referencia_parametros.md) se genera del c
 | --- | --- |
 | Cámara ocupada o índice incorrecto | Cierre la aplicación que la utiliza y revise índices. La captura del tablero libera las cámaras de la vista previa; reconecte al terminar. |
 | Puerto serie sin respuesta | Compruebe puerto, baudios 115200, cable y firmware. No cambie la posición inicial física durante una captura. |
-| Error CUDA o proveedor no disponible | Revise el diagnóstico. Use `auto` o `cpu` desde Herramientas si corresponde; no declare que se usó GPU cuando el registro indica CPU. |
-| Huellas de referencias distintas | Conserve el diagnóstico. Restaure los bytes originales o cree otra campaña; no edite las huellas para aceptar recursos diferentes. |
+| Error CUDA o proveedor no disponible | Revise el diagnóstico. Use `auto` o `cpu` desde Herramientas si corresponde. Consulte el registro para identificar el proveedor utilizado. |
+| Huellas de referencias distintas | Conserve el diagnóstico. Restaure los bytes originales o cree otra campaña con las referencias correctas. Las huellas deben corresponder a los archivos utilizados. |
 | Captura interrumpida | Reinicie la captura con el objeto en su posición inicial. El reinicio lógico del Arduino no mueve físicamente el montaje a un origen. |
 | Procesamiento interrumpido | Reabra el trabajo y reanude. Solo se reutilizan checkpoints vigentes; si cambian código, entradas o productos, puede ser necesario recalcular. |
 | Candidata o informe rechazados | Lea el registro y corrija el experimento o los archivos. Guardar un informe no implica verificarlo ni activar una calibración. |
-| Exportación rechazada | Revise los pasos 16 y 17. No cambie manualmente el estado de calidad para forzar la entrega. |
+| Exportación rechazada | Revise las causas en los pasos 16 y 17 y corrija el problema antes de exportar. El estado de calidad debe proceder de la validación. |
 | Falta de evidencia LR en un trabajo reducido | Vuelva a procesar con conservación completa. La compactación anterior no es reversible sin los datos originales. |
 
 `Parar` solicita cancelar el proceso y detener el motor. El firmware no interrumpe un movimiento bloqueante ya iniciado. Espere a la confirmación de parada antes de manipular el montaje.
 
 ## Integridad de exportación
 
-El informe `resumen_exportacion_18.json` registra hashes de los archivos de carga útil y excluye su propio nombre. El resumen de la etapa 18 guarda externamente `export_report_sha256`. No existe un ciclo de hashes.
+El informe `resumen_exportacion_18.json` registra las huellas de los archivos exportados y excluye su propio nombre. Para evitar la autorreferencia, su huella se guarda por separado como `export_report_sha256` en el resumen de la etapa 18.
 
-La reparación histórica se ejecuta con `python herramientas/reparar_manifiestos_exportacion.py`. Comprueba primero las huellas existentes de la carga útil; si encuentra diferencias no las encubre recalculándolas. Conserva los informes anteriores en `registros/reparacion_manifiestos_*/` y corrige únicamente el manifiesto y su resumen asociado. No modifica mallas ni métricas. Los checkpoints no se falsifican para declararlos vigentes; el coordinador los vuelve a comprobar al reanudar.
+La reparación histórica se ejecuta con `python herramientas/reparar_manifiestos_exportacion.py`. Primero comprueba las huellas de los archivos exportados y detiene la reparación si encuentra diferencias. Conserva los informes anteriores en `registros/reparacion_manifiestos_*/` y corrige únicamente el manifiesto y su resumen asociado. No modifica mallas ni métricas. La reparación no renueva los checkpoints: el coordinador vuelve a comprobarlos al reanudar.
 
 ## Contenido de la entrega
 
@@ -56,7 +56,9 @@ La reparación histórica se ejecuta con `python herramientas/reparar_manifiesto
 - `resultados/`: nueve campañas seleccionadas, con originales PLY, imágenes, advertencias, procedencia y manifiesto independiente.
 - Se excluyen `trabajos/`, `registros/`, `respaldos/`, `backups/`, cachés y archivos temporales. No elimine las campañas originales: son necesarias para una reproducción completa.
 
-La muestra pública permite inspección; no contiene todas las capturas ni certifica reproducción numérica completa. El script de selección usa campañas identificadas explícitamente y exige una carpeta de salida nueva. Las huellas de `resultados/MANIFEST.json` excluyen el propio manifiesto. No convierta finales de línea ni edite archivos publicados sin regenerar ese manifiesto.
+La muestra pública permite inspeccionar los resultados. Repetir el procesamiento completo requiere también las capturas y sus referencias originales. El script de selección trabaja con campañas identificadas y exige una carpeta de salida nueva.
+
+`resultados/MANIFEST.json` registra las huellas de los archivos, salvo la del propio manifiesto. Si modifica un documento publicado o sus finales de línea, regenere el manifiesto para que siga describiendo el contenido del paquete.
 
 ## Alcance de la entrega
 
@@ -64,7 +66,9 @@ La entrega reúne el software, el firmware, las referencias del montaje y la evi
 
 Se incluye una [comparación dimensional exploratoria](../resultados/comparacion_dimensional.md) con las referencias físicas aproximadas tomadas con regla. La autoría, el título y la institución están documentados en el [README principal](../README.md#identificación-del-proyecto); el montaje y el equipo de cómputo de referencia, en [instalación y uso](instalacion_y_uso.md#montaje-de-referencia). La conversión ONNX utilizada procede de PINTO Model Zoo, sin que se haya comprobado la igualdad binaria con una descarga upstream.
 
-El alcance experimental se limita a los tres tipos de objeto de la muestra publicada; sus resultados no acreditan generalización a otras geometrías o montajes. Las referencias físicas son aproximadas, con incertidumbre sin cuantificar y sin correspondencia individual entre todos los segmentos medidos y reconstruidos. La identificación del modelo acredita el archivo local, sin una comparación binaria upstream. El manual identifica el equipo de cómputo de referencia. El código propio y su documentación de software se publican bajo [licencia MIT](../LICENSE), con el alcance y las excepciones de terceros descritos en el [README](../README.md#licencia). Los resultados publicados corresponden a las ejecuciones históricas identificadas en el catálogo y sus archivos de procedencia.
+El alcance experimental se limita a los tres tipos de objeto de la muestra y al montaje utilizado. Las referencias físicas son aproximadas, carecen de incertidumbre cuantificada y no establecen una correspondencia individual entre todos los segmentos medidos y los estimados. El catálogo y los archivos de procedencia identifican las ejecuciones históricas que sustentan los resultados publicados.
+
+El código propio y su documentación de software se publican bajo [licencia MIT](../LICENSE), con el alcance y las excepciones de terceros descritos en el [README](../README.md#licencia).
 
 ## Controles de importación y exportación
 
@@ -82,4 +86,4 @@ La exportación registra el reemplazo en `resultado_final_publicacion.json`. Ant
 
 ## Evidencia de la implementación
 
-La [guía de implementación y evidencia](implementacion_y_evidencia.md) reúne contratos de etapas, controles de consenso y superficie, indicadores de plataforma y registro, parámetros efectivos, capturas de interfaz y tiempos de una ejecución histórica identificada.
+La [guía de implementación y evidencia](implementacion_y_evidencia.md) permite relacionar el recorrido operativo con las capturas de la interfaz, los parámetros y los productos de procesamiento conservados.

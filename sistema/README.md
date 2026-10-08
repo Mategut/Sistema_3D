@@ -2,7 +2,7 @@
 
 [Volver al proyecto](../README.md)
 
-Esta carpeta contiene las referencias globales utilizadas al preparar nuevas campañas. Los archivos incluidos corresponden al montaje de desarrollo: no constituyen una calibración universal para otras cámaras, posiciones o plataformas. Compruebe su correspondencia con el equipo físico antes de utilizarlos.
+Al preparar una campaña, la aplicación utiliza las referencias de esta carpeta. Las incluidas corresponden al montaje de desarrollo. Antes de emplearlas, compruebe la disposición de cámaras y plataforma; si el montaje es diferente, obtenga referencias propias.
 
 ## Contenido
 
@@ -20,7 +20,7 @@ El paso 09 genera la calibración dentro de la campaña. Si sus controles se apr
 
 La instalación habitual registra `active_step09_approved` en `estado_activacion_plataforma.json` con la huella correspondiente. **Instalar calibración guardada…** realiza la misma operación sobre un resultado existente. No necesita protocolo ni informe del paso 17. Los estados históricos `evaluation_only` y `active_independently_validated` siguen describiendo sus modalidades de evaluación y revisión; no se reetiquetan automáticamente.
 
-El nombre `calibracion_plataforma.json` indica la referencia instalada, pero por sí solo no demuestra aprobación independiente. Consulte los estados y la evidencia asociada. La validación estructural de los archivos tampoco certifica exactitud dimensional.
+El archivo `calibracion_plataforma.json` contiene la referencia instalada. Para conocer su modalidad de aprobación, consulte los estados y la evidencia asociada: el nombre del archivo no acredita una revisión independiente, y la validación estructural no certifica exactitud dimensional.
 
 El procedimiento completo está en la [guía de calibración](../documentacion/validacion_independiente_plataforma.md).
 
@@ -34,8 +34,8 @@ Realice estas operaciones desde la interfaz siguiendo [instalación y uso](../do
 
 ## Referencias de cada campaña
 
-Al crear una campaña, el sistema congela sus referencias en `trabajos/<campaña>/documentacion/referencias/`. El procesamiento utiliza esas copias y comprueba su integridad. Actualizar esta carpeta global no actualiza las copias de una campaña existente.
+Al crear una campaña, el sistema conserva copias de sus referencias en `trabajos/<campaña>/documentacion/referencias/`. Esas copias quedan congeladas para el procesamiento, que comprueba su integridad. Los cambios posteriores en la carpeta global no se trasladan a campañas ya existentes.
 
 Conserve las referencias originales de las capturas. Si el montaje cambia, prepare una nueva campaña con referencias correspondientes al nuevo montaje. Las campañas antiguas sin copias congeladas tienen un tratamiento de compatibilidad explicado en las guías; no ofrecen la misma trazabilidad.
 
-Los recursos se identifican mediante SHA-256 y Git conserva sus bytes mediante `.gitattributes`. No edite manualmente matrices, mapas o huellas para hacer pasar una comprobación.
+Los recursos se identifican mediante SHA-256 y Git conserva sus bytes mediante `.gitattributes`. Si una comprobación falla, revise o regenere la referencia correspondiente; modificar matrices, mapas o huellas manualmente invalida su trazabilidad.

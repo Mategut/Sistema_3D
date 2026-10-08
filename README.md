@@ -1,14 +1,14 @@
 # Sistema de reconstrucción 3D por visión estereoscópica
 
-Software de un proyecto de grado para reconstruir objetos mediante dos cámaras web y una plataforma giratoria controlada por Arduino. Integra adquisición, estimación de profundidad, registro multivista, reconstrucción de superficie y exportación en escala métrica.
+Sistema 3D es una aplicación desarrollada como proyecto de grado que reúne captura de imágenes, estimación de profundidad y reconstrucción de superficies métricas. Dos cámaras web permanecen fijas frente a una plataforma giratoria controlada por Arduino. Al girar el objeto, se adquieren vistas parciales que después se alinean para reconstruir su geometría.
 
-Cada adquisición se organiza como una **campaña**, con sus capturas, referencias del montaje, resultados e informes de calidad. La configuración habitual utiliza tres sesiones de 25 posiciones: 75 pares estéreo.
+Cada **campaña** reúne las capturas, las referencias del montaje y los productos de una adquisición. La configuración habitual comprende tres sesiones de 25 posiciones: en total, 75 pares estéreo, junto con sus resultados e informes de calidad.
 
 ## Explorar los modelos en 3D
 
 [**Abrir la galería interactiva de resultados**](https://mategut.github.io/Sistema_3D/)
 
-Permite girar y ampliar las nueve reconstrucciones, alternar entre la malla final y la anterior al pulido, consultar métricas y descargar los PLY originales. La galería está publicada en GitHub Pages y puede consultarse sin instalar la aplicación. Los controles y la interpretación de los resultados se explican en la [guía del visor](visor/LEEME.md).
+En la galería puede girar y ampliar las nueve reconstrucciones, alternar entre la malla final y la anterior al pulido, consultar métricas y descargar los PLY originales. La galería está publicada en GitHub Pages y puede consultarse sin instalar la aplicación. Los controles y la interpretación de los resultados se explican en la [guía del visor](visor/LEEME.md).
 
 ## Identificación del proyecto
 
@@ -18,7 +18,7 @@ Permite girar y ampliar las nueve reconstrucciones, alternar entre la malla fina
 - **Director:** Billy Wladimir Toro Tovar, Ph.D. **Codirector:** Armando Mateus Rojas, M.Sc.
 - **Repositorio:** [Mategut/Sistema_3D](https://github.com/Mategut/Sistema_3D).
 
-Este repositorio constituye la entrega de software y evidencia del proyecto: incluye el código, el firmware, las referencias del montaje, el modelo de profundidad, los manuales y nueve campañas documentadas de cubo, cilindro y pirámide. Los modelos publicados conservan las métricas y los estados de calidad registrados en sus ejecuciones. El documento académico de tesis desarrolla la fundamentación y la discusión de los resultados y no forma parte de este paquete.
+El repositorio reúne el código, el firmware, las referencias del montaje, el modelo de profundidad y las guías de uso, junto con nueve campañas documentadas de cubo, cilindro y pirámide. Las métricas y los estados de calidad corresponden a las ejecuciones originales y se conservan sin recalcularlos. La tesis, entregada por separado, desarrolla la fundamentación y la discusión académica.
 
 La [guía de instalación](documentacion/instalacion_y_uso.md#montaje-de-referencia) incluye los esquemas del banco, el cableado Arduino–ULN2003–28BYJ-48 y el equipo de cómputo. El alcance experimental y las limitaciones de la evidencia se describen en [Resultados y validación](documentacion/resultados_y_validacion.md).
 
@@ -38,7 +38,7 @@ La [guía de instalación](documentacion/instalacion_y_uso.md#montaje-de-referen
 
 ## Versión del software
 
-La versión de esta entrega es **3.2.1**. Su fuente única es [version_sistema.py](procesamiento/version_sistema.py); la interfaz, el coordinador y los informes de calibración y exportación generados por esta versión utilizan esa constante. Las versiones de esquema y de métodos tienen significado independiente. Los informes históricos conservan la versión con la que fueron generados.
+Esta entrega utiliza la versión **3.2.1**, definida en [version_sistema.py](procesamiento/version_sistema.py). La interfaz, el coordinador y los nuevos informes de calibración y exportación leen esa misma constante. Las versiones de los esquemas de datos y de los métodos se identifican por separado; los informes históricos conservan su versión original.
 
 ## Requisitos
 
@@ -71,7 +71,7 @@ Después:
 
 `VERIFICAR_SISTEMA.bat` intenta instalar las dependencias faltantes. La opción `--no-install` permite comprobarlas sin instalar. El lanzador busca preferentemente el entorno Conda `tesis`; para usar el intérprete activo puede ejecutar `python Sistema_3D.py`.
 
-La interfaz organiza las acciones en **Captura**, **Calibración** y **Herramientas**. Permite crear y verificar la calibración estéreo e instalar automáticamente la calibración de plataforma al aprobar el paso 09, sin informes externos ni PowerShell. Incluye diagnósticos, registros y selección de motor y almacenamiento. Consulte el [flujo de calibración en la interfaz](documentacion/instalacion_y_uso.md#calibraciones-desde-la-interfaz).
+Las pestañas **Captura**, **Calibración** y **Herramientas** reúnen la preparación del montaje, la adquisición y la reconstrucción. La aplicación instala la calibración de plataforma cuando se aprueban los controles del paso 09. Desde la interfaz también se consultan los diagnósticos y registros y se seleccionan el motor de inferencia y el modo de almacenamiento. Consulte el [flujo de calibración en la interfaz](documentacion/instalacion_y_uso.md#calibraciones-desde-la-interfaz).
 
 ## Organización
 
@@ -116,7 +116,7 @@ El [coordinador 00](procesamiento/00_ejecutar_pipeline.py) ejecuta la ruta y per
 
 ## Resultados
 
-La exportación genera un OBJ en metros para Blender y versiones OBJ y PLY en milímetros. El PLY conserva los atributos de color de la malla. Cada campaña incluye informes de calidad y una referencia anterior al pulido para comparar la geometría.
+La exportación genera un OBJ en metros para Blender y versiones OBJ y PLY en milímetros. El PLY conserva los atributos de color de la malla. Los informes de calidad acompañan la exportación, junto con una referencia anterior al pulido que permite comparar la geometría.
 
 La superficie puede incorporar regiones estimadas y conservar la base inferior abierta. La [guía de resultados](documentacion/resultados_y_validacion.md) explica las unidades, las métricas y los estados de validación.
 

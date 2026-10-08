@@ -4,17 +4,17 @@
 
 ## Alcance de la evaluación
 
-La caracterización combina dimensiones de objetos de referencia, indicadores de alineación multivista, fidelidad nube–malla y topología. El tercer objetivo del documento académico es:
+La evaluación examina cuatro aspectos: dimensiones de los objetos de referencia, alineación de las vistas, relación entre nube y malla y topología. Este alcance corresponde al tercer objetivo del documento académico:
 
 > Evaluar la precisión y la calidad geométrica del modelo tridimensional obtenido mediante la comparación dimensional con objetos poligonales de referencia y el análisis de indicadores de alineación multivista, fidelidad geométrica y topología.
 
-Los objetivos de captura controlada y desarrollo de reconstrucción métrica se mantienen. Los indicadores describen la estrategia implementada; no se declara superioridad frente a ICP libre u otras estrategias.
+Los otros objetivos abarcan la captura controlada y el desarrollo de la reconstrucción métrica. Se evalúa el comportamiento de la estrategia implementada, sin atribuirle superioridad frente a ICP libre u otros métodos.
 
 ## Geometría del montaje
 
-La base mide aproximadamente 30 × 50 cm. Los 40 cm son desde el borde frontal hasta el centro de la plataforma. Las cámaras están retranqueadas unos 5 cm; su distancia longitudinal nominal al centro es de unos 35 cm. La separación entre centros ópticos es aproximadamente 7,7 cm.
+La base tiene dimensiones aproximadas de 30 × 50 cm. Desde su borde frontal hasta el centro de la plataforma hay 40 cm; como las cámaras se sitúan unos 5 cm hacia el interior, la distancia longitudinal nominal entre estas y el centro es de unos 35 cm. La separación entre centros ópticos es aproximadamente 7,7 cm.
 
-La calibración histórica conserva 355,196 mm como distancia del punto medio estéreo a la recta del eje. Es un descriptor tridimensional distinto de la cota longitudinal nominal. El informe original utilizó un prior de 400 mm con tolerancia amplia y se conserva intacto. Los valores por defecto de los pasos 08/09 para nuevas calibraciones son 350 mm. No se modifican calibraciones activas, referencias congeladas ni mallas históricas.
+La calibración histórica registra 355,196 mm entre el punto medio estéreo y la recta del eje. Esta distancia tridimensional no equivale a la cota longitudinal nominal del esquema. El informe original conserva el prior de 400 mm y su tolerancia amplia; las nuevas calibraciones utilizan 350 mm por defecto en los pasos 08/09. Las calibraciones activas, las referencias congeladas y las mallas históricas mantienen sus valores originales.
 
 ## Interfaz y operación
 
@@ -26,7 +26,7 @@ Las imágenes muestran los controles reales en estado inicial, sin dispositivos 
 
 ![Pestaña herramientas](imagenes/interfaz_herramientas.png)
 
-Captura reúne conexión, confirmación de cámaras, fondo vacío, creación de campañas y adquisición de tres sesiones. Calibración permite crear/importar/verificar estéreo y crear la campaña de plataforma. «Calibrar plataforma» y «Crear campaña de calibración» invocan la misma acción. Herramientas reúne diagnóstico LR, registros, motor de inferencia y almacenamiento.
+En **Captura** se conectan y confirman las cámaras, se registra el fondo vacío y se adquieren las tres sesiones de la campaña. **Calibración** permite crear, importar y verificar las referencias estéreo, además de preparar la campaña de plataforma. Los botones «Calibrar plataforma» y «Crear campaña de calibración» realizan esa misma preparación. **Herramientas** reúne el diagnóstico LR, la consulta de registros y la selección del motor de inferencia y del almacenamiento.
 
 «Procesar desde cero» limpia los productos previos del trabajo. «Reanudar procesamiento» reutiliza checkpoints válidos y recalcula desde la primera etapa afectada. No equivale a continuar una captura interrumpida: la posición inicial debe restablecerse físicamente.
 
@@ -46,11 +46,13 @@ La [arquitectura y productos por etapa](arquitectura_y_codigo.md) identifica cad
 
 ## Consenso y profundidad absoluta
 
-El paso 05 realiza alineación bidimensional restringida y selecciona una capa compatible mediante medoide. Combina observaciones en profundidad inversa con confianza, residual y ponderación robusta. Conserva dispersión y fiabilidad. Las diferencias escalares de profundidad se registran como diagnóstico; la estimación devuelve correcciones nulas, sin modificar la profundidad absoluta para igualar sesiones. El soporte entre sesiones de una pose no equivale a soporte angular de poses distintas.
+En el paso 05, un ajuste bidimensional restringido alinea las imágenes y un medoide permite seleccionar una capa de profundidad compatible. Las observaciones se combinan después en profundidad inversa, según su confianza, residual y peso robusto. El resultado conserva la dispersión y la fiabilidad del consenso.
+
+Las diferencias escalares de profundidad se registran como diagnóstico, con correcciones estimadas nulas. Se conserva así la profundidad absoluta, sin desplazarla para igualar las sesiones. La repetición de una pose aporta observaciones adicionales de esa posición; el soporte angular requiere poses distintas.
 
 ## Registro, fusión y superficie
 
-El registro aplica la referencia de plataforma; el refinamiento transversal conserva dirección y ángulos y requiere controles independientes. La fusión utiliza soporte, incidencia, confianza, dispersión y coherencia local en un marco canónico con Y alineado al eje. El paso 13 exige fidelidad, cobertura y conectividad antes de comparar puntuaciones. Si todos los candidatos fallan, rechaza la etapa. Una superficie estimada o continua no constituye observación íntegra ni verdad de referencia.
+El registro aplica la referencia de plataforma; el refinamiento transversal conserva dirección y ángulos y requiere controles independientes. La fusión pondera el soporte, la incidencia, la confianza, la dispersión y la coherencia local en un marco canónico cuyo eje Y se alinea con el eje de giro. Antes de comparar puntuaciones, el paso 13 comprueba la fidelidad, la cobertura y la conectividad de los candidatos. Si ninguno supera esos controles, la etapa se rechaza. La continuidad de la superficie puede incluir geometría estimada y, por sí sola, no acredita observación completa ni una geometría de referencia.
 
 Los nueve informes conservan `runtime_axis_line_refinement_used = false`. Los cilindros 1 y 3 conservan Poisson; los otros siete resultados conservan paredes continuas con base abierta. El caso de cubo 1 seleccionó inicialmente Poisson y aceptó después el completado; su reporte identifica todas las caras finales como estimadas.
 
@@ -79,11 +81,11 @@ Los nueve informes conservan `runtime_axis_line_refinement_used = false`. Los ci
 | Validación 17 | Radio de cobertura 3 mm | Informe histórico | Fracción de la nube próxima a malla. |
 | Exportación 18 | Factor 0.001 y permutación de ejes | Código actual | Milímetros a metros para Blender. |
 
-Los valores de cubo 1 no se atribuyen automáticamente a todas las campañas. La [referencia completa](referencia_parametros.md) recoge valores declarados del código y los informes identifican valores efectivos.
+Los valores de cubo 1 describen esa campaña. Para consultar los valores declarados en el código, utilice la [referencia completa](referencia_parametros.md); los informes de cada ejecución identifican los valores efectivos.
 
 ## Calibración de plataforma registrada
 
-Las 25 relaciones primarias aprobaron; mediana RMSE punto–plano 0,506 mm; mediana P90 0,740 mm; solapamiento de cierre 0,983; RMSE robusto de cierre 1,085 mm y punto–plano de cierre 0,776 mm. Son indicadores internos del cubo de referencia, sin certificación metrológica independiente.
+Las 25 relaciones primarias superaron los controles. La mediana del RMSE punto–plano fue de 0,506 mm y la del P90, de 0,740 mm. En el cierre se registraron un solapamiento de 0,983, un RMSE robusto de 1,085 mm y un RMSE punto–plano de 0,776 mm. Estos indicadores describen el ajuste interno del cubo de referencia; no constituyen una certificación metrológica independiente.
 
 ## Montaje construido
 
@@ -91,7 +93,7 @@ Las 25 relaciones primarias aprobaron; mediana RMSE punto–plano 0,506 mm; medi
 
 ![Interior del montaje](imagenes/montaje_real_interior.jpeg)
 
-Fotografías suministradas del montaje; no se utilizan para deducir dimensiones por perspectiva.
+Las fotografías muestran el montaje construido. Las dimensiones proceden de las medidas documentadas, no de estimaciones sobre la perspectiva de las imágenes.
 
 ## Secuencia visual conservada de cubo 1
 
@@ -107,11 +109,11 @@ Fotografías suministradas del montaje; no se utilizan para deducir dimensiones 
 
 ![Pulido, paso 15](imagenes/etapa_pulido.png)
 
-Son diagnósticos originales de cubo 1: las hojas de contacto abarcan varias poses y los previews geométricos son agregados. No se reconstruyen mapas individuales retirados por compactación; la máscara validada no es una escala de distancia.
+Los diagnósticos proceden de cubo 1. Las hojas de contacto reúnen varias poses y las vistas geométricas presentan resultados agregados. Los mapas individuales retirados durante la compactación no se regeneran para esta selección; los colores de la máscara validada tampoco representan una escala de distancia.
 
 ## Rendimiento histórico identificado
 
-El registro `Piramide3_20260922_211146_20260923_104137.log` solicita reanudación, pero invalida desde 01 y ejecuta las 21 invocaciones de la ruta normal. Sus tiempos corresponden con 21 archivos de telemetría de salida cero. La suma externa de etapas es **4672,1 s (77,9 min)**, sin adquisición ni todos los intervalos entre procesos.
+El registro `Piramide3_20260922_211146_20260923_104137.log` solicita reanudación, pero invalida desde 01 y ejecuta las 21 invocaciones de la ruta normal. Sus tiempos se corresponden con 21 archivos de telemetría cuyos procesos terminaron con código de salida cero. La suma externa de etapas es **4672,1 s (77,9 min)**, sin adquisición ni todos los intervalos entre procesos.
 
 | Paso | Operación | Tiempo externo (s) |
 | --- | --- | ---: |
@@ -133,10 +135,10 @@ El registro `Piramide3_20260922_211146_20260923_104137.log` solicita reanudació
 
 ![Tiempos por etapa](imagenes/rendimiento_etapas.png)
 
-Las etapas 02–04 agrupan tres sesiones. Las muestras de CPU, RAM disponible y GPU son del equipo completo; no acreditan consumo exclusivo ni proveedor ONNX. Los tiempos internos de superficie tienen otro alcance y no se suman al registro externo.
+Los tiempos de las etapas 02–04 reúnen las tres sesiones. El muestreo de CPU, RAM disponible y GPU corresponde al equipo completo, por lo que no permite atribuir el consumo exclusivamente al proceso ni identificar el proveedor ONNX. Los tiempos internos de reconstrucción de superficie describen otro intervalo y se mantienen separados del registro externo.
 
 ## Procedencia y alcance de las fuentes
 
-El [resumen de evidencia](evidencia_implementacion/resumen_implementacion.json) conserva indicadores extraídos, identificadores relativos y huellas SHA-256 de los originales. Las fuentes permanecen en las campañas locales; no se modifican métricas ni mallas. El JSON incluye las 21 series de telemetría utilizadas y la suma de tiempos.
+El [resumen de evidencia](evidencia_implementacion/resumen_implementacion.json) conserva indicadores extraídos, identificadores relativos y huellas SHA-256 de los originales. Las fuentes permanecen en las campañas locales, con sus métricas y mallas originales. El JSON incluye las 21 series de telemetría utilizadas y la suma de tiempos.
 
-La formulación del anteproyecto se materializa en adquisición, calibración, nubes, eje, integración y evaluación; la aplicación añade consenso, campañas, referencias congeladas y publicación. Presupuesto y cronograma de planeación no equivalen a gastos finales o fechas ejecutadas. La comparación de estrategias alternativas queda fuera de la evaluación descrita.
+El proyecto desarrolla la adquisición, la calibración, las nubes, la estimación del eje, la integración y la evaluación planteadas inicialmente. Durante su desarrollo se incorporaron el consenso, la gestión de campañas, las referencias congeladas y la publicación de resultados. El presupuesto y el cronograma de planeación describen lo previsto, sin acreditar gastos finales ni fechas de ejecución. La evaluación publicada no incluye una comparación con estrategias alternativas.

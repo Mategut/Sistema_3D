@@ -2,7 +2,7 @@
 
 [**Abrir el visor interactivo**](https://mategut.github.io/Sistema_3D/)
 
-El visor permite consultar las nueve campañas publicadas del proyecto Sistema 3D desde el navegador, sin instalar la aplicación de reconstrucción. El contenido publicado corresponde a la selección oficial de resultados del repositorio. Los visitantes pueden explorar y descargar los resultados; la página no ofrece funciones para subir archivos ni modificar las campañas publicadas.
+El visor permite explorar las nueve campañas publicadas desde el navegador, sin instalar Sistema 3D. Puede girar los modelos, consultar métricas y descargar archivos. La selección oficial se ofrece para consulta; el visor no admite cargar archivos ni modificar campañas.
 
 ## Cómo utilizarlo
 
@@ -22,7 +22,7 @@ Con el área del visor enfocada, las flechas giran la vista, `+` y `−` ajustan
 - La malla anterior al pulido también puede contener superficies estimadas. La vista de vértices representa puntos de la malla, no la nube observada original.
 - Los PLY se cargan sin simplificar. Se centran y giran solo en pantalla para facilitar su inspección; las descargas conservan las coordenadas y unidades originales en milímetros.
 
-El visor requiere un navegador moderno con WebGL2. Carga un modelo a la vez; el tiempo de apertura depende de la conexión y del equipo. Si la visualización 3D no está disponible, se pueden consultar las imágenes y descargar los archivos. No realiza nuevas reconstrucciones ni permite medir distancias haciendo clic.
+Se necesita un navegador moderno con WebGL2. El visor carga un modelo a la vez, y el tiempo de apertura depende de la conexión y del equipo. Si la visualización 3D no está disponible, las imágenes y las descargas siguen permitiendo consultar los resultados. La página no ejecuta reconstrucciones ni mide distancias mediante clics.
 
 ## Mantenimiento del sitio oficial
 
